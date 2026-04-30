@@ -1,21 +1,16 @@
 import { Link } from "@tanstack/react-router";
-import { Home, ChevronRight, Info } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Home, ChevronRight } from "lucide-react";
 
 interface Props {
   title: string;
   subtitle?: string;
   breadcrumb: string;
+  /** @deprecated wird nicht mehr angezeigt */
   hint?: string;
   actions?: React.ReactNode;
 }
 
-export function PageHeader({ title, subtitle, breadcrumb, hint, actions }: Props) {
+export function PageHeader({ title, subtitle, breadcrumb, actions }: Props) {
   return (
     <div className="space-y-2">
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -27,23 +22,7 @@ export function PageHeader({ title, subtitle, breadcrumb, hint, actions }: Props
       </nav>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
-            {hint && (
-              <TooltipProvider delayDuration={150}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button className="text-muted-foreground hover:text-foreground">
-                      <Info className="h-4 w-4" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" className="max-w-xs">
-                    {hint}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-          </div>
+          <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
           {subtitle && (
             <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
           )}

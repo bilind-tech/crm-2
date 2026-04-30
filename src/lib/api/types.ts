@@ -124,6 +124,19 @@ export type AngebotStatus =
   | "abgelehnt"
   | "abgelaufen";
 
+export interface BelegOptionen {
+  /** Standardsatz „Reinigungsmittel & Werkzeuge werden bereitgestellt" einfügen */
+  materialBereitgestellt: boolean;
+  /** Standard-Anschreiben aus Textvorlagen verwenden */
+  standardAnschreiben: boolean;
+  /** Eigener Einleitungstext (überschreibt Vorlage wenn gesetzt) */
+  eigenesIntro?: string;
+  /** Eigener Schlusstext */
+  eigenesOutro?: string;
+  /** Wiederkehrend / Dauerauftrag */
+  wiederkehrend: boolean;
+}
+
 export interface Angebot {
   id: ID;
   nummer: string; // "AN-2025-001"
@@ -140,6 +153,7 @@ export interface Angebot {
   status: AngebotStatus;
   versendetAm?: ISODateTime;
   archiviert: boolean;
+  optionen?: BelegOptionen;
   erstelltAm: ISODateTime;
   geaendertAm: ISODateTime;
 }
@@ -189,6 +203,7 @@ export interface Rechnung {
   versendetAm?: ISODateTime;
   archiviert: boolean;
   zahlungen: Zahlung[];
+  optionen?: BelegOptionen;
   erstelltAm: ISODateTime;
   geaendertAm: ISODateTime;
 }
