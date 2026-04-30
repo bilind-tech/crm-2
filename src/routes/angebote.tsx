@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { useAngebote, useDeleteAngebot, useSendeAngebot } from "@/hooks/useApi";
 import { formatEUR, formatDate } from "@/lib/format";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
+import { SlideOver } from "@/components/ui/slide-over";
+import { AngebotForm } from "@/components/forms/AngebotForm";
 import type { Angebot } from "@/lib/api/types";
 
 export const Route = createFileRoute("/angebote")({ component: Page });
@@ -48,6 +50,7 @@ function Page() {
   const send = useSendeAngebot("");
   const [filter, setFilter] = useState<string>("alle");
   const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
 
   const counts = useMemo(
     () => ({
@@ -82,11 +85,9 @@ function Page() {
         subtitle="Angebote erstellen, versenden und nachverfolgen."
         hint="Aus Angeboten lassen sich per Klick Rechnungen generieren."
         actions={
-          <Button asChild className="h-10 gap-1.5 rounded-full px-5 shadow-sm">
-            <Link to="/angebote/neu">
-              <Plus className="h-4 w-4" />
-              Neues Angebot
-            </Link>
+          <Button onClick={() => setOpen(true)} className="h-10 gap-1.5 rounded-full px-5 shadow-sm">
+            <Plus className="h-4 w-4" />
+            Neues Angebot
           </Button>
         }
       />
