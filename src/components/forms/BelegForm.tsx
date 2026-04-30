@@ -71,7 +71,9 @@ export function BelegForm({ mode, onClose, defaultKundeId }: Props) {
     wiederkehrend: false,
   });
 
-  const create = mode === "angebot" ? useCreateAngebot() : useCreateRechnung();
+  const createA = useCreateAngebot();
+  const createR = useCreateRechnung();
+  const pending = mode === "angebot" ? createA.isPending : createR.isPending;
 
   const totals = useMemo(() => {
     const netto = rows.reduce(
