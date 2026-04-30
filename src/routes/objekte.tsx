@@ -42,10 +42,7 @@ function Page() {
         title="Objekte"
         subtitle="Reinigungsobjekte deiner Kunden mit Frequenz und Zugang."
         actions={
-          <Button onClick={() => setOpen(true)} className="h-10 gap-1.5 rounded-full px-5 shadow-sm">
-            <Plus className="h-4 w-4" />
-            Neues Objekt
-          </Button>
+          <PrimaryAction onClick={() => setOpen(true)} label="Neues Objekt" />
         }
       />
 
