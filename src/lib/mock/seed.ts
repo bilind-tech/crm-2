@@ -431,7 +431,7 @@ export function seed() {
   };
 
   const sicherheit: SicherheitsEinstellungen = { autoLockMinuten: 30 };
-  const appearance: AppearanceEinstellungen = { theme: "system", akzentfarbe: "#0E9F8A" };
+  const appearance: AppearanceEinstellungen = { theme: "hell", akzentfarbe: "#1E3A5F" };
   const backup: BackupEinstellungen = {
     autoBackup: true,
     zeitpunkt: "02:00",
