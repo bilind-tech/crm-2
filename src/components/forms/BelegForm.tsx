@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useKunden, useObjekte, useCreateAngebot, useCreateRechnung } from "@/hooks/useApi";
 import { formatEUR, todayISO, addDays } from "@/lib/format";
 import { toast } from "sonner";
-import type { Position, Einheit, BelegOptionen, Angebot, Rechnung } from "@/lib/api/types";
+import type { Position, Einheit, BelegOptionen } from "@/lib/api/types";
 
 type Mode = "angebot" | "rechnung";
 
@@ -120,7 +120,7 @@ export function BelegForm({ mode, onClose, defaultKundeId }: Props) {
     };
 
     if (mode === "angebot") {
-      const r = (await (mode === "angebot" ? createA : createR).mutateAsync({
+      const r = await createA.mutateAsync({
         kundeId,
         objektId: objektId || undefined,
         titel,
@@ -129,12 +129,12 @@ export function BelegForm({ mode, onClose, defaultKundeId }: Props) {
         steuersatz: mwst,
         gueltigBis,
         optionen,
-      } as Partial<Angebot>)) as Angebot;
+      });
       toast.success("Angebot angelegt", { description: `${r.nummer} • erfolgreich gespeichert.` });
       onClose();
       navigate({ to: "/angebote/$id", params: { id: r.id } });
     } else {
-      const r = (await (mode === "angebot" ? createA : createR).mutateAsync({
+      const r = await createR.mutateAsync({
         kundeId,
         objektId: objektId || undefined,
         titel,
@@ -144,7 +144,7 @@ export function BelegForm({ mode, onClose, defaultKundeId }: Props) {
         rechnungsdatum,
         faelligkeitsdatum: addDays(rechnungsdatum, frist),
         optionen,
-      } as Partial<Rechnung>)) as Rechnung;
+      });
       toast.success("Rechnung angelegt", { description: `${r.nummer} • erfolgreich gespeichert.` });
       onClose();
       navigate({ to: "/rechnungen/$id", params: { id: r.id } });
