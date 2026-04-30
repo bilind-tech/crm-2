@@ -74,11 +74,11 @@ export function AppSidebar() {
                   tooltip={item.title}
                   className={
                     active
-                      ? "bg-sidebar-accent font-medium text-sidebar-primary border border-sidebar-border shadow-sm"
-                      : "hover:bg-sidebar-accent/60"
+                      ? "bg-sidebar-accent font-medium text-sidebar-primary border border-sidebar-border shadow-sm transition-colors duration-150"
+                      : "transition-colors duration-150 hover:bg-sidebar-accent/60"
                   }
                 >
-                  <Link to={item.url} className="flex items-center gap-2.5">
+                  <Link to={item.url} preload="intent" className="flex items-center gap-2.5">
                     <item.icon className={`h-4 w-4 ${active ? "text-sidebar-primary" : ""}`} />
                     {!collapsed && <span>{item.title}</span>}
                   </Link>
