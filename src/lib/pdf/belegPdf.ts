@@ -301,7 +301,7 @@ async function buildDoc(
         ],
       },
       { text: titel, fontSize: 18, bold: true, color: "#1e3a8a", margin: [0, 24, 0, 12] },
-      { text: anrede(ctx.kunde), margin: [0, 0, 0, 8] },
+      { text: anrede(ctx.kunde, ctx.ansprechpartner), margin: [0, 0, 0, 8] },
       { text: intro, margin: [0, 0, 0, 14] },
       leistungstabelle(beleg.positionen),
       summenBlock(t, beleg.steuersatz),
@@ -311,7 +311,7 @@ async function buildDoc(
   };
 }
 
-export async function generateAngebotPdf(angebot: Angebot, kunde: Kunde, firma: Firmendaten): Promise<Blob> {
+export async function generateAngebotPdf(angebot: Angebot, kunde: Kunde, firma: Firmendaten, ansprechpartner?: Ansprechpartner): Promise<Blob> {
   const pdfMake = await getPdfMake();
   const meta = [
     { label: "Angebot-Nr.", wert: angebot.nummer },
@@ -325,7 +325,7 @@ export async function generateAngebotPdf(angebot: Angebot, kunde: Kunde, firma: 
     materialBereitgestellt: angebot.optionen?.materialBereitgestellt ?? true,
   };
   const doc = await buildDoc(
-    { firma, kunde },
+    { firma, kunde, ansprechpartner },
     `Angebot ${angebot.nummer}`,
     meta,
     { positionen: angebot.positionen, rabattGesamt: angebot.rabattGesamt, steuersatz: angebot.steuersatz },
@@ -337,7 +337,7 @@ export async function generateAngebotPdf(angebot: Angebot, kunde: Kunde, firma: 
   });
 }
 
-export async function generateRechnungPdf(rechnung: Rechnung, kunde: Kunde, firma: Firmendaten): Promise<Blob> {
+export async function generateRechnungPdf(rechnung: Rechnung, kunde: Kunde, firma: Firmendaten, ansprechpartner?: Ansprechpartner): Promise<Blob> {
   const pdfMake = await getPdfMake();
   const meta = [
     { label: "Rechnung-Nr.", wert: rechnung.nummer },
@@ -351,7 +351,7 @@ export async function generateRechnungPdf(rechnung: Rechnung, kunde: Kunde, firm
     materialBereitgestellt: rechnung.optionen?.materialBereitgestellt ?? true,
   };
   const doc = await buildDoc(
-    { firma, kunde },
+    { firma, kunde, ansprechpartner },
     `Rechnung ${rechnung.nummer}`,
     meta,
     { positionen: rechnung.positionen, rabattGesamt: rechnung.rabattGesamt, steuersatz: rechnung.steuersatz },
