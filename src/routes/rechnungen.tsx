@@ -208,6 +208,15 @@ function Page() {
           </tbody>
         </table>
       </div>
+
+      <SlideOver
+        open={open}
+        onOpenChange={setOpen}
+        title="Neue Rechnung"
+        description="Positionen, Fristen und Optionen erfassen — wird sofort als Entwurf gespeichert."
+      >
+        <RechnungForm onClose={() => setOpen(false)} />
+      </SlideOver>
     </div>
   );
 }
