@@ -182,6 +182,15 @@ function Page() {
           </tbody>
         </table>
       </div>
+
+      <SlideOver
+        open={open}
+        onOpenChange={setOpen}
+        title="Neues Angebot"
+        description="Leistungen, Optionen und Texte erfassen — wird sofort als Entwurf gespeichert."
+      >
+        <AngebotForm onClose={() => setOpen(false)} />
+      </SlideOver>
     </div>
   );
 }
