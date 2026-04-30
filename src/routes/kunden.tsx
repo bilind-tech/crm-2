@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { useKunden } from "@/hooks/useApi";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
 import { FilterBar } from "@/routes/angebote";
+import { SlideOver } from "@/components/ui/slide-over";
+import { KundeForm } from "@/components/forms/KundeForm";
 
 export const Route = createFileRoute("/kunden")({ component: Page });
 
@@ -12,6 +14,7 @@ function Page() {
   const { data: alle = [] } = useKunden();
   const [filter, setFilter] = useState("alle");
   const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
 
   const counts = useMemo(
     () => ({
@@ -46,11 +49,9 @@ function Page() {
         title="Kunden"
         subtitle="Stammdaten deiner Kunden zentral verwalten."
         actions={
-          <Button asChild className="h-10 gap-1.5 rounded-full px-5 shadow-sm">
-            <Link to="/kunden/neu">
-              <Plus className="h-4 w-4" />
-              Neuer Kunde
-            </Link>
+          <Button onClick={() => setOpen(true)} className="h-10 gap-1.5 rounded-full px-5 shadow-sm">
+            <Plus className="h-4 w-4" />
+            Neuer Kunde
           </Button>
         }
       />
@@ -93,7 +94,9 @@ function Page() {
               <tr key={k.id} className="border-b border-border last:border-0 hover:bg-muted/30">
                 <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{k.nummer}</td>
                 <td className="px-4 py-3 font-medium">
-                  {k.firmenname || `${k.vorname ?? ""} ${k.nachname ?? ""}`.trim()}
+                  <Link to="/kunden/$id" params={{ id: k.id }} className="hover:text-primary">
+                    {k.firmenname || `${k.vorname ?? ""} ${k.nachname ?? ""}`.trim()}
+                  </Link>
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{k.ort ?? "—"}</td>
                 <td className="px-4 py-3 text-muted-foreground">{k.email ?? "—"}</td>
@@ -123,6 +126,15 @@ function Page() {
           </tbody>
         </table>
       </div>
+
+      <SlideOver
+        open={open}
+        onOpenChange={setOpen}
+        title="Neuer Kunde"
+        description="Stammdaten anlegen — vollständige Felder unter den Tabs."
+      >
+        <KundeForm onClose={() => setOpen(false)} />
+      </SlideOver>
     </div>
   );
 }

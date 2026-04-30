@@ -6,6 +6,8 @@ import { useRechnungen, useDeleteRechnung } from "@/hooks/useApi";
 import { formatEUR, formatDate } from "@/lib/format";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
 import { FilterBar } from "@/routes/angebote";
+import { SlideOver } from "@/components/ui/slide-over";
+import { RechnungForm } from "@/components/forms/RechnungForm";
 import type { Rechnung } from "@/lib/api/types";
 
 export const Route = createFileRoute("/rechnungen")({ component: Page });
@@ -52,6 +54,7 @@ function Page() {
   const del = useDeleteRechnung();
   const [filter, setFilter] = useState("alle");
   const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
 
   const heute = new Date().toISOString().slice(0, 10);
   const monat = heute.slice(0, 7);
@@ -91,20 +94,10 @@ function Page() {
         title="Rechnungen"
         subtitle="Rechnungen erstellen, Zahlungen erfassen, Mahnungen senden."
         actions={
-          <div className="flex items-center gap-2">
-            <Button variant="outline" asChild className="h-10 gap-1.5 rounded-full px-5">
-              <Link to="/rechnungen/neu">
-                <Plus className="h-4 w-4" />
-                Aus Auftrag
-              </Link>
-            </Button>
-            <Button asChild className="h-10 gap-1.5 rounded-full px-5 shadow-sm">
-              <Link to="/rechnungen/neu">
-                <Plus className="h-4 w-4" />
-                Neue Rechnung
-              </Link>
-            </Button>
-          </div>
+          <Button onClick={() => setOpen(true)} className="h-10 gap-1.5 rounded-full px-5 shadow-sm">
+            <Plus className="h-4 w-4" />
+            Neue Rechnung
+          </Button>
         }
       />
 
@@ -215,6 +208,15 @@ function Page() {
           </tbody>
         </table>
       </div>
+
+      <SlideOver
+        open={open}
+        onOpenChange={setOpen}
+        title="Neue Rechnung"
+        description="Positionen, Fristen und Optionen erfassen — wird sofort als Entwurf gespeichert."
+      >
+        <RechnungForm onClose={() => setOpen(false)} />
+      </SlideOver>
     </div>
   );
 }

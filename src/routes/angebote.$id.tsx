@@ -1,38 +1,140 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useAngebot } from "@/hooks/useApi";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatEUR } from "@/lib/format";
+import { Home, ChevronRight, Download, Send, FileCheck2 } from "lucide-react";
+import { useAngebot, useSendeAngebot, useAngebotInRechnung } from "@/hooks/useApi";
+import { useAngebotPdf } from "@/hooks/useBelegPdf";
+import { Button } from "@/components/ui/button";
+import { formatEUR, formatDate } from "@/lib/format";
 import { summenRechnung } from "@/lib/mock/backend";
+import { toast } from "sonner";
+import { useNavigate } from "@tanstack/react-router";
+
 export const Route = createFileRoute("/angebote/$id")({ component: Page });
+
 function Page() {
+  const navigate = useNavigate();
   const { id } = Route.useParams();
   const { data: a } = useAngebot(id);
-  if (!a) return <p className="text-sm">Lade …</p>;
+  const send = useSendeAngebot(id);
+  const inRechnung = useAngebotInRechnung(id);
+  const pdf = useAngebotPdf(a);
+
+  if (!a) return <p className="text-sm text-muted-foreground">Lade …</p>;
   const s = summenRechnung(a.positionen, a.rabattGesamt);
+
   return (
-    <div className="space-y-4">
-      <div><Link to="/angebote" className="text-xs text-muted-foreground hover:underline">← Angebote</Link>
-        <h1 className="text-2xl font-semibold">{a.nummer}</h1>
-        <p className="text-sm text-muted-foreground">{a.titel} · Status: {a.status}</p>
+    <div className="space-y-6">
+      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <Link to="/" className="flex items-center hover:text-foreground"><Home className="h-3.5 w-3.5" /></Link>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <Link to="/angebote" className="hover:text-foreground">Angebote</Link>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <span className="text-foreground">{a.nummer}</span>
+      </nav>
+
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">{a.titel}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            <span className="font-mono">{a.nummer}</span> · Status <span className="capitalize">{a.status}</span>
+            {a.gueltigBis ? ` · gültig bis ${formatDate(a.gueltigBis)}` : ""}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {pdf.url && (
+            <Button asChild variant="outline" className="rounded-full">
+              <a href={pdf.url} download={`${a.nummer}.pdf`}>
+                <Download className="mr-1.5 h-4 w-4" /> PDF herunterladen
+              </a>
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            className="rounded-full"
+            onClick={() => {
+              send.mutate(undefined, {
+                onSuccess: () => toast.success("Angebot versendet"),
+              });
+            }}
+          >
+            <Send className="mr-1.5 h-4 w-4" /> Senden
+          </Button>
+          <Button
+            className="rounded-full"
+            onClick={() => {
+              inRechnung.mutate(undefined, {
+                onSuccess: (r) => {
+                  toast.success(`Rechnung ${r.nummer} erstellt`);
+                  navigate({ to: "/rechnungen/$id", params: { id: r.id } });
+                },
+              });
+            }}
+          >
+            <FileCheck2 className="mr-1.5 h-4 w-4" /> In Rechnung umwandeln
+          </Button>
+        </div>
       </div>
-      <Card><CardHeader><CardTitle>Positionen</CardTitle></CardHeader>
-        <CardContent>
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-xs uppercase text-muted-foreground"><th className="py-2">Beschreibung</th><th>Menge</th><th>Preis</th><th className="text-right">Summe</th></tr></thead>
-            <tbody>
-              {a.positionen.map((p) => (
-                <tr key={p.id} className="border-t"><td className="py-2">{p.beschreibung}</td><td>{p.menge} {p.einheit}</td><td>{formatEUR(p.einzelpreisNetto)}</td><td className="text-right">{formatEUR(p.menge * p.einzelpreisNetto)}</td></tr>
+
+      <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Beträge</p>
+            <Row label="Netto" value={formatEUR(s.netto)} />
+            <Row label={`MwSt ${a.steuersatz}%`} value={formatEUR(s.steuer)} />
+            <div className="my-2 h-px bg-border" />
+            <Row label="Brutto" value={formatEUR(s.brutto)} bold />
+          </div>
+
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Positionen</p>
+            <ul className="space-y-2">
+              {a.positionen.map((p, i) => (
+                <li key={p.id} className="flex items-baseline justify-between gap-3 text-sm">
+                  <span className="min-w-0 truncate">
+                    {i + 1}. {p.beschreibung}
+                  </span>
+                  <span className="font-medium whitespace-nowrap">
+                    {p.menge} × {formatEUR(p.einzelpreisNetto)}
+                  </span>
+                </li>
               ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t"><td colSpan={3} className="py-2 text-right text-muted-foreground">Netto</td><td className="text-right">{formatEUR(s.netto)}</td></tr>
-              <tr><td colSpan={3} className="py-1 text-right text-muted-foreground">Steuer</td><td className="text-right">{formatEUR(s.steuer)}</td></tr>
-              <tr className="font-semibold"><td colSpan={3} className="py-2 text-right">Brutto</td><td className="text-right">{formatEUR(s.brutto)}</td></tr>
-            </tfoot>
-          </table>
-        </CardContent>
-      </Card>
-      <p className="text-xs text-muted-foreground">PDF-Vorschau, Versand und „in Rechnung umwandeln" folgen in der nächsten Iteration.</p>
+            </ul>
+          </div>
+
+          {a.optionen && (
+            <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Optionen</p>
+              <ul className="space-y-1.5 text-sm text-muted-foreground">
+                <li>{a.optionen.materialBereitgestellt ? "✓" : "✗"} Material bereitgestellt</li>
+                <li>{a.optionen.standardAnschreiben ? "✓" : "✗"} Standard-Anschreiben</li>
+                <li>{a.optionen.wiederkehrend ? "✓" : "✗"} Wiederkehrend</li>
+              </ul>
+            </div>
+          )}
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-border bg-muted/40 shadow-sm">
+          {pdf.status === "loading" && (
+            <div className="grid h-[800px] place-content-center text-sm text-muted-foreground">PDF wird erzeugt …</div>
+          )}
+          {pdf.status === "error" && (
+            <div className="grid h-[800px] place-content-center px-6 text-center text-sm text-destructive">
+              PDF konnte nicht erzeugt werden.<br />{pdf.error}
+            </div>
+          )}
+          {pdf.url && (
+            <iframe title="Angebot PDF" src={pdf.url} className="block h-[900px] w-full border-0" />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <div className={`flex items-baseline justify-between gap-3 text-sm ${bold ? "text-base" : ""}`}>
+      <span className="text-muted-foreground">{label}</span>
+      <span className={bold ? "text-lg font-semibold text-primary" : "font-medium"}>{value}</span>
     </div>
   );
 }
