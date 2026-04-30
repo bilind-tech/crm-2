@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { Plus, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ChevronRight } from "lucide-react";
 import { useObjekte } from "@/hooks/useApi";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
+import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { FilterBar } from "@/routes/angebote";
 import { SlideOver } from "@/components/ui/slide-over";
 import { ObjektForm } from "@/components/forms/ObjektForm";
@@ -42,10 +42,7 @@ function Page() {
         title="Objekte"
         subtitle="Reinigungsobjekte deiner Kunden mit Frequenz und Zugang."
         actions={
-          <Button onClick={() => setOpen(true)} className="h-10 gap-1.5 rounded-full px-5 shadow-sm">
-            <Plus className="h-4 w-4" />
-            Neues Objekt
-          </Button>
+          <PrimaryAction onClick={() => setOpen(true)} label="Neues Objekt" />
         }
       />
 

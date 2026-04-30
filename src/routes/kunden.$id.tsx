@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Home, ChevronRight, Pencil, Archive, Building2, Plus } from "lucide-react";
+import { Pencil, Archive, Building2, Plus } from "lucide-react";
 import { useKunde } from "@/hooks/useApi";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { SlideOver } from "@/components/ui/slide-over";
 import { ObjektForm } from "@/components/forms/ObjektForm";
 import { AngebotForm } from "@/components/forms/AngebotForm";
@@ -46,34 +47,29 @@ function Page() {
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link to="/" className="flex items-center hover:text-foreground">
-          <Home className="h-3.5 w-3.5" />
-        </Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <Link to="/kunden" className="hover:text-foreground">Kunden</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-foreground">{fullName}</span>
-      </nav>
-
-      {/* Title row */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">{fullName}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            <span className="font-mono">{k.nummer}</span> · {k.typ === "firma" ? "Firma" : "Privatkunde"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" className="rounded-full">
-            <Pencil className="mr-1.5 h-4 w-4" /> Bearbeiten
-          </Button>
-          <Button variant="outline" className="rounded-full">
-            <Archive className="mr-1.5 h-4 w-4" /> Archivieren
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        breadcrumb={[
+          { label: "Kunden", to: "/kunden" },
+          { label: fullName },
+        ]}
+        title={fullName}
+        subtitle={
+          <>
+            <span className="font-mono">{k.nummer}</span> ·{" "}
+            {k.typ === "firma" ? "Firma" : "Privatkunde"}
+          </>
+        }
+        actions={
+          <>
+            <Button variant="outline" className="rounded-lg">
+              <Pencil className="mr-1.5 h-4 w-4" /> Bearbeiten
+            </Button>
+            <Button variant="outline" className="rounded-lg">
+              <Archive className="mr-1.5 h-4 w-4" /> Archivieren
+            </Button>
+          </>
+        }
+      />
 
       {/* Header card */}
       <div className="flex items-center gap-5 rounded-2xl border border-border bg-card p-5 shadow-sm">

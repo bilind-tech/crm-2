@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
 import { Upload, Receipt } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useDokumente } from "@/hooks/useApi";
 import { formatEUR } from "@/lib/format";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
+import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { FilterBar } from "@/routes/angebote";
 
 export const Route = createFileRoute("/dokumente")({ component: Page });
@@ -45,10 +45,7 @@ function Page() {
         title="Dokumente"
         subtitle="Quittungen, Rechnungen und steuerrelevante Belege zentral ablegen."
         actions={
-          <Button className="h-10 gap-1.5 rounded-full px-5 shadow-sm">
-            <Upload className="h-4 w-4" />
-            Dokument hochladen
-          </Button>
+          <PrimaryAction icon={Upload} label="Dokument hochladen" />
         }
       />
 
@@ -83,10 +80,9 @@ function Page() {
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
             Lade deine erste Quittung oder Rechnung hoch.
           </p>
-          <Button className="mt-5 h-10 gap-1.5 rounded-full px-5 shadow-sm">
-            <Upload className="h-4 w-4" />
-            Dokument hochladen
-          </Button>
+          <div className="mt-5 inline-flex">
+            <PrimaryAction icon={Upload} label="Dokument hochladen" />
+          </div>
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">

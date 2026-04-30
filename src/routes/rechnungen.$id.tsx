@@ -1,8 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { Home, ChevronRight, Download, Send, CheckCircle2 } from "lucide-react";
+import { createFileRoute } from "@tanstack/react-router";
+import { Download, Send, CheckCircle2 } from "lucide-react";
 import { useRechnung, useSendeRechnung, useAddZahlung } from "@/hooks/useApi";
 import { useRechnungPdf } from "@/hooks/useBelegPdf";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { formatEUR, formatDate, todayISO } from "@/lib/format";
 import { summenRechnung } from "@/lib/mock/backend";
 import { toast } from "sonner";
@@ -23,51 +24,59 @@ function Page() {
 
   return (
     <div className="space-y-6">
-      <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link to="/" className="flex items-center hover:text-foreground"><Home className="h-3.5 w-3.5" /></Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <Link to="/rechnungen" className="hover:text-foreground">Rechnungen</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="text-foreground">{r.nummer}</span>
-      </nav>
-
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">{r.titel}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            <span className="font-mono">{r.nummer}</span> · {formatDate(r.rechnungsdatum)} · fällig {formatDate(r.faelligkeitsdatum)} · Status <span className="capitalize">{r.status}</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {pdf.url && (
-            <Button asChild variant="outline" className="rounded-full">
-              <a href={pdf.url} download={`${r.nummer}.pdf`}>
-                <Download className="mr-1.5 h-4 w-4" /> PDF herunterladen
-              </a>
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            className="rounded-full"
-            onClick={() => send.mutate(undefined, { onSuccess: () => toast.success("Rechnung versendet") })}
-          >
-            <Send className="mr-1.5 h-4 w-4" /> Senden
-          </Button>
-          {offen > 0 && (
+      <PageHeader
+        breadcrumb={[
+          { label: "Rechnungen", to: "/rechnungen" },
+          { label: r.nummer },
+        ]}
+        title={r.titel}
+        subtitle={
+          <>
+            <span className="font-mono">{r.nummer}</span> ·{" "}
+            {formatDate(r.rechnungsdatum)} · fällig{" "}
+            {formatDate(r.faelligkeitsdatum)} · Status{" "}
+            <span className="capitalize">{r.status}</span>
+          </>
+        }
+        actions={
+          <>
+            {pdf.url && (
+              <Button asChild variant="outline" className="rounded-lg">
+                <a href={pdf.url} download={`${r.nummer}.pdf`}>
+                  <Download className="mr-1.5 h-4 w-4" /> PDF
+                </a>
+              </Button>
+            )}
             <Button
-              className="rounded-full"
-              onClick={() => {
-                addZahlung.mutate(
-                  { datum: todayISO(), betrag: offen, methode: "ueberweisung" },
-                  { onSuccess: () => toast.success(`${formatEUR(offen)} als bezahlt erfasst`) }
-                );
-              }}
+              variant="outline"
+              className="rounded-lg"
+              onClick={() =>
+                send.mutate(undefined, {
+                  onSuccess: () => toast.success("Rechnung versendet"),
+                })
+              }
             >
-              <CheckCircle2 className="mr-1.5 h-4 w-4" /> Bezahlt markieren
+              <Send className="mr-1.5 h-4 w-4" /> Senden
             </Button>
-          )}
-        </div>
-      </div>
+            {offen > 0 && (
+              <Button
+                className="rounded-lg"
+                onClick={() => {
+                  addZahlung.mutate(
+                    { datum: todayISO(), betrag: offen, methode: "ueberweisung" },
+                    {
+                      onSuccess: () =>
+                        toast.success(`${formatEUR(offen)} als bezahlt erfasst`),
+                    }
+                  );
+                }}
+              >
+                <CheckCircle2 className="mr-1.5 h-4 w-4" /> Bezahlt markieren
+              </Button>
+            )}
+          </>
+        }
+      />
 
       <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
         <div className="space-y-4">

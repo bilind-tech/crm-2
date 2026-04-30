@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { Plus, Search, Eye, Send, Trash2, ChevronRight } from "lucide-react";
+import { Search, Eye, Send, Trash2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAngebote, useDeleteAngebot, useSendeAngebot } from "@/hooks/useApi";
 import { formatEUR, formatDate } from "@/lib/format";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
+import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { SlideOver } from "@/components/ui/slide-over";
 import { AngebotForm } from "@/components/forms/AngebotForm";
 import type { Angebot } from "@/lib/api/types";
@@ -85,10 +86,7 @@ function Page() {
         subtitle="Angebote erstellen, versenden und nachverfolgen."
         hint="Aus Angeboten lassen sich per Klick Rechnungen generieren."
         actions={
-          <Button onClick={() => setOpen(true)} className="h-10 gap-1.5 rounded-full px-5 shadow-sm">
-            <Plus className="h-4 w-4" />
-            Neues Angebot
-          </Button>
+          <PrimaryAction onClick={() => setOpen(true)} label="Neues Angebot" />
         }
       />
 
