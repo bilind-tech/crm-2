@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, Lock as LockIcon, Plus, Search } from "lucide-react";
+import { Bell, Plus, Search } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useAuth } from "@/lib/auth";
 import {
   useBenachrichtigungen,
   useMarkAlleBenachrichtigungenGelesen,
@@ -21,7 +20,6 @@ import { GlobalSearch } from "@/components/layout/GlobalSearch";
 import { QuickCreate } from "@/components/layout/QuickCreate";
 
 export function AppHeader() {
-  const { lock } = useAuth();
   const navigate = useNavigate();
   const { data: benachrichtigungen = [] } = useBenachrichtigungen();
   const ungelesen = benachrichtigungen.filter((b) => !b.gelesen).length;
@@ -31,36 +29,35 @@ export function AppHeader() {
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border/60 bg-background/85 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/65">
-      <SidebarTrigger className="md:hidden" />
-      <Button
-        variant="outline"
-        size="sm"
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border/60 bg-background px-4">
+      <SidebarTrigger className="h-9 w-9" />
+
+      <button
         onClick={() => setSearchOpen(true)}
-        className="hidden h-9 w-72 justify-start gap-2 text-muted-foreground sm:flex"
+        className="flex h-10 max-w-2xl flex-1 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm text-muted-foreground transition hover:border-primary/30"
       >
         <Search className="h-4 w-4" />
-        <span>Suchen … Kunden, Objekte, Belege</span>
-        <kbd className="ml-auto rounded border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+        <span>Suchen…</span>
+        <kbd className="ml-auto hidden rounded border bg-muted px-1.5 py-0.5 text-[10px] sm:inline">
           ⌘K
         </kbd>
-      </Button>
-      <Button variant="outline" size="icon" onClick={() => setSearchOpen(true)} className="sm:hidden h-9 w-9">
-        <Search className="h-4 w-4" />
-      </Button>
+      </button>
 
-      <div className="ml-auto flex items-center gap-1">
-        <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1">
+      <div className="ml-auto flex items-center gap-2">
+        <Button
+          onClick={() => setCreateOpen(true)}
+          className="h-10 gap-1.5 rounded-full px-5 font-medium shadow-sm"
+        >
           <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Neu</span>
+          <span>Neu</span>
         </Button>
 
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative">
+            <Button variant="ghost" size="icon" className="relative h-10 w-10 rounded-full">
               <Bell className="h-4 w-4" />
               {ungelesen > 0 && (
-                <Badge className="absolute -right-0.5 -top-0.5 h-4 min-w-4 justify-center rounded-full px-1 text-[10px]">
+                <Badge className="absolute right-1 top-1 h-4 min-w-4 justify-center rounded-full px-1 text-[10px]">
                   {ungelesen}
                 </Badge>
               )}
@@ -85,7 +82,11 @@ export function AppHeader() {
                   onClick={() => {
                     if (!b.gelesen) markRead.mutate(b.id);
                     if (b.link) {
-                      const route = b.link.route as "/rechnungen/$id" | "/angebote/$id" | "/kunden/$id" | "/objekte/$id";
+                      const route = b.link.route as
+                        | "/rechnungen/$id"
+                        | "/angebote/$id"
+                        | "/kunden/$id"
+                        | "/objekte/$id";
                       navigate({ to: route, params: b.link.params as never });
                     }
                   }}
@@ -116,10 +117,6 @@ export function AppHeader() {
             </ScrollArea>
           </PopoverContent>
         </Popover>
-
-        <Button variant="ghost" size="icon" onClick={() => void lock()} title="Sperren">
-          <LockIcon className="h-4 w-4" />
-        </Button>
       </div>
 
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
