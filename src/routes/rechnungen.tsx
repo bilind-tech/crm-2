@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { Plus, Eye, CheckCircle2, Trash2, ChevronRight } from "lucide-react";
+import { Eye, CheckCircle2, Trash2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRechnungen, useDeleteRechnung } from "@/hooks/useApi";
 import { formatEUR, formatDate } from "@/lib/format";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
+import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { FilterBar } from "@/routes/angebote";
 import { SlideOver } from "@/components/ui/slide-over";
 import { RechnungForm } from "@/components/forms/RechnungForm";
