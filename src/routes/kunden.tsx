@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { Plus, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ChevronRight } from "lucide-react";
 import { useKunden } from "@/hooks/useApi";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
+import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { FilterBar } from "@/routes/angebote";
 import { SlideOver } from "@/components/ui/slide-over";
 import { KundeForm } from "@/components/forms/KundeForm";
