@@ -2,7 +2,7 @@
 // Layout angelehnt an die Mustervorlage von My Clean Center GmbH.
 // pdfmake läuft rein im Browser (kein Server-Roundtrip nötig).
 
-import type { Angebot, Rechnung, Position, Kunde, Firmendaten } from "@/lib/api/types";
+import type { Angebot, Rechnung, Position, Kunde, Firmendaten, Ansprechpartner } from "@/lib/api/types";
 import logoUrl from "@/assets/logo.png";
 
 // pdfmake-Typen sind unvollständig — wir benutzen any-Cast, um Layout-Definitionen frei zu halten.
@@ -209,7 +209,13 @@ function absenderzeile(f: Firmendaten) {
   return `${f.firmenname} · ${f.strasse ?? ""} · ${f.plz ?? ""} ${f.ort ?? ""}`;
 }
 
-function anrede(k: Kunde) {
+function anrede(k: Kunde, ap?: Ansprechpartner) {
+  if (ap) {
+    const name = ap.nachname?.trim() || "";
+    if (ap.anrede === "herr") return `Sehr geehrter Herr ${name},`;
+    if (ap.anrede === "frau") return `Sehr geehrte Frau ${name},`;
+    if (ap.vorname || ap.nachname) return `Hallo ${[ap.vorname, ap.nachname].filter(Boolean).join(" ")},`;
+  }
   if (k.anrede === "herr") return `Sehr geehrter Herr ${k.nachname ?? ""},`;
   if (k.anrede === "frau") return `Sehr geehrte Frau ${k.nachname ?? ""},`;
   return "Sehr geehrte Damen und Herren,";
