@@ -120,7 +120,7 @@ export function BelegForm({ mode, onClose, defaultKundeId }: Props) {
     };
 
     if (mode === "angebot") {
-      const r = (await create.mutateAsync({
+      const r = (await (mode === "angebot" ? createA : createR).mutateAsync({
         kundeId,
         objektId: objektId || undefined,
         titel,
@@ -134,7 +134,7 @@ export function BelegForm({ mode, onClose, defaultKundeId }: Props) {
       onClose();
       navigate({ to: "/angebote/$id", params: { id: r.id } });
     } else {
-      const r = (await create.mutateAsync({
+      const r = (await (mode === "angebot" ? createA : createR).mutateAsync({
         kundeId,
         objektId: objektId || undefined,
         titel,
@@ -385,8 +385,8 @@ export function BelegForm({ mode, onClose, defaultKundeId }: Props) {
 
       <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
         <Button variant="outline" onClick={onClose}>Abbrechen</Button>
-        <Button disabled={create.isPending} onClick={submit} className="rounded-md px-6">
-          {create.isPending ? "Speichere…" : mode === "angebot" ? "Angebot anlegen" : "Rechnung anlegen"}
+        <Button disabled={pending} onClick={submit} className="rounded-md px-6">
+          {pending ? "Speichere…" : mode === "angebot" ? "Angebot anlegen" : "Rechnung anlegen"}
         </Button>
       </div>
     </div>
