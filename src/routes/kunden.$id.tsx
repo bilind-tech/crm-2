@@ -57,7 +57,7 @@ function Page() {
           <>
             <span className="font-mono">{k.nummer}</span> ·{" "}
             {k.typ === "firma" ? "Firma" : "Privatkunde"}
-          </> as unknown as string
+          </>
         }
         actions={
           <>
