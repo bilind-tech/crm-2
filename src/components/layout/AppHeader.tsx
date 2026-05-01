@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Bell, Plus, Search } from "lucide-react";
+import { Bell, Search } from "lucide-react";
+import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { useNavigate } from "@tanstack/react-router";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -44,13 +45,7 @@ export function AppHeader() {
       </button>
 
       <div className="ml-auto flex items-center gap-2">
-        <Button
-          onClick={() => setCreateOpen(true)}
-          className="h-10 gap-1.5 rounded-full px-5 font-medium shadow-sm"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Neu</span>
-        </Button>
+        <PrimaryAction onClick={() => setCreateOpen(true)} label="Neu" />
 
         <Popover>
           <PopoverTrigger asChild>

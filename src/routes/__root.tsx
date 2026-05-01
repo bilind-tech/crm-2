@@ -66,6 +66,7 @@ function TopLoader() {
 
 function Shell() {
   const { unlocked } = useAuth();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   if (!unlocked) return <LockScreen />;
   return (
     <SidebarProvider>
@@ -74,7 +75,7 @@ function Shell() {
         <AppSidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <AppHeader />
-          <main key={typeof window !== "undefined" ? window.location.pathname : ""} className="flex-1 p-4 motion-safe:animate-fade-in-fast sm:p-6">
+          <main key={pathname} className="flex-1 p-4 motion-safe:animate-fade-in-fast sm:p-6">
             <Outlet />
           </main>
         </div>

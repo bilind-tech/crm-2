@@ -18,14 +18,15 @@ export const PrimaryAction = React.forwardRef<HTMLButtonElement, PrimaryActionPr
         ref={ref}
         {...props}
         className={cn(
-          "group relative inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-semibold text-primary-foreground",
-          "bg-gradient-to-b from-primary to-[color-mix(in_oklab,var(--primary)_85%,black)]",
-          "shadow-[0_1px_0_rgba(255,255,255,0.18)_inset,0_6px_18px_-6px_color-mix(in_oklab,var(--primary)_55%,transparent),0_1px_2px_rgba(15,23,42,0.18)]",
-          "ring-1 ring-inset ring-white/10",
+          "group relative inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-semibold text-white",
+          // Premium blue gradient (helleres, sattes Blau, nicht das dunkle Marineblau des Theme-primary)
+          "bg-[linear-gradient(180deg,#3B82F6_0%,#2563EB_55%,#1D4ED8_100%)]",
+          "shadow-[0_1px_0_rgba(255,255,255,0.25)_inset,0_8px_22px_-8px_rgba(37,99,235,0.55),0_1px_2px_rgba(15,23,42,0.18)]",
+          "ring-1 ring-inset ring-white/15",
           "transition-all duration-150 ease-out",
-          "hover:shadow-[0_1px_0_rgba(255,255,255,0.22)_inset,0_10px_24px_-8px_color-mix(in_oklab,var(--primary)_70%,transparent),0_1px_2px_rgba(15,23,42,0.22)]",
-          "hover:brightness-[1.04] active:brightness-[0.97] active:translate-y-[0.5px]",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          "hover:shadow-[0_1px_0_rgba(255,255,255,0.3)_inset,0_12px_28px_-8px_rgba(37,99,235,0.7),0_1px_2px_rgba(15,23,42,0.2)]",
+          "hover:brightness-[1.06] active:brightness-[0.96] active:translate-y-[0.5px]",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3B82F6]/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           "disabled:pointer-events-none disabled:opacity-60",
           className,
         )}
