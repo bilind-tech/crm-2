@@ -1,17 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { Download, Send, FileCheck2, ThumbsUp, ThumbsDown } from "lucide-react";
 import {
   useAngebot,
-  useSendeAngebot,
   useAngebotInRechnung,
   useUpdateAngebot,
   useRechnungen,
+  useKunde,
 } from "@/hooks/useApi";
 import { useAngebotPdf } from "@/hooks/useBelegPdf";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { FlowBar } from "@/components/flow/FlowBar";
 import { angebotFlow } from "@/lib/flow/flows";
+import { EmailVersandDialog } from "@/components/email/EmailVersandDialog";
+import { EmailVersandHistorie } from "@/components/email/EmailVersandHistorie";
 import { formatEUR, formatDate } from "@/lib/format";
 import { summenRechnung } from "@/lib/mock/backend";
 import { toast } from "sonner";
@@ -23,11 +26,12 @@ function Page() {
   const navigate = useNavigate();
   const { id } = Route.useParams();
   const { data: a } = useAngebot(id);
-  const send = useSendeAngebot(id);
+  const { data: kunde } = useKunde(a?.kundeId ?? "");
   const inRechnung = useAngebotInRechnung(id);
   const updateAngebot = useUpdateAngebot(id);
   const pdf = useAngebotPdf(a);
   const { data: alleRechnungen = [] } = useRechnungen();
+  const [emailOpen, setEmailOpen] = useState(false);
 
   if (!a) return <p className="text-sm text-muted-foreground">Lade …</p>;
 
@@ -50,12 +54,7 @@ function Page() {
   const renderPrimaryAction = () => {
     if (a.status === "entwurf") {
       return (
-        <Button
-          className="rounded-lg"
-          onClick={() =>
-            send.mutate(undefined, { onSuccess: () => toast.success("Angebot versendet") })
-          }
-        >
+        <Button className="rounded-lg" onClick={() => setEmailOpen(true)}>
           <Send className="mr-1.5 h-4 w-4" /> Per E-Mail versenden
         </Button>
       );
@@ -183,6 +182,8 @@ function Page() {
               </ul>
             </div>
           )}
+
+          <EmailVersandHistorie belegId={a.id} belegTyp="angebot" />
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-border bg-muted/40 shadow-sm">
@@ -199,6 +200,16 @@ function Page() {
           )}
         </div>
       </div>
+
+      <EmailVersandDialog
+        open={emailOpen}
+        onOpenChange={setEmailOpen}
+        kontext="angebot"
+        kunde={kunde}
+        angebot={a}
+        pdfBlobUrl={pdf.url}
+        pdfDateiname={`${a.nummer}.pdf`}
+      />
     </div>
   );
 }

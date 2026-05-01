@@ -1,13 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Download, Send, CheckCircle2, Wallet } from "lucide-react";
-import { useRechnung, useSendeRechnung, useAngebot } from "@/hooks/useApi";
+import { useRechnung, useAngebot, useKunde } from "@/hooks/useApi";
 import { useRechnungPdf } from "@/hooks/useBelegPdf";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { FlowBar } from "@/components/flow/FlowBar";
 import { rechnungFlow } from "@/lib/flow/flows";
 import { ZahlungErfassenDialog } from "@/components/forms/ZahlungErfassenDialog";
+import { EmailVersandDialog } from "@/components/email/EmailVersandDialog";
+import { EmailVersandHistorie } from "@/components/email/EmailVersandHistorie";
 import { formatEUR, formatDate } from "@/lib/format";
 import { summenRechnung } from "@/lib/mock/backend";
 import { toast } from "sonner";
@@ -17,10 +19,11 @@ export const Route = createFileRoute("/rechnungen/$id")({ component: Page });
 function Page() {
   const { id } = Route.useParams();
   const { data: r } = useRechnung(id);
-  const send = useSendeRechnung(id);
   const pdf = useRechnungPdf(r);
   const [zahlungOpen, setZahlungOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
   const { data: quellAngebot } = useAngebot(r?.quellAngebotId ?? "");
+  const { data: kunde } = useKunde(r?.kundeId ?? "");
 
   if (!r) return <p className="text-sm text-muted-foreground">Lade …</p>;
   const s = summenRechnung(r.positionen, r.rabattGesamt);
@@ -31,15 +34,14 @@ function Page() {
   const renderPrimaryAction = () => {
     if (r.status === "entwurf") {
       return (
-        <Button
-          className="rounded-lg"
-          onClick={() =>
-            send.mutate(undefined, { onSuccess: () => toast.success("Rechnung versendet") })
-          }
-        >
+        <Button className="rounded-lg" onClick={() => setEmailOpen(true)}>
           <Send className="mr-1.5 h-4 w-4" /> Per E-Mail versenden
         </Button>
       );
+    }
+    if (r.status === "versendet" || r.status === "ueberfaellig" || r.status === "teilbezahlt") {
+      // weiter unten regulärer Zahlung-Button — zusätzlich Mahnung anbieten bei überfällig
+      // (rendern wir später in einem zweiten Block, hier primär)
     }
     if (r.status === "bezahlt") {
       return (
@@ -155,6 +157,18 @@ function Page() {
               </ul>
             </div>
           )}
+
+          {r.status === "ueberfaellig" && (
+            <Button
+              variant="outline"
+              className="w-full rounded-lg border-warning/40 bg-warning/10 text-warning-foreground hover:bg-warning/20"
+              onClick={() => setEmailOpen(true)}
+            >
+              <Send className="mr-1.5 h-4 w-4" /> Mahnung senden
+            </Button>
+          )}
+
+          <EmailVersandHistorie belegId={r.id} belegTyp="rechnung" />
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-border bg-muted/40 shadow-sm">
@@ -171,6 +185,15 @@ function Page() {
       </div>
 
       <ZahlungErfassenDialog open={zahlungOpen} onOpenChange={setZahlungOpen} rechnung={r} />
+      <EmailVersandDialog
+        open={emailOpen}
+        onOpenChange={setEmailOpen}
+        kontext={r.status === "ueberfaellig" ? "mahnung" : "rechnung"}
+        kunde={kunde}
+        rechnung={r}
+        pdfBlobUrl={pdf.url}
+        pdfDateiname={`${r.nummer}.pdf`}
+      />
     </div>
   );
 }

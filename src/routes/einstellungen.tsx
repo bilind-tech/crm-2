@@ -11,18 +11,29 @@ import {
   Save,
   History,
   Save as SaveIcon,
+  Mail,
+  PenLine,
+  Server,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useFirmendaten, useUpdateFirmendaten } from "@/hooks/useApi";
 import { PageHeader } from "@/components/layout/PageHeader";
+import {
+  EmailVorlagenTab,
+  EmailSignaturenTab,
+  SmtpTab,
+} from "@/components/email/EmailEinstellungen";
 import type { Firmendaten } from "@/lib/api/types";
 
 export const Route = createFileRoute("/einstellungen")({ component: Page });
 
 const tabs = [
   { id: "firmendaten", label: "Firmendaten", icon: Building2 },
+  { id: "email-vorlagen", label: "E-Mail-Vorlagen", icon: Mail },
+  { id: "email-signaturen", label: "E-Mail-Signaturen", icon: PenLine },
+  { id: "smtp", label: "SMTP-Server", icon: Server },
   { id: "erscheinungsbild", label: "Erscheinungsbild", icon: Palette },
   { id: "nummernkreise", label: "Nummernkreise", icon: Hash },
   { id: "mahnwesen", label: "Mahnwesen", icon: Bell },
@@ -78,7 +89,11 @@ function Page() {
         />
       )}
 
-      {tab !== "firmendaten" && (
+      {tab === "email-vorlagen" && <EmailVorlagenTab />}
+      {tab === "email-signaturen" && <EmailSignaturenTab />}
+      {tab === "smtp" && <SmtpTab />}
+
+      {!["firmendaten", "email-vorlagen", "email-signaturen", "smtp"].includes(tab) && (
         <div className="rounded-2xl border border-border bg-card p-12 text-center shadow-sm">
           <p className="text-base font-medium">
             {tabs.find((t) => t.id === tab)?.label} folgt
