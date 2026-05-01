@@ -50,10 +50,6 @@ function Page() {
   return (
     <div className="space-y-6">
       <PageHeader
-        breadcrumb={[
-          { label: "Kunden", to: "/kunden" },
-          { label: fullName },
-        ]}
         title={fullName}
         subtitle={
           <>
