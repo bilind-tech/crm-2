@@ -1,57 +1,73 @@
-## 1. Neue mobile FilterBar (alle Listenseiten)
+## Ziel
 
-Aktuell: Pillen-Tabs brechen unschön um, doppelter Container, Suche separat darunter — wirkt überladen. Auf Touch zu klein.
+1. Der "Vom Handy scannen"-Dialog ist auf dem PC kaputt (Inhalt wird oben/unten abgeschnitten, sieht "geklatscht" aus).
+2. Alle primären Action-Buttons (Desktop + Mobile-Upload-Seite) sollen den gleichen blauen Premium-Stil wie der "+ Neu"-Button bekommen.
+3. Auf der Handy-Upload-Seite (`/m/upload/$session`) soll man neben "Foto aufnehmen" auch **Bilder/PDFs aus der Mediathek/Dateien** hochladen können — funktional auch auf dem Raspberry-Pi-LAN.
 
-Neu für Mobile (`<md`):
-- **Sticky Toolbar** direkt unter dem Header, eine Zeile, bündig:
-  - Kompaktes **Such-Icon-Feld** (volle Breite, dezent), Tap = Cursor rein, kein Modal-Sprung mehr.
-  - Rechts daneben ein **„Filter"-Button mit Gegenstand-Counter** (z. B. „Alle" / „Versendet · 1").
-- Klick auf den Filter-Button öffnet ein **Bottom-Sheet** (vom unteren Rand hoch, native-feel) mit:
-  - Großen, fingerfreundlichen Status-Zeilen (Häkchen + Label + Count rechts).
-  - Schließen automatisch nach Auswahl.
-- Status-Pillen werden auf Mobile **komplett ausgeblendet** (sie brachen vorher um). Auf Desktop/Tablet (`md:`) bleibt die heutige Pillen-Leiste 1:1 erhalten.
+---
 
-Datei: `src/components/layout/FilterBar.tsx` (neu) — wird aus `src/routes/angebote.tsx` re-exportiert, um Imports in `rechnungen/kunden/objekte/dokumente.tsx` nicht zu brechen. Bottom-Sheet basiert auf dem vorhandenen `Dialog`/`Drawer` aus `src/components/ui/`.
+## 1. HandyScanDialog reparieren (`src/components/dokumente/HandyScanDialog.tsx`)
 
-## 2. Dokumente erweitern: Titel, Frist, Mahn-Status
+Problem auf dem Screenshot: der Dialog-Content rendert ohne Scroll und ohne Höhenbegrenzung — Header und Footer werden vom Viewport abgeschnitten, die QR-Karte hängt halb ins Leere.
 
-### Datenmodell (`src/lib/api/types.ts`)
-`Dokument` bekommt:
-- `titel` ist bereits vorhanden — bleibt editierbar.
-- `faelligAm?: ISODate` — bis wann zu erledigen (z. B. „Belege ans Steuerbüro").
-- `erledigtAm?: ISODateTime` — als erledigt markiert.
-- bereits vorhandene `beschreibung`, `dokumentdatum`, `betrag`, `steuerrelevant` werden ebenfalls editierbar gemacht.
+Fix:
+- `DialogContent` mit `max-h-[90vh] flex flex-col` und der innere Bereich `flex-1 overflow-y-auto`.
+- QR-Karte etwas kleiner (`size={220}`) und gleichmäßige Innen-Paddings, damit der Dialog auf 1080p sauber zentriert ist.
+- "Sitzung beenden" als richtigen `<Button variant="outline">` und in einem klar abgesetzten Footer (`border-t … pt-3`).
 
-Status leitet sich ab (kein zusätzliches Feld nötig):
-- `erledigtAm` gesetzt → **erledigt**
-- sonst `faelligAm < heute` → **überfällig**
-- sonst `faelligAm` in <= 3 Tagen → **bald fällig**
-- sonst → **offen**
+## 2. Einheitlicher Premium-Blue-Button-Stil
 
-### Bearbeiten-Dialog `DokumentBearbeitenDialog`
-Neu unter `src/components/dokumente/DokumentBearbeitenDialog.tsx`:
-- Titel, Beschreibung, Typ, Dokumentdatum, **Frist (faelligAm)**, Betrag, „Steuerrelevant"-Toggle, „Erledigt"-Toggle.
-- Bild-/PDF-Vorschau oben.
-- Speichern → `useUpdateDokument` (PATCH).
+Wir nutzen den existierenden `PrimaryAction` aus `src/components/layout/PrimaryAction.tsx` (genau das blaue Gradient des "+ Neu"-Buttons) und führen einen kleinen Bruder ein.
 
-### Hooks & Mock-Backend
-- `useUpdateDokument` neu in `src/hooks/useApi.ts` (PATCH `/dokumente/:id`).
-- Mock-Backend: PATCH-Handler analog zu Angeboten (`Object.assign`).
+- **Neue Variante** `PrimaryAction` akzeptiert optional `variant?: "solid" | "soft"` und `size?: "md" | "lg"` für die Mobile-Vollbreite-Variante (gleiche blaue Optik, nur größer + `w-full justify-center`).
+- Verwenden:
+  - **`src/routes/dokumente.tsx`**: "Vom Handy scannen" und "Dokument hochladen" werden beide `PrimaryAction`-Instanzen (gleicher Stil, "Vom Handy scannen" mit Icon `Smartphone`).
+  - **`src/components/dokumente/DokumentUploader.tsx`** (compact-Branch): Button durch `PrimaryAction` ersetzen.
+  - **`src/routes/m.upload.$session.tsx`**: "Foto aufnehmen", "Aus Galerie/Dateien wählen" und "Alle hochladen" benutzen die gleiche blaue Optik (`size="lg"`, full-width). "Alle hochladen" bekommt eine leicht abgesetzte Erfolgs-Variante (Häkchen-Icon) — bleibt aber im selben blauen Spektrum.
 
-### Dokumente-Liste
-- Tap auf Dokument-Karte/Zeile → öffnet Bearbeiten-Dialog.
-- Status-Badge sichtbar: grau „Offen", orange „Bald fällig", rot „Überfällig", grün „Erledigt".
-- Frist-Datum als Sublabel.
+So entsteht visuelle Konsistenz vom Desktop-Header bis hin zur Handy-Seite.
 
-### Benachrichtigungen für überfällige Dokumente
-- Bestehender `scheduler` (`src/lib/mock/scheduler.ts`) bekommt einen zusätzlichen Pass: durchsucht alle Dokumente, bei denen `faelligAm < heute` und `erledigtAm == null` und für die noch keine Benachrichtigung existiert (Schlüssel: `dokument:<id>:ueberfaellig`) → erstellt `Benachrichtigung` mit Link `/dokumente`.
-- Erscheint dann sofort im vorhandenen Glocken-Popover oben rechts (nutzt `GET /benachrichtigungen`, ist bereits angeschlossen).
-- Wird ein Dokument als erledigt markiert → entsprechende ungelesene Benachrichtigung wird mit-gelöscht (Idempotenz).
+## 3. Handy-Upload erweitern (`src/routes/m.upload.$session.tsx`)
 
-### Dashboard-KPI
-- Neue kleine KPI „Offene Dokumente" mit Count, falls > 0 → tone `warning`. Auf Dokumente-Seite eigene KPI-Karte „Überfällig" ergänzen (ersetzt eine vorhandene Karte, damit es 4 bleiben).
+Bisher: nur ein `<input capture="environment">` → öffnet zwingend die Kamera.
 
-## Was NICHT angefasst wird
-- Vorhandener Drag&Drop-Uploader und Handy-Scan-Brücke bleiben unverändert.
-- Pillen-Filter auf Desktop/Tablet bleibt.
-- Bestehende Benachrichtigungen für andere Bereiche.
+Neu: **zwei** versteckte Inputs + zwei sichtbare Buttons:
+
+```text
+┌────────────────────────────────┐
+│  [📷  Foto aufnehmen]          │  → input#camera (capture="environment", accept="image/*")
+│  [🖼  Aus Galerie / Dateien]   │  → input#picker  (accept="image/*,application/pdf", multiple, KEIN capture)
+└────────────────────────────────┘
+```
+
+- Beim Klick auf "Aus Galerie / Dateien" öffnet iOS/Android den nativen File-Picker (Fotos, Dateien, iCloud, Drive, Downloads…).
+- Verarbeitung in derselben `onCapture`-Logik, aber:
+  - PDFs werden **nicht** komprimiert; `fileToDataUrl` direkt nutzen.
+  - `mimeType` aus `file.type` übernehmen (`image/jpeg`, `image/png`, `application/pdf` …).
+  - `typ`: `dokumentTypAusMime(file.type)` aus `lib/dokument/upload.ts` (`bild` / `rechnung` / `sonstiges`).
+  - Vorschau-Grid: PDFs zeigen ein `FileText`-Icon + Dateiname statt `<img>`.
+  - Größenlimit `MAX_BYTES` (20 MB) anwenden, ansonsten Toast-Fehler pro Datei.
+- "Noch ein Foto" wird zu zwei kontextuellen Buttons (Kamera + Galerie), die immer beide sichtbar bleiben.
+
+## 4. Raspberry-Pi-Kompatibilität
+
+Es ändert sich nichts an der Transport-Schicht:
+- Upload geht weiterhin über `useUploadDateienToSession(token)` → das ist bereits dieselbe Mock-/Backend-API, die der Pi später bedient.
+- Die Erweiterung ist rein client-seitig (zusätzlicher File-Input, Mime-/Größen-Handling). Kein neuer Endpoint nötig.
+- Zur Sicherheit prüfen wir in `useUploadDateienToSession`/`backend.ts`, dass ein Eintrag mit beliebigem `mimeType` (insb. `application/pdf`) korrekt gespeichert wird — falls dort bisher hardcoded `image/jpeg` angenommen wird, wird das angepasst.
+
+## Geänderte Dateien
+
+- `src/components/dokumente/HandyScanDialog.tsx` — Layout-Fix, scrollbarer Content, neuer Footer.
+- `src/components/layout/PrimaryAction.tsx` — `size` + optional `w-full`-Support.
+- `src/components/dokumente/DokumentUploader.tsx` — compact-Button auf `PrimaryAction` umstellen.
+- `src/routes/dokumente.tsx` — beide Header-Buttons als `PrimaryAction`.
+- `src/routes/m.upload.$session.tsx` — zweiter File-Input (Galerie/Dateien), PDF-Support, neue Button-Optik, PDF-Vorschau.
+- ggf. `src/lib/mock/backend.ts` / `src/hooks/useApi.ts` — Mime-Type-Pass-Through für Session-Upload prüfen.
+
+## Akzeptanzkriterien
+
+- Auf Desktop @1920×1080 ist der "Vom Handy scannen"-Dialog vollständig sichtbar, vertikal zentriert, mit klarem Header/Inhalt/Footer.
+- Alle primären Buttons auf der Dokumente-Seite und auf der Mobile-Upload-Seite haben dieselbe blaue Premium-Optik wie der "+ Neu"-Button.
+- Auf dem Handy: zwei Buttons — "Foto aufnehmen" (Kamera) und "Aus Galerie / Dateien" (öffnet nativen Picker, akzeptiert Bilder + PDF, mehrere Dateien).
+- Hochgeladene PDFs erscheinen in der Vorschau-Liste mit Datei-Icon und werden mit korrektem Mime-Type an die Session übertragen.
