@@ -11,6 +11,8 @@ import { AngebotForm } from "@/components/forms/AngebotForm";
 import { RechnungForm } from "@/components/forms/RechnungForm";
 import { formatEUR, formatDate } from "@/lib/format";
 import { summenRechnung } from "@/lib/mock/backend";
+import { FlowBar } from "@/components/flow/FlowBar";
+import { angebotFlow, rechnungFlow } from "@/lib/flow/flows";
 
 export const Route = createFileRoute("/kunden/$id")({ component: Page });
 
