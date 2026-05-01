@@ -91,7 +91,13 @@ interface DB {
   appearance: AppearanceEinstellungen;
   backup: BackupEinstellungen;
   mahnung: MahnEinstellungen;
-  zaehler: { kunde: number; objekt: number; angebot: number; rechnung: number };
+  dauerauftraege: Dauerauftrag[];
+  dauerauftragLaeufe: DauerauftragLauf[];
+  dauerauftragSonderpositionen: DauerauftragSonderposition[];
+  zahlungseingaenge: Zahlungseingang[];
+  dauerauftragEinstellungen: DauerauftragEinstellungen;
+  zahlungsabgleich: ZahlungsabgleichEinstellungen;
+  zaehler: { kunde: number; objekt: number; angebot: number; rechnung: number; dauerauftrag: number };
 }
 
 let db: DB | null = null;
@@ -110,6 +116,10 @@ function load(): DB {
       db.unlocked = false;
       db.unlockedAt = undefined;
       return db;
+    }
+    // Legacy-Keys aufräumen, frisch seeden (Settings & Daten gehen verloren — bewusst)
+    for (const k of LEGACY_KEYS) {
+      try { window.localStorage.removeItem(k); } catch { /* ignore */ }
     }
   } catch {
     /* ignore */
