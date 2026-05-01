@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { Eye, CheckCircle2, Trash2, ChevronRight } from "lucide-react";
+import { CheckCircle2, Trash2, ChevronRight } from "lucide-react";
+import { PdfViewButton } from "@/components/pdf/PdfViewButton";
 import { Button } from "@/components/ui/button";
 import { useRechnungen, useDeleteRechnung } from "@/hooks/useApi";
 import { formatEUR, formatDate } from "@/lib/format";
