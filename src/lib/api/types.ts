@@ -145,6 +145,18 @@ export interface BelegOptionen {
   eigenesOutro?: string;
   /** Wiederkehrend / Dauerauftrag */
   wiederkehrend: boolean;
+  /** Detail-Konfiguration für „Wiederkehrend": Rhythmus + Wochentage. Optional. */
+  wiederkehrendDetails?: WiederkehrendDetails;
+}
+
+export type WiederkehrendRhythmus = "woechentlich" | "monatlich" | "quartalsweise" | "jaehrlich";
+
+export interface WiederkehrendDetails {
+  rhythmus: WiederkehrendRhythmus;
+  /** Wochentage 0=So, 1=Mo, … 6=Sa. Mehrfach-Auswahl. Nur für Rhythmus „woechentlich" wirklich sinnvoll, kann aber überall mitgeschickt werden. */
+  wochentage: number[];
+  /** Häufigkeit pro Monat (z. B. 2 = „2× monatlich"). Nur informativ, optional. */
+  proMonat?: number;
 }
 
 /** Status der automatischen Google-Drive-Synchronisation eines PDFs. Wird vom Pi-Backend gesetzt. */
