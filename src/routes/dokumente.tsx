@@ -4,6 +4,7 @@ import { Smartphone, Receipt, Image as ImageIcon, FileText, AlertTriangle } from
 import { useDokumente } from "@/hooks/useApi";
 import { formatEUR, formatDate } from "@/lib/format";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
+import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { FilterBar } from "@/routes/angebote";
 import { DokumentUploader } from "@/components/dokumente/DokumentUploader";
 import { HandyScanDialog } from "@/components/dokumente/HandyScanDialog";
