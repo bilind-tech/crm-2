@@ -21,6 +21,7 @@ import type {
   EmailVorlage,
   Firmendaten,
   Kunde,
+  MahnEinstellungen,
   Notiz,
   Nummernkreise,
   Objekt,
@@ -30,6 +31,7 @@ import type {
   SmtpEinstellungen,
   Textvorlage,
 } from "@/lib/api/types";
+import { STANDARD_MAHN_EINSTELLUNGEN, standardMahnVorlagen } from "@/lib/mahnung/defaults";
 
 function uuid(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
