@@ -47,7 +47,13 @@ export function AppSidebar() {
   const path = useRouterState({ select: (r) => r.location.pathname });
   const { lock } = useAuth();
   const mahn = useMahnZaehler();
-  const { data: laeufeErzeugt = [] } = useDauerauftragLaeugeOffen();
+  const { data: laeufeErzeugt = [] } = useDauerauftragLaeufe("erzeugt");
+  const { data: alleRechnungen = [] } = useRechnungen();
+  const offeneEntwuerfe = laeufeErzeugt.filter((l) => {
+    if (!l.rechnungId) return false;
+    const r = alleRechnungen.find((rr) => rr.id === l.rechnungId);
+    return r?.status === "entwurf";
+  }).length;
   const { data: zeOffen = [] } = useZahlungseingaenge("offen");
 
   const uebersicht: NavItem[] = [
@@ -63,7 +69,7 @@ export function AppSidebar() {
       title: "Daueraufträge",
       url: "/dauerauftraege",
       icon: Repeat,
-      badge: laeufeErzeugt.length,
+      badge: offeneEntwuerfe,
       badgeTone: "primary",
     },
     {
