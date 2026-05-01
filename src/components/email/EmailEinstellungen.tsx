@@ -41,6 +41,7 @@ import {
 import type { EmailVorlage, EmailSignatur, EmailKontext } from "@/lib/api/types";
 import { ALLE_PLATZHALTER } from "@/lib/email/placeholders";
 import { cn } from "@/lib/utils";
+import { useConfirm } from "@/hooks/useConfirm";
 
 // =============================================================================
 // VORLAGEN-TAB
@@ -53,6 +54,7 @@ export function EmailVorlagenTab() {
   const del = useDeleteEmailVorlage();
   const [editing, setEditing] = useState<EmailVorlage | null>(null);
   const [creating, setCreating] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   return (
     <div className="space-y-4">
@@ -111,10 +113,20 @@ export function EmailVorlagenTab() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      if (confirm(`Vorlage „${v.name}" löschen?`))
-                        del.mutate(v.id, { onSuccess: () => toast.success("Vorlage gelöscht") });
-                    }}
+                    onClick={() =>
+                      confirm(
+                        {
+                          title: "Vorlage löschen?",
+                          description: `„${v.name}" dauerhaft entfernen.`,
+                          variant: "destructive",
+                          confirmLabel: "Löschen",
+                        },
+                        () =>
+                          del.mutate(v.id, {
+                            onSuccess: () => toast.success("Vorlage gelöscht"),
+                          }),
+                      )
+                    }
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
