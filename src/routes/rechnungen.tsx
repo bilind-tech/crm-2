@@ -270,6 +270,10 @@ function Page() {
             {filtered.map((r) => {
               const b = brutto(r);
               const offen = b - bezahlt(r);
+              const tageUeber =
+                r.status !== "bezahlt" && r.status !== "storniert" && r.faelligkeitsdatum < heute
+                  ? Math.floor((Date.parse(heute) - Date.parse(r.faelligkeitsdatum)) / 86400000)
+                  : 0;
               return (
                 <tr
                   key={r.id}
@@ -289,7 +293,18 @@ function Page() {
                   <td className="px-4 py-3 text-muted-foreground">{formatDate(r.rechnungsdatum)}</td>
                   <td className="px-4 py-3 text-muted-foreground">{formatDate(r.faelligkeitsdatum)}</td>
                   <td className="px-4 py-3 text-right font-semibold">{formatEUR(b)}</td>
-                  <td className="px-4 py-3 text-right font-semibold">{formatEUR(offen)}</td>
+                  <td className={`px-4 py-3 text-right font-semibold ${tageUeber > 0 ? "text-destructive" : r.status === "bezahlt" ? "text-success" : ""}`}>
+                    {r.status === "bezahlt" ? (
+                      <span className="inline-flex items-center gap-1 text-xs"><CheckCircle2 className="h-3.5 w-3.5" /> bezahlt</span>
+                    ) : (
+                      <>
+                        {formatEUR(offen)}
+                        {tageUeber > 0 && (
+                          <div className="text-[10px] font-normal">+{tageUeber}d</div>
+                        )}
+                      </>
+                    )}
+                  </td>
                   <td className="px-4 py-3">{statusBadge(r.status)}</td>
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1 text-muted-foreground">
