@@ -17,6 +17,8 @@ import { PdfViewButton } from "@/components/pdf/PdfViewButton";
 import { PdfPreviewCard } from "@/components/pdf/PdfPreviewCard";
 import { formatEUR, formatDate } from "@/lib/format";
 import { summenRechnung } from "@/lib/mock/backend";
+import { formatWiederkehrend } from "@/components/forms/DauerauftragKonfig";
+import { Repeat } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/rechnungen/$id")({ component: Page });
@@ -188,13 +190,57 @@ function Page() {
             </div>
           )}
 
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Positionen</p>
+            <ul className="space-y-3">
+              {r.positionen.map((p, i) => {
+                const istPauschal = p.modus === "pauschal";
+                const summe = istPauschal
+                  ? (p.pauschalpreisNetto ?? 0) * (1 - (p.rabatt || 0) / 100)
+                  : p.menge * p.einzelpreisNetto * (1 - (p.rabatt || 0) / 100);
+                return (
+                  <li key={p.id} className="text-sm">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="min-w-0 font-medium">
+                        {i + 1}. {istPauschal ? (p.beschreibung.split("\n")[0] || "Pauschal") : p.beschreibung}
+                      </span>
+                      <span className="whitespace-nowrap font-semibold tabular-nums">
+                        {formatEUR(summe)}
+                      </span>
+                    </div>
+                    {istPauschal ? (
+                      <div className="mt-0.5 text-xs text-muted-foreground">
+                        {p.ausfuehrung && <span>{p.ausfuehrung} · </span>}
+                        Pauschal
+                      </div>
+                    ) : (
+                      <div className="mt-0.5 text-xs text-muted-foreground">
+                        {p.menge} × {formatEUR(p.einzelpreisNetto)}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
           {r.optionen && (
             <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
               <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Optionen</p>
               <ul className="space-y-1.5 text-sm text-muted-foreground">
                 <li>{r.optionen.materialBereitgestellt ? "✓" : "✗"} Material bereitgestellt</li>
                 <li>{r.optionen.standardAnschreiben ? "✓" : "✗"} Standard-Anschreiben</li>
-                <li>{r.optionen.wiederkehrend ? "✓" : "✗"} Wiederkehrend</li>
+                {r.optionen.wiederkehrend && (
+                  <li className="flex items-center gap-1.5 text-foreground">
+                    <Repeat className="h-3.5 w-3.5 text-primary" />
+                    Dauerauftrag
+                    {r.optionen.wiederkehrendDetails && (
+                      <span className="text-muted-foreground">
+                        · {formatWiederkehrend(r.optionen.wiederkehrendDetails)}
+                      </span>
+                    )}
+                  </li>
+                )}
               </ul>
             </div>
           )}
