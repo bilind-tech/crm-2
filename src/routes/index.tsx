@@ -40,6 +40,19 @@ function Dashboard() {
   const { data: umsatz = [] } = useUmsatz();
   const { data: rechnungen = [] } = useRechnungen();
   const mahn = useMahnZaehler();
+  const { data: dauerauftraege = [] } = useDauerauftraege();
+  const { data: laeufeErzeugt = [] } = useDauerauftragLaeufe("erzeugt");
+
+  const aktiveDA = dauerauftraege.filter((d) => d.status === "aktiv");
+  const mrr = aktiveDA.reduce((sum, da) => {
+    const s = summenRechnung(da.positionen, da.rabattGesamt);
+    return sum + monatlicheBrutto(da, s.brutto);
+  }, 0);
+  const offeneDAEntwuerfe = laeufeErzeugt.filter((l) => {
+    if (!l.rechnungId) return false;
+    const r = rechnungen.find((rr) => rr.id === l.rechnungId);
+    return r?.status === "entwurf";
+  }).length;
 
   const offene = rechnungen.filter(
     (r) => r.status === "versendet" || r.status === "ueberfaellig" || r.status === "teilbezahlt"
