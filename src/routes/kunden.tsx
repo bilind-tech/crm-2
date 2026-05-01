@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
 import { ChevronRight } from "lucide-react";
 import { useKunden } from "@/hooks/useApi";
@@ -9,7 +9,13 @@ import { SlideOver } from "@/components/ui/slide-over";
 import { MobileListCard } from "@/components/ui/mobile-list-card";
 import { KundeForm } from "@/components/forms/KundeForm";
 
-export const Route = createFileRoute("/kunden")({ component: Page });
+export const Route = createFileRoute("/kunden")({ component: Layout });
+
+function Layout() {
+  const path = useRouterState({ select: (r) => r.location.pathname });
+  if (path !== "/kunden") return <Outlet />;
+  return <Page />;
+}
 
 function Page() {
   const { data: alle = [] } = useKunden();
