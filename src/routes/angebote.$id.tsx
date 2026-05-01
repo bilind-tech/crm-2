@@ -138,6 +138,46 @@ function Page() {
       {/* Lebenszyklus-Balken */}
       <FlowBar steps={flow.steps} size="lg" />
 
+      {/* Annahme-Banner: Angebot wurde angenommen, aber noch keine Rechnung */}
+      {a.status === "angenommen" && !folgeRechnung && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-primary/40 bg-primary/5 p-5 shadow-sm">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+              Angebot angenommen
+            </p>
+            <p className="mt-1 text-sm">
+              Schick jetzt die Rechnung an{" "}
+              <span className="font-semibold">
+                {kunde?.firmenname ||
+                  [kunde?.vorname, kunde?.nachname].filter(Boolean).join(" ") ||
+                  "den Kunden"}
+              </span>
+              .
+            </p>
+          </div>
+          <Button
+            className="rounded-lg"
+            onClick={() =>
+              inRechnung.mutate(undefined, {
+                onSuccess: (r) => {
+                  toast.success(`Rechnung ${r.nummer} erstellt`);
+                  navigate({ to: "/rechnungen/$id", params: { id: r.id } });
+                },
+              })
+            }
+          >
+            <FileCheck2 className="mr-1.5 h-4 w-4" /> In Rechnung umwandeln
+          </Button>
+        </div>
+      )}
+
+      {/* Abgelehnt-Hinweis */}
+      {a.status === "abgelehnt" && (
+        <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+          Dieses Angebot wurde abgelehnt.
+        </div>
+      )}
+
       {/* Folge-Rechnung Hinweis */}
       {folgeRechnung && (
         <div className="flex items-center justify-between rounded-2xl border border-success/30 bg-success/5 p-4">

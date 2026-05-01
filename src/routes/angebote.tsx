@@ -1,11 +1,12 @@
 import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { Search, Send, Trash2, ChevronRight, SlidersHorizontal, Check } from "lucide-react";
+import { Search, Mail, Trash2, ChevronRight, SlidersHorizontal, Check, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { PdfViewButton } from "@/components/pdf/PdfViewButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAngebote, useDeleteAngebot, useKunde } from "@/hooks/useApi";
+import { useAngebote, useDeleteAngebot, useKunde, useUpdateAngebot } from "@/hooks/useApi";
+import { toast } from "sonner";
 import { useAngebotPdf } from "@/hooks/useBelegPdf";
 import { EmailVersandDialog } from "@/components/email/EmailVersandDialog";
 import { formatEUR, formatDate } from "@/lib/format";
@@ -141,14 +142,15 @@ function Page() {
             badge={statusBadge(a.status)}
             actions={
               <>
+                <AngebotAnnahmeButtons angebot={a} />
                 <PdfViewButton kind="angebot" beleg={a} />
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setEmailFuer(a); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setEmailFuer(a); }}
                   className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-primary"
                   title="Per E-Mail versenden"
                 >
-                  <Send className="h-4 w-4" />
+                  <Mail className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() =>
@@ -215,14 +217,15 @@ function Page() {
                 <td className="px-4 py-3">{statusBadge(a.status)}</td>
                 <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-end gap-1 text-muted-foreground">
+                    <AngebotAnnahmeButtons angebot={a} size="sm" />
                     <PdfViewButton kind="angebot" beleg={a} />
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setEmailFuer(a); }}
+                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); setEmailFuer(a); }}
                       className="rounded-md p-1.5 hover:bg-muted hover:text-primary"
                       title="Per E-Mail versenden"
                     >
-                      <Send className="h-4 w-4" />
+                      <Mail className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() =>
@@ -291,7 +294,49 @@ function AngebotEmailLauncher({ angebot, onClose }: { angebot: Angebot; onClose:
       angebot={angebot}
       pdfBlobUrl={pdf.url}
       pdfDateiname={`${angebot.nummer}.pdf`}
+      pdfStatus={pdf.status}
     />
+  );
+}
+
+function AngebotAnnahmeButtons({ angebot, size = "md" }: { angebot: Angebot; size?: "sm" | "md" }) {
+  const upd = useUpdateAngebot(angebot.id);
+  if (angebot.status !== "versendet") return null;
+  const setStatus = (s: "angenommen" | "abgelehnt", e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    upd.mutate(
+      { status: s },
+      {
+        onSuccess: () =>
+          toast.success(
+            s === "angenommen"
+              ? `Angebot ${angebot.nummer} als angenommen markiert`
+              : `Angebot ${angebot.nummer} als abgelehnt markiert`,
+          ),
+      },
+    );
+  };
+  const klass = size === "sm" ? "p-1.5" : "p-2";
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => setStatus("angenommen", e)}
+        className={`rounded-md ${klass} text-success hover:bg-success/10`}
+        title="Als angenommen markieren"
+      >
+        <ThumbsUp className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={(e) => setStatus("abgelehnt", e)}
+        className={`rounded-md ${klass} text-muted-foreground hover:bg-muted hover:text-destructive`}
+        title="Als abgelehnt markieren"
+      >
+        <ThumbsDown className="h-4 w-4" />
+      </button>
+    </>
   );
 }
 

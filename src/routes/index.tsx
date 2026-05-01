@@ -30,6 +30,7 @@ import {
   YAxis,
 } from "recharts";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
+import { NaechsteSchritteCard } from "@/components/dashboard/NaechsteSchritteCard";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -139,6 +140,8 @@ function Dashboard() {
           </ResponsiveContainer>
         </div>
       </div>
+
+      <NaechsteSchritteCard />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
