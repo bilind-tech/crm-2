@@ -1,146 +1,255 @@
 
-# Phase C — Mahnwesen (Frontend + Mock)
+# Phase C — Mahnwesen (Frontend + Mock-Backend)
 
-## Was Mahnwesen heißt — kurz
+## Was Mahnwesen ist — kurz
 
-Wenn ein Kunde eine Rechnung nicht zahlt, erinnerst du ihn nacheinander höflicher → bestimmter → letzter. Heute hast du **eine** Mahn-Vorlage und einen Button „Mahnung senden". Das reicht nicht: du brauchst Stufen, automatische Erkennung wer dran ist, und Übersicht, damit nichts durchrutscht.
+Wenn ein Kunde nicht zahlt, schreibst du ihm in **mehreren Stufen**: erst freundlich erinnern, dann bestimmter mahnen, schließlich letzte Aufforderung. Jede Stufe hat ein Datum, eine Frist, optional eine Mahngebühr — und alles muss nachvollziehbar sein.
 
-## Ziel von Phase C
-
-1. **3 Mahnstufen** statt einer (Erinnerung → 1. Mahnung → 2. Mahnung)
-2. **Automatik:** Rechnungen werden selbst „überfällig", wenn Fälligkeitsdatum überschritten — ohne dass du klickst
-3. **Mahn-Dashboard:** eine Seite, die dir zeigt „diese 7 Rechnungen sind dran" mit jeweils der passenden Stufe
-4. **Historie pro Rechnung:** wann wurde welche Stufe versendet, mit welcher Frist
-5. **Mahngebühren** optional pro Stufe (z.B. 5 € ab Stufe 2)
+Heute hast du **eine** Mahnvorlage und einen einzelnen Button "Mahnung senden" auf der Rechnungs-Detailseite. Das reicht weder rechtlich noch praktisch.
 
 ---
 
-## Konzept: Die 3 Stufen
+## Die 5 Ziele
 
-| Stufe | Wann fällig | Ton | Mahngebühr (Default) | Neue Frist |
-|---|---|---|---|---|
-| **0 · Zahlungserinnerung** | 3 Tage nach Fälligkeit | freundlich | 0 € | +7 Tage |
-| **1 · 1. Mahnung** | 10 Tage nach Erinnerung | bestimmt | 5 € | +7 Tage |
-| **2 · 2. Mahnung (letzte)** | 10 Tage nach 1. Mahnung | letzte Aufforderung | 10 € | +7 Tage |
-
-Alle Werte (Tage, Gebühren, Texte) **konfigurierbar in Einstellungen**.
-
-Nach Stufe 2: Rechnung bekommt Status „Inkasso-Übergabe vorgeschlagen" — keine weitere automatische Mahnung. Du entscheidest manuell.
+1. **3 saubere Mahnstufen** statt einer pauschalen Mahnung
+2. **Auto-Erkennung:** Rechnungen werden ohne Klick "überfällig", sobald die Fälligkeit überschritten ist; die fällige Mahnstufe wird vorgeschlagen
+3. **Mahn-Cockpit** (`/mahnungen`) — eine zentrale Liste "diese Rechnungen sind dran", sortiert nach Dringlichkeit
+4. **Mahn-Historie** pro Rechnung — wer wann mit welcher Stufe und Frist angeschrieben wurde, lückenlos
+5. **Mahngebühren** konfigurierbar pro Stufe (z.B. 0 € / 5 € / 10 €), korrekt im Mahnschreiben angezeigt
 
 ---
 
-## Was die UI macht
+## Konzept: Die 3 Stufen (Defaults — alles konfigurierbar)
 
-### 1. Mahn-Dashboard (neue Seite `/mahnungen`)
+| # | Bezeichnung | Trigger | Ton | Mahngebühr | Neue Frist |
+|---|---|---|---|---|---|
+| 1 | Zahlungserinnerung | 3 Tage nach Fälligkeit | freundlich | 0 € | +7 Tage |
+| 2 | 1. Mahnung | 10 Tage nach Stufe 1 | bestimmt | 5 € | +7 Tage |
+| 3 | Letzte Mahnung | 10 Tage nach Stufe 2 | letzte Aufforderung, Inkasso-Hinweis | 10 € | +7 Tage |
 
-Zentrale Übersicht — die wichtigste neue Seite:
+Nach Stufe 3: Rechnung wird als **"Inkasso-reif"** markiert — keine weitere automatische Mahnung. Du entscheidest manuell (Inkasso, Anwalt, abschreiben).
+
+**Wichtige Regel:** Eine Stufe wird erst "fällig vorgeschlagen", wenn die in der vorigen Stufe gesetzte **neue Frist** abgelaufen ist. Das vermeidet, dass jemand am Tag nach der Erinnerung schon die 1. Mahnung bekommt.
+
+---
+
+## Die UI im Detail
+
+### 1. Neues Mahn-Cockpit `/mahnungen`
+
+Die wichtigste neue Seite. Reduziert das Problem "wo sind meine offenen Posten?" auf einen Klick.
 
 ```text
-┌────────────────────────────────────────────────────┐
-│ Mahnwesen                                          │
-│                                                    │
-│ Heute fällig: 7 Rechnungen · Summe offen: 4.230 € │
-│                                                    │
-│ ▸ Erinnerung (3)         ▸ 1. Mahnung (2)         │
-│ ▸ 2. Mahnung (1)         ▸ Inkasso-reif (1)       │
-│                                                    │
-│ ┌──────────────────────────────────────────────┐  │
-│ │ RE-2025-014 · Müller GmbH                    │  │
-│ │ 850 € · 12 Tage überfällig · → Erinnerung   │  │
-│ │ [Mahnung vorbereiten]                        │  │
-│ ├──────────────────────────────────────────────┤  │
-│ │ RE-2025-009 · Schmidt KG                     │  │
-│ │ 1.200 € · 25 Tage · letzte Mahnung verschickt│  │
-│ │ → für Inkasso vorschlagen                    │  │
-│ └──────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│ Mahnwesen                                                   │
+│                                                             │
+│ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │
+│ │ Erinnerg.│ │ 1. Mahng.│ │ Letzte M.│ │ Inkasso  │       │
+│ │   3      │ │    2     │ │    1     │ │    1     │       │
+│ │ 1.240 €  │ │  890 €   │ │ 1.200 €  │ │  900 €   │       │
+│ └──────────┘ └──────────┘ └──────────┘ └──────────┘       │
+│                                                             │
+│ Filter: [ Alle ▾ ]  [ ↓ Dringlichkeit ]                    │
+│                                                             │
+│ ┌─────────────────────────────────────────────────────┐    │
+│ │ ▌ RE-2025-014 · Müller GmbH                        │    │
+│ │   850 € offen · 12 Tage überfällig                 │    │
+│ │   FlowBar: ●─●─○─○ (1. Mahnung empfohlen)          │    │
+│ │   [Mahnung vorbereiten]  [Verschieben ▾]           │    │
+│ ├─────────────────────────────────────────────────────┤    │
+│ │ ▌ RE-2025-009 · Schmidt KG                         │    │
+│ │   1.200 € offen · 38 Tage · letzte Mahnung am 15.4 │    │
+│ │   FlowBar: ●─●─●─○                                 │    │
+│ │   [Inkasso-Vorgang starten]                        │    │
+│ └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-Filter nach Stufe, Sortierung nach „am dringendsten zuerst".
+- **4 KPI-Karten** = 4 Stufen mit Anzahl + Summe (klickbar = filtert die Liste)
+- Sortierung default: dringendste oben (Tage seit Fälligkeit · Summe als Tiebreaker)
+- Zeile = klickbar zur Rechnungs-Detailseite, Primary-Button öffnet direkt den Versand-Dialog mit vorausgewählter Stufe
+- "Verschieben" = Mahnstufe um X Tage pausieren (z.B. wenn Kunde Zahlung mündlich zugesagt hat)
+- Mobil: Karten stapeln sich, Aktions-Button volle Breite
 
-Sidebar-Eintrag „Mahnungen" mit Badge-Zahl (Anzahl überfällige Rechnungen) — fällt sofort ins Auge.
+### 2. Sidebar-Eintrag "Mahnungen" mit Live-Badge
 
-### 2. Rechnungs-Detailseite — erweiterte Mahn-Sektion
+Neuer Menüpunkt unter "Rechnungen" mit roter Badge-Zahl = Anzahl der Rechnungen, bei denen mindestens eine Stufe **fällig** (nicht versendet) ist. Sofort sichtbar, ohne irgendwo reinzuklicken.
 
-Statt einem einzigen Button:
-- Zeigt nächste fällige Stufe als Primary-Button („1. Mahnung versenden")
-- Mahn-Historie kompakt: „Erinnerung am 12.04. · 1. Mahnung am 22.04."
-- Manuell überspringen oder Stufe wiederholen möglich (Dropdown)
+### 3. Rechnungs-Detailseite — Mahn-Sektion neu
 
-### 3. Versand-Dialog (Erweiterung)
+Ersetzt den heutigen einzelnen "Mahnung senden"-Button:
 
-Beim Mahnungs-Versand:
-- Dropdown „Stufe" oben (vorausgewählt: nächste fällige)
-- Vorlage wechselt automatisch mit Stufe
-- Mahngebühr-Hinweis sichtbar („+ 5 € Mahngebühr")
-- Neue Frist-Datum vorausgefüllt
+```text
+┌───────────────────────────────────────────────┐
+│ MAHNVERFAHREN                                 │
+│                                               │
+│ Stufenfortschritt: ●─●─○─○                   │
+│                                               │
+│ ✓ Zahlungserinnerung · 03.04.2026 · Frist 10.4│
+│ ✓ 1. Mahnung         · 14.04.2026 · Frist 21.4│
+│ ▸ Letzte Mahnung empfohlen seit 22.04.        │
+│                                               │
+│ [ Letzte Mahnung versenden (10 € Gebühr) ]   │
+│ Stufe ändern ▾    Mahnverfahren pausieren    │
+└───────────────────────────────────────────────┘
+```
 
-### 4. Einstellungen → neuer Tab „Mahnwesen"
+- Pro versendeter Stufe: Datum, Frist, Gebühr, Klick öffnet die zugehörige E-Mail in der Versand-Historie
+- **Primary-Action** = nächste empfohlene Stufe (oder "Inkasso starten" nach Stufe 3)
+- "Stufe ändern" = Dropdown, falls du eine Stufe überspringen oder wiederholen willst
+- "Pausieren" = z.B. "Kunde hat versprochen bis 30.4. zu zahlen" — bis dahin keine Vorschläge
 
-- 3 Stufen konfigurieren: Bezeichnung, Tage, Gebühr, Frist
-- Auto-Vorschlag an/aus (wenn aus: Mahnungen rein manuell)
-- Pro Stufe eigene E-Mail-Vorlage zuordnen
+### 4. Versand-Dialog erweitert
 
----
+`EmailVersandDialog` bekommt im Mahn-Kontext ein zusätzliches Feld oben:
 
-## Logik-Regeln (für die Automatik)
+- Dropdown "Mahnstufe" (vorausgewählt: empfohlene Stufe)
+- Wechsel der Stufe → Vorlage tauscht automatisch, Mahngebühr-Hinweis aktualisiert sich, neue Frist wird neu berechnet
+- Info-Box unter dem Editor: "Mahngebühr 5 € · neue Frist: 21.04.2026" — beides als Platzhalter `{{mahnung.gebuehr}}` und `{{mahnung.neueFrist}}` automatisch im Body verwendbar
+- Beim Versand wird zusätzlich zur E-Mail ein **MahnVorgang**-Eintrag angelegt und mit der `EmailVersand`-ID verknüpft
 
-- Status `versendet` + Fälligkeit überschritten → wird automatisch `ueberfaellig`
-- Wenn Zahlung erfasst (auch teilweise) → Mahnstufe pausiert bis nächste Fälligkeit der Restsumme
-- Wenn voll bezahlt → Mahnkette beendet, alle Mahnungen bleiben in Historie
-- Storniert → Mahnkette beendet
-- „Tage seit Fälligkeit" wird live berechnet, nicht gespeichert
+### 5. Einstellungen → neuer Tab "Mahnwesen"
 
----
+In `src/routes/einstellungen.tsx` als zusätzlicher Tab neben "E-Mail":
 
-## Sichtbare Änderungen — Liste
+- 3 Stufen-Cards (Bezeichnung, Tage nach Vorgänger, Gebühr in €, Frist in Tagen, zugeordnete E-Mail-Vorlage)
+- Master-Schalter: "Auto-Vorschlag aktiviert" (wenn aus: nur manuelle Mahnungen)
+- Reset-Button "Auf Standard zurücksetzen"
 
-**Neue Dateien**
-- `src/routes/mahnungen.tsx` — Dashboard
-- `src/components/mahnung/MahnDashboard.tsx`
-- `src/components/mahnung/MahnHistorie.tsx`
-- `src/components/mahnung/MahnStufenEinstellungen.tsx`
-- `src/lib/mahnung/regeln.ts` — Berechnet aktuelle Stufe pro Rechnung
+### 6. Rechnungsliste-Verbesserung
 
-**Erweiterte Dateien**
-- `types.ts` — neue Felder: `mahnungen[]` auf Rechnung, `MahnStufe`-Konfig
-- `seed.ts` — 3 Standard-Vorlagen, Standard-Stufen-Config, Beispiel-überfällige Rechnungen
-- `backend.ts` — Endpoints für Mahnstufen-Config, Mahnungs-Versand mit Stufe
-- `useApi.ts` — Hooks für Mahn-Daten
-- `EmailVersandDialog.tsx` — Stufen-Auswahl
-- `rechnungen.$id.tsx` — Mahn-Sektion neu
-- `einstellungen.tsx` — Tab „Mahnwesen"
-- `AppSidebar.tsx` — neuer Eintrag mit Badge
-- `index.tsx` (Dashboard) — Kachel „Mahnungen offen"
+In der existierenden `/rechnungen`-Tabelle: kleine Spalte "Mahnstufe" (●●○ Mini-Indikator) — auf einen Blick sichtbar, ohne in die Detailseite zu müssen.
 
----
+### 7. Dashboard-Kachel
 
-## Technische Details
-
-- **Stufenermittlung** (`bestimmeAktuelleStufe(rechnung, config)`): rein berechnet aus `faelligkeitsdatum`, Mahn-Historie und Konfiguration. Keine doppelte Datenhaltung.
-- **MahnVorgang**-Datenmodell: `{ id, rechnungId, stufe: 0|1|2, versendetAm, neueFrist, gebuehr, emailVersandId }` — referenziert `EmailVersand` aus Phase B für Audit-Trail.
-- **Backend-Mock** simuliert „heute = Datum X" mittels existierender `now()`-Helper, sodass Beispieldaten realistisch überfällig wirken.
-- **Mahngebühr** wird **nicht** in Rechnungs-Positionen geschrieben (Original bleibt unverändert), sondern nur im Mahn-Brief-Text als zusätzlicher Betrag angezeigt — sauberer für Buchhaltung.
-- **Keine Cron-Jobs nötig im Frontend**: Auto-Status-Update läuft beim App-Öffnen / Query-Refresh über `regeln.ts`. Echte Cron kommt im Backend (Pi).
+Auf `/` neue KPI-Karte "Mahnungen offen" (Anzahl + Summe) mit Link aufs Cockpit.
 
 ---
 
-## Was NICHT in Phase C ist
+## Die intelligente Logik (Auto-Status)
 
-- Echter E-Mail-Versand (kommt im Backend)
-- Inkasso-API-Anbindung (manuell, Status-Markierung reicht)
-- Verzugszinsen-Berechnung (kann in Phase F nachgereicht werden, falls gewünscht)
-- SMS-Mahnungen
+Beim Laden jeder Rechnungsabfrage läuft `bestimmeAktuelleStufe(rechnung, config)` — eine **reine Funktion**, kein gespeicherter Zustand:
+
+1. Wenn voll bezahlt oder storniert → Mahnkette beendet (Historie bleibt sichtbar)
+2. Berechne `tageSeitFaelligkeit`
+3. Prüfe Mahn-Historie: was war die letzte versendete Stufe? Wann war ihre Frist?
+4. Ist Frist abgelaufen → nächste Stufe wird **empfohlen**
+5. Bei Teilzahlung: Mahnstufe pausiert nicht, aber "Offen-Betrag" wird neu berechnet — sonst würde ein Kunde mit 1 € Restzahlung nie wieder gemahnt
+6. Pausierung (`pausiertBis`-Datum) übersteuert alles bis zum Datum
+
+**Status `ueberfaellig`** wird automatisch gesetzt, sobald `faelligkeitsdatum < heute && offen > 0 && status === "versendet"`. Beim Backend-Switch wandert das in einen Cron-Job auf dem Pi.
+
+---
+
+## Datenmodell (neu)
+
+**Erweiterung `Rechnung`:**
+```ts
+mahnungen: MahnVorgang[];   // versendete Mahnungen, chronologisch
+mahnPausiertBis?: ISODate;  // optional, "nicht vor diesem Datum mahnen"
+```
+
+**Neuer Typ:**
+```ts
+interface MahnVorgang {
+  id: ID;
+  rechnungId: ID;
+  stufe: 1 | 2 | 3;
+  versendetAm: ISODateTime;
+  neueFrist: ISODate;
+  gebuehr: number;            // EUR, in Mahnschreiben angezeigt
+  emailVersandId?: ID;        // Verknüpfung zu EmailVersand für Audit
+}
+
+interface MahnStufeConfig {
+  stufe: 1 | 2 | 3;
+  bezeichnung: string;
+  tageNachVorgaenger: number; // Stufe 1: Tage nach Fälligkeit
+  gebuehr: number;
+  fristTage: number;
+  emailVorlageId?: ID;
+}
+
+interface MahnEinstellungen {
+  autoVorschlagAktiv: boolean;
+  stufen: MahnStufeConfig[];   // genau 3
+}
+```
+
+**Globale Einstellungen** bekommen `mahnung: MahnEinstellungen` im DB-Mock.
+
+---
+
+## Mahngebühr — Designentscheidung
+
+Die Mahngebühr wird **nicht** als zusätzliche Position in die Rechnung eingefügt (das würde die ursprüngliche Rechnung manipulieren — buchhalterisch heikel). Stattdessen:
+
+- Gebühr ist **Eigenschaft des MahnVorgangs**
+- Erscheint im Mahn-E-Mail-Body via Platzhalter `{{mahnung.gebuehr}}` und im Gesamtsatz `{{mahnung.gesamtForderung}}` (= offen + Gebühr)
+- Im Mahn-Cockpit und Detail-Sektion wird sie separat ausgewiesen
+- Spätere echte Buchung im Backend kann das als separate Forderung führen
+
+---
+
+## Neue Platzhalter (für E-Mail-Vorlagen)
+
+Ergänzung in `src/lib/email/placeholders.ts`:
+
+- `{{mahnung.stufe}}` — "Zahlungserinnerung" / "1. Mahnung" / "Letzte Mahnung"
+- `{{mahnung.gebuehr}}` — formatierter EUR-Betrag
+- `{{mahnung.neueFrist}}` — formatiertes Datum
+- `{{mahnung.gesamtForderung}}` — offen + Gebühr formatiert
+- `{{mahnung.tageUeberfaellig}}` — Zahl
+
+---
+
+## Geänderte und neue Dateien
+
+**Neu:**
+- `src/routes/mahnungen.tsx` — Cockpit-Seite
+- `src/components/mahnung/MahnCockpit.tsx` — KPIs + Liste
+- `src/components/mahnung/MahnSektion.tsx` — Block für Detailseite
+- `src/components/mahnung/MahnHistorieListe.tsx` — versendete Stufen
+- `src/components/mahnung/MahnStufenIndikator.tsx` — ●●○ Mini-FlowBar
+- `src/components/mahnung/MahnEinstellungen.tsx` — Settings-Tab
+- `src/components/mahnung/MahnPausierenDialog.tsx`
+- `src/lib/mahnung/regeln.ts` — `bestimmeAktuelleStufe()`, `mahnenEmpfohlen()`, Helper
+- `src/lib/mahnung/defaults.ts` — Standard-3-Stufen-Config
+
+**Erweitert:**
+- `src/lib/api/types.ts` — neue Typen + Erweiterung `Rechnung`
+- `src/lib/mock/seed.ts` — 3 Mahn-Standardvorlagen, MahnEinstellungen, 3-4 realistisch überfällige Beispiel-Rechnungen mit teils existierender Mahn-Historie
+- `src/lib/mock/backend.ts` — DB-Migration auf `v6`, Endpoints: `getMahnEinstellungen`, `updateMahnEinstellungen`, `mahnungVersenden(rechnungId, stufe)` (legt MahnVorgang an + ruft sendEmail intern auf), `mahnungPausieren`
+- `src/hooks/useApi.ts` — `useMahnEinstellungen`, `useUpdateMahnEinstellungen`, `useMahnungVersenden`, `useMahnUebersicht` (aggregiert für Cockpit + Sidebar-Badge)
+- `src/lib/email/placeholders.ts` — neuer `mahnung`-Block im PlaceholderContext
+- `src/components/email/EmailVersandDialog.tsx` — Stufen-Dropdown bei `kontext === "mahnung"`, ruft `useMahnungVersenden` statt nur `useSendEmail`
+- `src/routes/rechnungen.$id.tsx` — neue MahnSektion ersetzt heutigen Mahnung-Button
+- `src/routes/rechnungen.tsx` — Mahnstufen-Spalte, KPI "Überfällig" wird klickbar zum Cockpit
+- `src/routes/einstellungen.tsx` — neuer Tab "Mahnwesen"
+- `src/components/layout/AppSidebar.tsx` — neuer Menüpunkt mit Badge
+- `src/routes/index.tsx` (Dashboard) — Kachel "Mahnungen offen"
+- `src/lib/flow/flows.ts` — `rechnungFlow` zeigt Mahnstufen, falls überfällig, als zusätzliche Schritte (oder dezentes Sub-Element unter "Versendet")
+
+---
+
+## Was Phase C NICHT macht
+
+- Echter E-Mail-Versand (Mock simuliert weiter mit 1.2s Delay + 10% Fail)
+- Echte Inkasso-API-Anbindung — "Inkasso-reif" ist nur Markierung + manueller Workflow
+- Verzugszinsen-Berechnung (nach §288 BGB) — kann in Phase F nachgereicht werden, falls gewünscht
+- SMS- oder Briefpost-Mahnungen
+- PDF-Anlage Mahnung als separates Dokument (die Original-Rechnung wird angehängt, das reicht in der Praxis)
 
 ---
 
 ## Reihenfolge der Umsetzung
 
-1. Datenmodell + Mock-Backend + Regeln-Engine
-2. Einstellungs-Tab „Mahnwesen" mit 3 Stufen
-3. 3 Standard-Vorlagen in Seed
-4. Mahn-Dashboard `/mahnungen` + Sidebar-Badge
-5. Rechnungs-Detailseite Mahn-Sektion + Historie
-6. Versand-Dialog Stufen-Erweiterung
+1. **Datenmodell + Defaults** (`types.ts`, `defaults.ts`, DB-Migration `v6`)
+2. **Regel-Engine** (`regeln.ts` mit Unit-tauglicher reiner Funktion)
+3. **Mock-Backend-Endpoints** + **Hooks** + neue **Platzhalter**
+4. **Seed-Daten:** 3 Standardvorlagen (Erinnerung / 1. Mahnung / Letzte) + 3-4 überfällige Beispiel-Rechnungen mit teils schon laufender Mahnkette
+5. **Einstellungs-Tab "Mahnwesen"**
+6. **Mahn-Sektion** auf Rechnungs-Detailseite + Versand-Dialog-Erweiterung
+7. **Mahn-Cockpit** `/mahnungen` + Sidebar-Badge + Dashboard-Kachel + Tabellen-Spalte
 
-Wenn der Plan passt, schreibe „los Phase C" und ich baue alles in einem Rutsch.
+Sag "los Phase C" — dann baue ich das in einem Rutsch durch.
