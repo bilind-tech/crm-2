@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { Search, Send, Trash2, ChevronRight, SlidersHorizontal, Check } from "lucide-react";
+import { Search, Mail, Trash2, ChevronRight, SlidersHorizontal, Check, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { PdfViewButton } from "@/components/pdf/PdfViewButton";
 import { Button } from "@/components/ui/button";
