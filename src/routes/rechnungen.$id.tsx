@@ -1,13 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Download, Send, CheckCircle2, Wallet } from "lucide-react";
-import { useRechnung, useSendeRechnung, useAngebot } from "@/hooks/useApi";
+import { useRechnung, useAngebot, useKunde } from "@/hooks/useApi";
 import { useRechnungPdf } from "@/hooks/useBelegPdf";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { FlowBar } from "@/components/flow/FlowBar";
 import { rechnungFlow } from "@/lib/flow/flows";
 import { ZahlungErfassenDialog } from "@/components/forms/ZahlungErfassenDialog";
+import { EmailVersandDialog } from "@/components/email/EmailVersandDialog";
+import { EmailVersandHistorie } from "@/components/email/EmailVersandHistorie";
 import { formatEUR, formatDate } from "@/lib/format";
 import { summenRechnung } from "@/lib/mock/backend";
 import { toast } from "sonner";
@@ -17,10 +19,11 @@ export const Route = createFileRoute("/rechnungen/$id")({ component: Page });
 function Page() {
   const { id } = Route.useParams();
   const { data: r } = useRechnung(id);
-  const send = useSendeRechnung(id);
   const pdf = useRechnungPdf(r);
   const [zahlungOpen, setZahlungOpen] = useState(false);
+  const [emailOpen, setEmailOpen] = useState(false);
   const { data: quellAngebot } = useAngebot(r?.quellAngebotId ?? "");
+  const { data: kunde } = useKunde(r?.kundeId ?? "");
 
   if (!r) return <p className="text-sm text-muted-foreground">Lade …</p>;
   const s = summenRechnung(r.positionen, r.rabattGesamt);
