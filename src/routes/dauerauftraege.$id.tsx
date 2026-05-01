@@ -20,6 +20,7 @@ import {
 } from "@/lib/dauerauftrag/termine";
 import { summenRechnung } from "@/lib/mock/backend";
 import { formatEUR, formatDate } from "@/lib/format";
+import { useConfirm } from "@/hooks/useConfirm";
 
 export const Route = createFileRoute("/dauerauftraege/$id")({ component: Page });
 
