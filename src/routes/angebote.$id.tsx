@@ -1,17 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import { Download, Send, FileCheck2, ThumbsUp, ThumbsDown } from "lucide-react";
 import {
   useAngebot,
-  useSendeAngebot,
   useAngebotInRechnung,
   useUpdateAngebot,
   useRechnungen,
+  useKunde,
 } from "@/hooks/useApi";
 import { useAngebotPdf } from "@/hooks/useBelegPdf";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { FlowBar } from "@/components/flow/FlowBar";
 import { angebotFlow } from "@/lib/flow/flows";
+import { EmailVersandDialog } from "@/components/email/EmailVersandDialog";
+import { EmailVersandHistorie } from "@/components/email/EmailVersandHistorie";
 import { formatEUR, formatDate } from "@/lib/format";
 import { summenRechnung } from "@/lib/mock/backend";
 import { toast } from "sonner";
@@ -23,11 +26,12 @@ function Page() {
   const navigate = useNavigate();
   const { id } = Route.useParams();
   const { data: a } = useAngebot(id);
-  const send = useSendeAngebot(id);
+  const { data: kunde } = useKunde(a?.kundeId ?? "");
   const inRechnung = useAngebotInRechnung(id);
   const updateAngebot = useUpdateAngebot(id);
   const pdf = useAngebotPdf(a);
   const { data: alleRechnungen = [] } = useRechnungen();
+  const [emailOpen, setEmailOpen] = useState(false);
 
   if (!a) return <p className="text-sm text-muted-foreground">Lade …</p>;
 
