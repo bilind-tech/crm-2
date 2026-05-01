@@ -936,16 +936,29 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     persist();
     result = d.firmendaten;
   } else if (m === "GET" && match(path, "/einstellungen/smtp")) {
-    result = d.smtp;
+    // Passwort NIEMALS im Response — Frontend bekommt nur passwortGesetzt-Flag.
+    const { passwort: _ignored, ...safe } = d.smtp as SmtpEinstellungen & { passwort?: string };
+    void _ignored;
+    result = safe;
   } else if (m === "PATCH" && match(path, "/einstellungen/smtp")) {
     const incoming = body as Partial<SmtpEinstellungen> & { passwort?: string };
-    Object.assign(d.smtp, incoming);
-    if (incoming.passwort) d.smtp.passwortGesetzt = true;
+    const { passwort, ...rest } = incoming;
+    Object.assign(d.smtp, rest);
+    if (passwort && passwort.trim().length > 0) {
+      d.smtp.passwortGesetzt = true;
+      // Mock: das Klartext-Passwort wird NICHT persistiert. Auf dem Pi wird hier AES-GCM verschlüsselt.
+    }
+    logAktivitaet("einstellung_geaendert", "SMTP-Einstellungen aktualisiert");
     persist();
-    result = d.smtp;
+    const { passwort: _strip, ...safe } = d.smtp as SmtpEinstellungen & { passwort?: string };
+    void _strip;
+    result = safe;
   } else if (m === "POST" && match(path, "/einstellungen/smtp/test")) {
-    // Mock: simulieren
-    result = { erfolg: true, nachricht: "Testmail (simuliert) erfolgreich versendet." };
+    if (!d.smtp.passwortGesetzt || !d.smtp.server || !d.smtp.benutzer) {
+      result = { erfolg: false, nachricht: "Bitte zuerst alle Felder inkl. Passwort speichern." };
+    } else {
+      result = { erfolg: true, nachricht: `Testmail (simuliert) an ${d.smtp.absenderEmail || d.smtp.benutzer} versendet.` };
+    }
   } else if (m === "GET" && match(path, "/einstellungen/nummernkreise")) {
     result = d.nummernkreise;
   } else if (m === "PATCH" && match(path, "/einstellungen/nummernkreise")) {
