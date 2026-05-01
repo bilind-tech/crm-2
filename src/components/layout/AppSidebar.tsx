@@ -7,6 +7,7 @@ import {
   FolderClosed,
   Settings,
   Lock,
+  Bell,
 } from "lucide-react";
 import {
   Sidebar,
@@ -23,34 +24,46 @@ import {
 } from "@/components/ui/sidebar";
 import logo from "@/assets/logo.png";
 import { useAuth } from "@/lib/auth";
+import { useMahnZaehler } from "@/hooks/useMahnZaehler";
+import { cn } from "@/lib/utils";
 
 type NavItem = {
   title: string;
   url: string;
   icon: React.ComponentType<{ className?: string }>;
   exact?: boolean;
+  badge?: number;
+  badgeTone?: "danger" | "warning" | "primary";
 };
-
-const uebersicht: NavItem[] = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },
-];
-const stammdaten: NavItem[] = [
-  { title: "Kunden", url: "/kunden", icon: Users },
-];
-const vertrieb: NavItem[] = [
-  { title: "Angebote", url: "/angebote", icon: FileText },
-  { title: "Rechnungen", url: "/rechnungen", icon: Receipt },
-  { title: "Dokumente", url: "/dokumente", icon: FolderClosed },
-];
-const system: NavItem[] = [
-  { title: "Einstellungen", url: "/einstellungen", icon: Settings },
-];
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const path = useRouterState({ select: (r) => r.location.pathname });
   const { lock } = useAuth();
+  const mahn = useMahnZaehler();
+
+  const uebersicht: NavItem[] = [
+    { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },
+  ];
+  const stammdaten: NavItem[] = [
+    { title: "Kunden", url: "/kunden", icon: Users },
+  ];
+  const vertrieb: NavItem[] = [
+    { title: "Angebote", url: "/angebote", icon: FileText },
+    { title: "Rechnungen", url: "/rechnungen", icon: Receipt },
+    {
+      title: "Mahnungen",
+      url: "/mahnungen",
+      icon: Bell,
+      badge: mahn.aktionEmpfohlen,
+      badgeTone: mahn.inkassoReif > 0 ? "danger" : "warning",
+    },
+    { title: "Dokumente", url: "/dokumente", icon: FolderClosed },
+  ];
+  const system: NavItem[] = [
+    { title: "Einstellungen", url: "/einstellungen", icon: Settings },
+  ];
 
   const isActive = (url: string, exact = false) =>
     exact ? path === url : path === url || path.startsWith(url + "/");
@@ -66,21 +79,64 @@ export function AppSidebar() {
         <SidebarMenu>
           {items.map((item) => {
             const active = isActive(item.url, item.exact);
+            const showBadge = !!item.badge && item.badge > 0;
             return (
               <SidebarMenuItem key={item.url}>
                 <SidebarMenuButton
                   asChild
                   isActive={active}
-                  tooltip={item.title}
+                  tooltip={
+                    showBadge ? `${item.title} · ${item.badge}` : item.title
+                  }
                   className={
                     active
                       ? "bg-sidebar-accent font-medium text-sidebar-primary border border-sidebar-border shadow-sm transition-colors duration-150"
                       : "transition-colors duration-150 hover:bg-sidebar-accent/60"
                   }
                 >
-                  <Link to={item.url} preload="intent" className="flex items-center gap-2.5">
-                    <item.icon className={`h-4 w-4 ${active ? "text-sidebar-primary" : ""}`} />
-                    {!collapsed && <span>{item.title}</span>}
+                  <Link
+                    to={item.url}
+                    preload="intent"
+                    className="flex items-center gap-2.5"
+                  >
+                    <span className="relative flex h-4 w-4 items-center justify-center">
+                      <item.icon
+                        className={`h-4 w-4 ${active ? "text-sidebar-primary" : ""}`}
+                      />
+                      {showBadge && collapsed && (
+                        <span
+                          className={cn(
+                            "absolute -right-1.5 -top-1.5 grid h-3.5 min-w-3.5 place-content-center rounded-full px-1 text-[9px] font-bold text-white",
+                            item.badgeTone === "danger"
+                              ? "bg-destructive"
+                              : item.badgeTone === "primary"
+                                ? "bg-primary"
+                                : "bg-warning",
+                          )}
+                        >
+                          {item.badge! > 9 ? "9+" : item.badge}
+                        </span>
+                      )}
+                    </span>
+                    {!collapsed && (
+                      <>
+                        <span className="flex-1">{item.title}</span>
+                        {showBadge && (
+                          <span
+                            className={cn(
+                              "grid h-5 min-w-5 place-content-center rounded-full px-1.5 text-[10px] font-bold text-white",
+                              item.badgeTone === "danger"
+                                ? "bg-destructive"
+                                : item.badgeTone === "primary"
+                                  ? "bg-primary"
+                                  : "bg-warning",
+                            )}
+                          >
+                            {item.badge}
+                          </span>
+                        )}
+                      </>
+                    )}
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

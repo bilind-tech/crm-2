@@ -10,6 +10,7 @@ import { rechnungFlow } from "@/lib/flow/flows";
 import { ZahlungErfassenDialog } from "@/components/forms/ZahlungErfassenDialog";
 import { EmailVersandDialog } from "@/components/email/EmailVersandDialog";
 import { EmailVersandHistorie } from "@/components/email/EmailVersandHistorie";
+import { MahnSektion } from "@/components/mahnung/MahnSektion";
 import { formatEUR, formatDate } from "@/lib/format";
 import { summenRechnung } from "@/lib/mock/backend";
 import { toast } from "sonner";
@@ -158,16 +159,6 @@ function Page() {
             </div>
           )}
 
-          {r.status === "ueberfaellig" && (
-            <Button
-              variant="outline"
-              className="w-full rounded-lg border-warning/40 bg-warning/10 text-warning-foreground hover:bg-warning/20"
-              onClick={() => setEmailOpen(true)}
-            >
-              <Send className="mr-1.5 h-4 w-4" /> Mahnung senden
-            </Button>
-          )}
-
           <EmailVersandHistorie belegId={r.id} belegTyp="rechnung" />
         </div>
 
@@ -184,11 +175,14 @@ function Page() {
         </div>
       </div>
 
+      {/* Mahnverfahren — eigene Sektion unter den Beträgen */}
+      <MahnSektion rechnung={r} />
+
       <ZahlungErfassenDialog open={zahlungOpen} onOpenChange={setZahlungOpen} rechnung={r} />
       <EmailVersandDialog
         open={emailOpen}
         onOpenChange={setEmailOpen}
-        kontext={r.status === "ueberfaellig" ? "mahnung" : "rechnung"}
+        kontext="rechnung"
         kunde={kunde}
         rechnung={r}
         pdfBlobUrl={pdf.url}

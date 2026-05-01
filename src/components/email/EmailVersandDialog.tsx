@@ -37,6 +37,7 @@ import {
   useEmailSignaturen,
   useEmailVorlagen,
   useFirmendaten,
+  useMahnEinstellungen,
   useSendEmail,
 } from "@/hooks/useApi";
 import {
@@ -64,6 +65,12 @@ interface Props {
   pdfBlobUrl?: string | null;
   pdfDateiname?: string;
   onSent?: () => void;
+  /** Wenn gesetzt: Versand wird im Backend als Mahnung dieser Stufe protokolliert. */
+  mahnStufe?: 1 | 2 | 3;
+  /** Optional: Vorlagen-ID, die per Default ausgewählt wird (z.B. aus Mahn-Konfig). */
+  vorbelegteVorlageId?: string;
+  /** Optional: zusätzliche Platzhalter-Variablen (z.B. mahnung.gebuehr). */
+  zusatzPlaceholder?: Record<string, string>;
 }
 
 type EditorMode = "visuell" | "html" | "vorschau";
@@ -78,10 +85,13 @@ export function EmailVersandDialog({
   pdfBlobUrl,
   pdfDateiname,
   onSent,
+  mahnStufe,
+  vorbelegteVorlageId,
 }: Props) {
   const { data: vorlagen = [] } = useEmailVorlagen();
   const { data: signaturen = [] } = useEmailSignaturen();
   const { data: firma } = useFirmendaten();
+  const { data: mahnEinstellungen } = useMahnEinstellungen();
   const send = useSendEmail();
 
   const passendeVorlagen = useMemo(
@@ -102,8 +112,16 @@ export function EmailVersandDialog({
   const visuellRef = useRef<HTMLDivElement>(null);
 
   const ctx: PlaceholderContext = useMemo(
-    () => ({ kunde, angebot, rechnung, firma }),
-    [kunde, angebot, rechnung, firma],
+    () => ({
+      kunde,
+      angebot,
+      rechnung,
+      firma,
+      mahnung: mahnStufe
+        ? { stufe: mahnStufe, einstellungen: mahnEinstellungen ?? null }
+        : null,
+    }),
+    [kunde, angebot, rechnung, firma, mahnStufe, mahnEinstellungen],
   );
 
   // Vorbelegen beim Öffnen
@@ -116,10 +134,22 @@ export function EmailVersandDialog({
     setPdfAnhangAktiv(true);
     setMode("visuell");
 
-    const standardVorlage =
-      passendeVorlagen.find((v) => v.istStandard && v.kontext === kontext) ??
-      passendeVorlagen.find((v) => v.kontext === kontext) ??
-      passendeVorlagen[0];
+    let standardVorlage: EmailVorlage | undefined;
+    if (mahnStufe && mahnEinstellungen) {
+      const config = mahnEinstellungen.stufen.find((s) => s.stufe === mahnStufe);
+      if (config?.emailVorlageId) {
+        standardVorlage = vorlagen.find((v) => v.id === config.emailVorlageId);
+      }
+    }
+    if (!standardVorlage && vorbelegteVorlageId) {
+      standardVorlage = vorlagen.find((v) => v.id === vorbelegteVorlageId);
+    }
+    if (!standardVorlage) {
+      standardVorlage =
+        passendeVorlagen.find((v) => v.istStandard && v.kontext === kontext) ??
+        passendeVorlagen.find((v) => v.kontext === kontext) ??
+        passendeVorlagen[0];
+    }
     const standardSig =
       signaturen.find((s) => s.istStandard) ?? signaturen[0];
 
@@ -196,6 +226,7 @@ export function EmailVersandDialog({
           pdfAnhangAktiv && pdfDateiname
             ? [{ name: pdfDateiname, sizeBytes: 0, kind: "pdf-beleg" }]
             : [],
+        mahnStufe,
       },
       {
         onSuccess: (res) => {

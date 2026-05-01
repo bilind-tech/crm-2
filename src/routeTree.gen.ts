@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RechnungenRouteImport } from './routes/rechnungen'
 import { Route as ObjekteRouteImport } from './routes/objekte'
+import { Route as MahnungenRouteImport } from './routes/mahnungen'
 import { Route as KundenRouteImport } from './routes/kunden'
 import { Route as EinstellungenRouteImport } from './routes/einstellungen'
 import { Route as DokumenteRouteImport } from './routes/dokumente'
@@ -34,6 +35,11 @@ const RechnungenRoute = RechnungenRouteImport.update({
 const ObjekteRoute = ObjekteRouteImport.update({
   id: '/objekte',
   path: '/objekte',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MahnungenRoute = MahnungenRouteImport.update({
+  id: '/mahnungen',
+  path: '/mahnungen',
   getParentRoute: () => rootRouteImport,
 } as any)
 const KundenRoute = KundenRouteImport.update({
@@ -114,6 +120,7 @@ export interface FileRoutesByFullPath {
   '/dokumente': typeof DokumenteRoute
   '/einstellungen': typeof EinstellungenRoute
   '/kunden': typeof KundenRouteWithChildren
+  '/mahnungen': typeof MahnungenRoute
   '/objekte': typeof ObjekteRouteWithChildren
   '/rechnungen': typeof RechnungenRouteWithChildren
   '/angebote/$id': typeof AngeboteIdRoute
@@ -132,6 +139,7 @@ export interface FileRoutesByTo {
   '/dokumente': typeof DokumenteRoute
   '/einstellungen': typeof EinstellungenRoute
   '/kunden': typeof KundenRouteWithChildren
+  '/mahnungen': typeof MahnungenRoute
   '/objekte': typeof ObjekteRouteWithChildren
   '/rechnungen': typeof RechnungenRouteWithChildren
   '/angebote/$id': typeof AngeboteIdRoute
@@ -151,6 +159,7 @@ export interface FileRoutesById {
   '/dokumente': typeof DokumenteRoute
   '/einstellungen': typeof EinstellungenRoute
   '/kunden': typeof KundenRouteWithChildren
+  '/mahnungen': typeof MahnungenRoute
   '/objekte': typeof ObjekteRouteWithChildren
   '/rechnungen': typeof RechnungenRouteWithChildren
   '/angebote/$id': typeof AngeboteIdRoute
@@ -171,6 +180,7 @@ export interface FileRouteTypes {
     | '/dokumente'
     | '/einstellungen'
     | '/kunden'
+    | '/mahnungen'
     | '/objekte'
     | '/rechnungen'
     | '/angebote/$id'
@@ -189,6 +199,7 @@ export interface FileRouteTypes {
     | '/dokumente'
     | '/einstellungen'
     | '/kunden'
+    | '/mahnungen'
     | '/objekte'
     | '/rechnungen'
     | '/angebote/$id'
@@ -207,6 +218,7 @@ export interface FileRouteTypes {
     | '/dokumente'
     | '/einstellungen'
     | '/kunden'
+    | '/mahnungen'
     | '/objekte'
     | '/rechnungen'
     | '/angebote/$id'
@@ -226,6 +238,7 @@ export interface RootRouteChildren {
   DokumenteRoute: typeof DokumenteRoute
   EinstellungenRoute: typeof EinstellungenRoute
   KundenRoute: typeof KundenRouteWithChildren
+  MahnungenRoute: typeof MahnungenRoute
   ObjekteRoute: typeof ObjekteRouteWithChildren
   RechnungenRoute: typeof RechnungenRouteWithChildren
 }
@@ -244,6 +257,13 @@ declare module '@tanstack/react-router' {
       path: '/objekte'
       fullPath: '/objekte'
       preLoaderRoute: typeof ObjekteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mahnungen': {
+      id: '/mahnungen'
+      path: '/mahnungen'
+      fullPath: '/mahnungen'
+      preLoaderRoute: typeof MahnungenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/kunden': {
@@ -408,6 +428,7 @@ const rootRouteChildren: RootRouteChildren = {
   DokumenteRoute: DokumenteRoute,
   EinstellungenRoute: EinstellungenRoute,
   KundenRoute: KundenRouteWithChildren,
+  MahnungenRoute: MahnungenRoute,
   ObjekteRoute: ObjekteRouteWithChildren,
   RechnungenRoute: RechnungenRouteWithChildren,
 }
