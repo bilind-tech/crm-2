@@ -18,6 +18,7 @@ import type {
   Angebot,
   Ansprechpartner,
   AppearanceEinstellungen,
+  BackupEintrag,
   BackupEinstellungen,
   Benachrichtigung,
   DashboardKennzahlen,
@@ -90,6 +91,9 @@ interface DB {
   sicherheit: SicherheitsEinstellungen;
   appearance: AppearanceEinstellungen;
   backup: BackupEinstellungen;
+  backupHistorie: BackupEintrag[];
+  googleDrive: GoogleDriveEinstellungen;
+  sitzungen: SitzungEintrag[];
   mahnung: MahnEinstellungen;
   dauerauftraege: Dauerauftrag[];
   dauerauftragLaeufe: DauerauftragLauf[];
