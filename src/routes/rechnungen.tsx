@@ -9,6 +9,7 @@ import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
 import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { FilterBar } from "@/routes/angebote";
 import { SlideOver } from "@/components/ui/slide-over";
+import { MobileListCard } from "@/components/ui/mobile-list-card";
 import { RechnungForm } from "@/components/forms/RechnungForm";
 import { ZahlungErfassenDialog } from "@/components/forms/ZahlungErfassenDialog";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -142,7 +143,76 @@ function Page() {
         placeholder="Suche nach Nummer, Titel, Kunde…"
       />
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      {/* Mobil: Card-View */}
+      <div className="space-y-2 md:hidden">
+        {filtered.map((r) => {
+          const b = brutto(r);
+          const offen = b - bezahlt(r);
+          return (
+            <MobileListCard
+              key={r.id}
+              onClick={() => navigate({ to: "/rechnungen/$id", params: { id: r.id } })}
+              title={r.titel}
+              meta={
+                <>
+                  <span className="font-mono">{r.nummer}</span>
+                  <span>· {formatDate(r.rechnungsdatum)}</span>
+                  <span>· fällig {formatDate(r.faelligkeitsdatum)}</span>
+                </>
+              }
+              trailing={
+                <div>
+                  <div>{formatEUR(b)}</div>
+                  {offen > 0 && (
+                    <div className="text-[10px] font-normal text-muted-foreground">
+                      offen {formatEUR(offen)}
+                    </div>
+                  )}
+                </div>
+              }
+              badge={statusBadge(r.status)}
+              actions={
+                <>
+                  <PdfViewButton kind="rechnung" beleg={r} />
+                  {r.status !== "bezahlt" && r.status !== "storniert" && (
+                    <button
+                      onClick={() => setZahlungFuer(r)}
+                      className="rounded-md p-2 text-success hover:bg-success/10"
+                      title="Zahlung erfassen"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() =>
+                      confirm(
+                        {
+                          title: "Rechnung löschen?",
+                          description: `Rechnung ${r.nummer} dauerhaft entfernen.`,
+                          variant: "destructive",
+                          confirmLabel: "Löschen",
+                        },
+                        () => del.mutate(r.id),
+                      )
+                    }
+                    className="rounded-md p-2 text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </>
+              }
+            />
+          );
+        })}
+        {filtered.length === 0 && (
+          <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+            Keine Rechnungen gefunden.
+          </div>
+        )}
+      </div>
+
+      {/* Desktop: Tabelle */}
+      <div className="hidden overflow-hidden rounded-2xl border border-border bg-card shadow-sm md:block">
         <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
