@@ -153,7 +153,14 @@ export function AngebotForm({ onClose, defaultKundeId, defaultObjektId }: Props)
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Leistungen & Preise
         </p>
-        <PositionenEditor positionen={positionen} onChange={setPositionen} defaultSteuersatz={steuersatz} />
+        <PositionenEditor
+          positionen={positionen}
+          onChange={setPositionen}
+          defaultSteuersatz={steuersatz}
+          defaultAusfuehrung={
+            optionen.wiederkehrend ? formatWiederkehrend(optionen.wiederkehrendDetails) : undefined
+          }
+        />
       </div>
 
       <OptionenBlock value={optionen} onChange={setOptionen} />
