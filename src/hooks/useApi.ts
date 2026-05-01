@@ -58,6 +58,12 @@ export const qk = {
     positionsvorlagen: ["einstellungen", "positionsvorlagen"] as const,
     textvorlagen: ["einstellungen", "textvorlagen"] as const,
   },
+  email: {
+    vorlagen: ["email", "vorlagen"] as const,
+    signaturen: ["email", "signaturen"] as const,
+    versand: (filter?: { belegId?: string; belegTyp?: string }) =>
+      ["email", "versand", filter ?? {}] as const,
+  },
   search: (q: string) => ["search", q] as const,
 };
 
