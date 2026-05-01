@@ -10,6 +10,7 @@ import { FilterBar } from "@/routes/angebote";
 import { SlideOver } from "@/components/ui/slide-over";
 import { RechnungForm } from "@/components/forms/RechnungForm";
 import { ZahlungErfassenDialog } from "@/components/forms/ZahlungErfassenDialog";
+import { useConfirm } from "@/hooks/useConfirm";
 import type { Rechnung } from "@/lib/api/types";
 
 export const Route = createFileRoute("/rechnungen")({ component: Page });
@@ -59,6 +60,7 @@ function Page() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [zahlungFuer, setZahlungFuer] = useState<Rechnung | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   const heute = new Date().toISOString().slice(0, 10);
   const monat = heute.slice(0, 7);
@@ -198,9 +200,17 @@ function Page() {
                         </button>
                       )}
                       <button
-                        onClick={() => {
-                          if (confirm(`Rechnung ${r.nummer} löschen?`)) del.mutate(r.id);
-                        }}
+                        onClick={() =>
+                          confirm(
+                            {
+                              title: "Rechnung löschen?",
+                              description: `Rechnung ${r.nummer} dauerhaft entfernen. Erfasste Zahlungen gehen verloren.`,
+                              variant: "destructive",
+                              confirmLabel: "Löschen",
+                            },
+                            () => del.mutate(r.id),
+                          )
+                        }
                         className="rounded-md p-1.5 text-destructive hover:bg-destructive/10"
                       >
                         <Trash2 className="h-4 w-4" />
