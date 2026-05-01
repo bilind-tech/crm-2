@@ -184,7 +184,7 @@ function Page() {
                 <>
                   <PdfViewButton kind="rechnung" beleg={r} />
                   <button
-                    onClick={(e) => { e.stopPropagation(); setEmailFuer(r); }}
+                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); setEmailFuer(r); }}
                     className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-primary"
                     title="Per E-Mail versenden"
                   >
@@ -192,7 +192,7 @@ function Page() {
                   </button>
                   {r.status !== "bezahlt" && r.status !== "storniert" && (
                     <button
-                      onClick={(e) => { e.stopPropagation(); setZahlungFuer(r); }}
+                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); setZahlungFuer(r); }}
                       className="rounded-md p-2 text-success hover:bg-success/10"
                       title="Zahlung erfassen"
                     >
@@ -272,7 +272,7 @@ function Page() {
                     <div className="flex items-center justify-end gap-1 text-muted-foreground">
                       <PdfViewButton kind="rechnung" beleg={r} />
                       <button
-                        onClick={(e) => { e.stopPropagation(); setEmailFuer(r); }}
+                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setEmailFuer(r); }}
                         className="rounded-md p-1.5 hover:bg-muted hover:text-primary"
                         title="Per E-Mail versenden"
                       >
@@ -280,7 +280,7 @@ function Page() {
                       </button>
                       {r.status !== "bezahlt" && r.status !== "storniert" && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); setZahlungFuer(r); }}
+                          onClick={(e) => { e.stopPropagation(); e.preventDefault(); setZahlungFuer(r); }}
                           className="rounded-md p-1.5 text-success hover:bg-success/10"
                           title="Zahlung erfassen"
                         >

@@ -144,7 +144,7 @@ function Page() {
                 <PdfViewButton kind="angebot" beleg={a} />
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setEmailFuer(a); }}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); setEmailFuer(a); }}
                   className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-primary"
                   title="Per E-Mail versenden"
                 >
@@ -218,7 +218,7 @@ function Page() {
                     <PdfViewButton kind="angebot" beleg={a} />
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setEmailFuer(a); }}
+                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); setEmailFuer(a); }}
                       className="rounded-md p-1.5 hover:bg-muted hover:text-primary"
                       title="Per E-Mail versenden"
                     >
