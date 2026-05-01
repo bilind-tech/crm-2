@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ZahlungseingaengeRouteImport } from './routes/zahlungseingaenge'
 import { Route as RechnungenRouteImport } from './routes/rechnungen'
 import { Route as ObjekteRouteImport } from './routes/objekte'
 import { Route as MahnungenRouteImport } from './routes/mahnungen'
@@ -30,6 +31,11 @@ import { Route as DauerauftraegeIdRouteImport } from './routes/dauerauftraege.$i
 import { Route as AngeboteNeuRouteImport } from './routes/angebote.neu'
 import { Route as AngeboteIdRouteImport } from './routes/angebote.$id'
 
+const ZahlungseingaengeRoute = ZahlungseingaengeRouteImport.update({
+  id: '/zahlungseingaenge',
+  path: '/zahlungseingaenge',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RechnungenRoute = RechnungenRouteImport.update({
   id: '/rechnungen',
   path: '/rechnungen',
@@ -143,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/mahnungen': typeof MahnungenRoute
   '/objekte': typeof ObjekteRouteWithChildren
   '/rechnungen': typeof RechnungenRouteWithChildren
+  '/zahlungseingaenge': typeof ZahlungseingaengeRoute
   '/angebote/$id': typeof AngeboteIdRoute
   '/angebote/neu': typeof AngeboteNeuRoute
   '/dauerauftraege/$id': typeof DauerauftraegeIdRoute
@@ -165,6 +172,7 @@ export interface FileRoutesByTo {
   '/mahnungen': typeof MahnungenRoute
   '/objekte': typeof ObjekteRouteWithChildren
   '/rechnungen': typeof RechnungenRouteWithChildren
+  '/zahlungseingaenge': typeof ZahlungseingaengeRoute
   '/angebote/$id': typeof AngeboteIdRoute
   '/angebote/neu': typeof AngeboteNeuRoute
   '/dauerauftraege/$id': typeof DauerauftraegeIdRoute
@@ -188,6 +196,7 @@ export interface FileRoutesById {
   '/mahnungen': typeof MahnungenRoute
   '/objekte': typeof ObjekteRouteWithChildren
   '/rechnungen': typeof RechnungenRouteWithChildren
+  '/zahlungseingaenge': typeof ZahlungseingaengeRoute
   '/angebote/$id': typeof AngeboteIdRoute
   '/angebote/neu': typeof AngeboteNeuRoute
   '/dauerauftraege/$id': typeof DauerauftraegeIdRoute
@@ -212,6 +221,7 @@ export interface FileRouteTypes {
     | '/mahnungen'
     | '/objekte'
     | '/rechnungen'
+    | '/zahlungseingaenge'
     | '/angebote/$id'
     | '/angebote/neu'
     | '/dauerauftraege/$id'
@@ -234,6 +244,7 @@ export interface FileRouteTypes {
     | '/mahnungen'
     | '/objekte'
     | '/rechnungen'
+    | '/zahlungseingaenge'
     | '/angebote/$id'
     | '/angebote/neu'
     | '/dauerauftraege/$id'
@@ -256,6 +267,7 @@ export interface FileRouteTypes {
     | '/mahnungen'
     | '/objekte'
     | '/rechnungen'
+    | '/zahlungseingaenge'
     | '/angebote/$id'
     | '/angebote/neu'
     | '/dauerauftraege/$id'
@@ -279,10 +291,18 @@ export interface RootRouteChildren {
   MahnungenRoute: typeof MahnungenRoute
   ObjekteRoute: typeof ObjekteRouteWithChildren
   RechnungenRoute: typeof RechnungenRouteWithChildren
+  ZahlungseingaengeRoute: typeof ZahlungseingaengeRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/zahlungseingaenge': {
+      id: '/zahlungseingaenge'
+      path: '/zahlungseingaenge'
+      fullPath: '/zahlungseingaenge'
+      preLoaderRoute: typeof ZahlungseingaengeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/rechnungen': {
       id: '/rechnungen'
       path: '/rechnungen'
@@ -505,6 +525,7 @@ const rootRouteChildren: RootRouteChildren = {
   MahnungenRoute: MahnungenRoute,
   ObjekteRoute: ObjekteRouteWithChildren,
   RechnungenRoute: RechnungenRouteWithChildren,
+  ZahlungseingaengeRoute: ZahlungseingaengeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
