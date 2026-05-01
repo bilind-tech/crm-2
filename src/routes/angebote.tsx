@@ -3,7 +3,7 @@ import { useState, useMemo } from "react";
 import { Search, Eye, Send, Trash2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAngebote, useDeleteAngebot, useSendeAngebot } from "@/hooks/useApi";
+import { useAngebote, useDeleteAngebot } from "@/hooks/useApi";
 import { formatEUR, formatDate } from "@/lib/format";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
 import { PrimaryAction } from "@/components/layout/PrimaryAction";
