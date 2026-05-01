@@ -80,7 +80,7 @@ export function QuickCreate({
               className="group relative flex flex-col items-start gap-3 rounded-xl border border-border/60 bg-card/60 p-4 text-left backdrop-blur-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-[0_10px_24px_-12px_rgba(37,99,235,0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:animate-fade-in-fast"
             >
               <div
-                className={`grid h-11 w-11 place-content-center rounded-xl bg-gradient-to-br ${it.tint} ring-1 ring-inset ring-border/40 transition-transform group-hover:scale-105`}
+                className={`grid h-11 w-11 place-content-center rounded-xl ${it.tint} ring-1 ring-inset ring-border/40 transition-transform group-hover:scale-105`}
               >
                 <it.icon className="h-5 w-5" />
               </div>

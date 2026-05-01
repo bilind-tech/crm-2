@@ -23,7 +23,7 @@ export function LockScreen() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-accent/30 p-4">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md border-border/60 p-2 shadow-2xl">
         <CardHeader className="text-center">
           <img
