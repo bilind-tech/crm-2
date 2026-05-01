@@ -98,6 +98,8 @@ interface DB {
   dauerauftragEinstellungen: DauerauftragEinstellungen;
   zahlungsabgleich: ZahlungsabgleichEinstellungen;
   zaehler: { kunde: number; objekt: number; angebot: number; rechnung: number; dauerauftrag: number };
+  /** Pro Kunde + "YYYY-MM" laufende Nummer für Rechnungen/Angebote mit eigenem Kürzel. */
+  zaehlerProKunde?: Record<string, Record<string, number>>;
 }
 
 let db: DB | null = null;
@@ -153,6 +155,26 @@ function nextNumber(praefix: string, n: number): string {
     .replace("{YYYY}", String(year))
     .replace("{####}", String(n).padStart(4, "0"))
     .replace("{###}", String(n).padStart(3, "0"));
+}
+
+/**
+ * Erzeugt eine Belegnummer für einen Kunden mit eigenem Kürzel:
+ * "{KÜRZEL}-{YYYY}-{MM}-{##}". Zähler läuft pro Kunde + Monat.
+ * Fällt auf das globale Schema zurück, wenn der Kunde kein Kürzel hat.
+ */
+function nextCustomerNumber(d: DB, kundeId: string | undefined, fallbackPraefix: string, fallbackZaehler: number): string {
+  const kunde = kundeId ? d.kunden.find((k) => k.id === kundeId) : undefined;
+  const kuerzel = kunde?.kuerzel?.trim().toUpperCase();
+  if (!kuerzel) return nextNumber(fallbackPraefix, fallbackZaehler);
+  const now = new Date();
+  const yyyy = String(now.getFullYear());
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const periode = `${yyyy}-${mm}`;
+  if (!d.zaehlerProKunde) d.zaehlerProKunde = {};
+  if (!d.zaehlerProKunde[kunde!.id]) d.zaehlerProKunde[kunde!.id] = {};
+  const map = d.zaehlerProKunde[kunde!.id];
+  map[periode] = (map[periode] ?? 0) + 1;
+  return `${kuerzel}-${yyyy}-${mm}-${String(map[periode]).padStart(2, "0")}`;
 }
 
 function logAktivitaet(typ: Aktivitaet["typ"], beschreibung: string, entitaet?: Aktivitaet["entitaet"]) {
@@ -279,6 +301,7 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     const neu: Kunde = {
       id: uuid(),
       nummer: nextNumber(d.nummernkreise.kundePraefix, d.zaehler.kunde),
+      kuerzel: k.kuerzel?.trim().toUpperCase().slice(0, 4) || undefined,
       typ: k.typ ?? "firma",
       anrede: k.anrede,
       firmenname: k.firmenname,
@@ -470,7 +493,7 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     d.zaehler.angebot += 1;
     const neu: Angebot = {
       id: uuid(),
-      nummer: nextNumber(d.nummernkreise.angebotPraefix, d.zaehler.angebot),
+      nummer: nextCustomerNumber(d, a.kundeId, d.nummernkreise.angebotPraefix, d.zaehler.angebot),
       kundeId: a.kundeId!,
       objektId: a.objektId,
       ansprechpartnerId: a.ansprechpartnerId,
@@ -537,7 +560,7 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     faellig.setDate(faellig.getDate() + (kunde?.zahlungszielTage ?? 14));
     const r: Rechnung = {
       id: uuid(),
-      nummer: nextNumber(d.nummernkreise.rechnungPraefix, d.zaehler.rechnung),
+      nummer: nextCustomerNumber(d, a.kundeId, d.nummernkreise.rechnungPraefix, d.zaehler.rechnung),
       kundeId: a.kundeId,
       objektId: a.objektId,
       quellAngebotId: a.id,
@@ -572,7 +595,7 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     const dup: Angebot = {
       ...a,
       id: uuid(),
-      nummer: nextNumber(d.nummernkreise.angebotPraefix, d.zaehler.angebot),
+      nummer: nextCustomerNumber(d, a.kundeId, d.nummernkreise.angebotPraefix, d.zaehler.angebot),
       status: "entwurf",
       versendetAm: undefined,
       positionen: a.positionen.map((p) => ({ ...p, id: uuid() })),
@@ -604,7 +627,7 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     faellig.setDate(faellig.getDate() + (kunde?.zahlungszielTage ?? 14));
     const neu: Rechnung = {
       id: uuid(),
-      nummer: nextNumber(d.nummernkreise.rechnungPraefix, d.zaehler.rechnung),
+      nummer: nextCustomerNumber(d, r.kundeId, d.nummernkreise.rechnungPraefix, d.zaehler.rechnung),
       kundeId: r.kundeId!,
       objektId: r.objektId,
       ansprechpartnerId: r.ansprechpartnerId,
@@ -1518,7 +1541,7 @@ function erzeugeLaufIntern(
 
   d.zaehler.rechnung += 1;
   const rechnungId = uuid();
-  const rechnungNummer = nextNumber(d.nummernkreise.rechnungPraefix, d.zaehler.rechnung);
+  const rechnungNummer = nextCustomerNumber(d, da.kundeId, d.nummernkreise.rechnungPraefix, d.zaehler.rechnung);
   const kunde = d.kunden.find((k) => k.id === da.kundeId);
 
   try {

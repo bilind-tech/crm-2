@@ -14,6 +14,8 @@ export type KundeStatus = "aktiv" | "inaktiv" | "interessent";
 export interface Kunde {
   id: ID;
   nummer: string; // z.B. "K-2025-001"
+  /** 3–4-stelliges Kürzel. Wenn gesetzt, werden Rechnungen/Angebote als "{KÜRZEL}-{YYYY}-{MM}-{##}" nummeriert. */
+  kuerzel?: string;
   typ: KundeTyp;
   anrede?: "herr" | "frau" | "divers" | "keine";
   firmenname?: string;

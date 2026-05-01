@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,10 +11,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SmartInput, smartValue } from "@/components/ui/smart-input";
 import { useCreateKunde } from "@/hooks/useApi";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
 import type { Kunde } from "@/lib/api/types";
+
+const PHONE_PREFIX = "+49 ";
+const WEB_PREFIX = "https://";
+
+function vorschlagKuerzel(name: string): string {
+  if (!name.trim()) return "";
+  const woerter = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9 ]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (woerter.length === 0) return "";
+  if (woerter.length === 1) return woerter[0].slice(0, 4).toUpperCase();
+  return woerter
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 4)
+    .toUpperCase();
+}
+
+function sanitizeKuerzel(v: string): string {
+  return v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+}
 
 interface Props {
   onClose: () => void;
@@ -25,6 +50,8 @@ interface FormState {
   typ: "firma" | "privat";
   status: "aktiv" | "interessent" | "inaktiv";
   firmenname: string;
+  kuerzel: string;
+  kuerzelManuell: boolean;
   anrede: "" | "herr" | "frau" | "divers" | "keine";
   vorname: string;
   nachname: string;
@@ -49,6 +76,8 @@ const initial: FormState = {
   typ: "firma",
   status: "aktiv",
   firmenname: "",
+  kuerzel: "",
+  kuerzelManuell: false,
   anrede: "",
   vorname: "",
   nachname: "",
@@ -75,6 +104,28 @@ export function KundeForm({ onClose, onCreated }: Props) {
   const [f, setF] = useState<FormState>(initial);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setF((p) => ({ ...p, [k]: v }));
 
+  // Live-Vorschau der zukünftigen Belegnummer
+  const vorschauNummer = useMemo(() => {
+    const k = f.kuerzel.trim();
+    if (!k) return "";
+    const d = new Date();
+    return `${k}-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  }, [f.kuerzel]);
+
+  // Beim Verlassen des Firmennamens automatisch ein Kürzel vorschlagen,
+  // sofern der Nutzer noch keines manuell eingegeben hat.
+  function handleFirmennameBlur() {
+    if (f.kuerzelManuell) return;
+    if (f.kuerzel.trim()) return;
+    const v = vorschlagKuerzel(f.firmenname);
+    if (v) setF((p) => ({ ...p, kuerzel: v }));
+  }
+
+  function handleKuerzelChange(v: string) {
+    const clean = sanitizeKuerzel(v);
+    setF((p) => ({ ...p, kuerzel: clean, kuerzelManuell: true }));
+  }
+
   async function submit() {
     if (f.typ === "firma" && !f.firmenname.trim()) {
       toast.error("Firmenname ist erforderlich");
@@ -84,17 +135,22 @@ export function KundeForm({ onClose, onCreated }: Props) {
       toast.error("Nachname ist erforderlich");
       return;
     }
+    if (f.kuerzel && f.kuerzel.length < 3) {
+      toast.error("Kürzel muss 3–4 Zeichen haben");
+      return;
+    }
     const k = await create.mutateAsync({
       typ: f.typ,
       status: f.status,
       firmenname: f.firmenname || undefined,
+      kuerzel: f.kuerzel || undefined,
       anrede: f.anrede || undefined,
       vorname: f.vorname || undefined,
       nachname: f.nachname || undefined,
-      telefon: f.telefon || undefined,
-      mobil: f.mobil || undefined,
+      telefon: smartValue(f.telefon, PHONE_PREFIX),
+      mobil: smartValue(f.mobil, PHONE_PREFIX),
       email: f.email || undefined,
-      webseite: f.webseite || undefined,
+      webseite: smartValue(f.webseite, WEB_PREFIX),
       strasse: f.strasse || undefined,
       plz: f.plz || undefined,
       ort: f.ort || undefined,
@@ -150,9 +206,43 @@ export function KundeForm({ onClose, onCreated }: Props) {
           </div>
           {f.typ === "firma" && (
             <Field label="Firmenname *">
-              <Input value={f.firmenname} onChange={(e) => set("firmenname", e.target.value)} placeholder="Mustermann GmbH" />
+              <Input
+                value={f.firmenname}
+                onChange={(e) => set("firmenname", e.target.value)}
+                onBlur={handleFirmennameBlur}
+                placeholder="Mustermann GmbH"
+              />
             </Field>
           )}
+
+          {/* Kürzel + Live-Vorschau */}
+          <Field label="Kürzel">
+            <div className="space-y-2">
+              <Input
+                value={f.kuerzel}
+                onChange={(e) => handleKuerzelChange(e.target.value)}
+                placeholder="z. B. MUST"
+                maxLength={4}
+                className="font-mono uppercase tracking-wider"
+              />
+              <div className="flex min-h-[1.25rem] items-center text-xs text-muted-foreground">
+                {vorschauNummer ? (
+                  <span
+                    key={vorschauNummer}
+                    className="animate-in fade-in slide-in-from-top-1 duration-200"
+                  >
+                    Vorschau:{" "}
+                    <span className="font-mono font-semibold text-foreground">
+                      {vorschauNummer}
+                    </span>
+                  </span>
+                ) : (
+                  <span>3–4 Zeichen. So beginnen alle Rechnungen & Angebote dieses Kunden.</span>
+                )}
+              </div>
+            </div>
+          </Field>
+
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Anrede">
               <Select
@@ -173,10 +263,16 @@ export function KundeForm({ onClose, onCreated }: Props) {
             <Field label="Nachname"><Input value={f.nachname} onChange={(e) => set("nachname", e.target.value)} /></Field>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Telefon"><Input value={f.telefon} onChange={(e) => set("telefon", e.target.value)} /></Field>
-            <Field label="Mobil"><Input value={f.mobil} onChange={(e) => set("mobil", e.target.value)} /></Field>
+            <Field label="Telefon">
+              <SmartInput prefix={PHONE_PREFIX} value={f.telefon} onChange={(v) => set("telefon", v)} inputMode="tel" />
+            </Field>
+            <Field label="Mobil">
+              <SmartInput prefix={PHONE_PREFIX} value={f.mobil} onChange={(v) => set("mobil", v)} inputMode="tel" />
+            </Field>
             <Field label="E-Mail"><Input type="email" value={f.email} onChange={(e) => set("email", e.target.value)} /></Field>
-            <Field label="Webseite"><Input value={f.webseite} onChange={(e) => set("webseite", e.target.value)} placeholder="https://" /></Field>
+            <Field label="Webseite">
+              <SmartInput prefix={WEB_PREFIX} value={f.webseite} onChange={(v) => set("webseite", v)} inputMode="url" />
+            </Field>
           </div>
         </TabsContent>
 
