@@ -11,6 +11,9 @@ import type {
   Benachrichtigung,
   DashboardKennzahlen,
   Dokument,
+  EmailSignatur,
+  EmailVersand,
+  EmailVorlage,
   Firmendaten,
   Kunde,
   Notiz,
@@ -54,6 +57,12 @@ export const qk = {
     backup: ["einstellungen", "backup"] as const,
     positionsvorlagen: ["einstellungen", "positionsvorlagen"] as const,
     textvorlagen: ["einstellungen", "textvorlagen"] as const,
+  },
+  email: {
+    vorlagen: ["email", "vorlagen"] as const,
+    signaturen: ["email", "signaturen"] as const,
+    versand: (filter?: { belegId?: string; belegTyp?: string }) =>
+      ["email", "versand", filter ?? {}] as const,
   },
   search: (q: string) => ["search", q] as const,
 };
@@ -550,3 +559,92 @@ export const usePasswortAendern = () =>
     mutationFn: (data: { altesPasswort: string; neuesPasswort: string }) =>
       api.post<void>("/auth/passwort-aendern", data),
   });
+
+// ---------- E-Mail-Vorlagen ----------
+export const useEmailVorlagen = () =>
+  useQuery({
+    queryKey: qk.email.vorlagen,
+    queryFn: () => api.get<EmailVorlage[]>("/email/vorlagen"),
+  });
+export const useCreateEmailVorlage = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<EmailVorlage>) => api.post<EmailVorlage>("/email/vorlagen", data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.email.vorlagen }),
+  });
+};
+export const useUpdateEmailVorlage = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: Partial<EmailVorlage> & { id: string }) =>
+      api.patch<EmailVorlage>(`/email/vorlagen/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.email.vorlagen }),
+  });
+};
+export const useDeleteEmailVorlage = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/email/vorlagen/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.email.vorlagen }),
+  });
+};
+
+// ---------- E-Mail-Signaturen ----------
+export const useEmailSignaturen = () =>
+  useQuery({
+    queryKey: qk.email.signaturen,
+    queryFn: () => api.get<EmailSignatur[]>("/email/signaturen"),
+  });
+export const useCreateEmailSignatur = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<EmailSignatur>) => api.post<EmailSignatur>("/email/signaturen", data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.email.signaturen }),
+  });
+};
+export const useUpdateEmailSignatur = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: Partial<EmailSignatur> & { id: string }) =>
+      api.patch<EmailSignatur>(`/email/signaturen/${id}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.email.signaturen }),
+  });
+};
+export const useDeleteEmailSignatur = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/email/signaturen/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.email.signaturen }),
+  });
+};
+
+// ---------- E-Mail-Versand-Historie ----------
+export const useEmailVersand = (filter?: { belegId?: string; belegTyp?: string }) =>
+  useQuery({
+    queryKey: qk.email.versand(filter),
+    queryFn: () => {
+      const q = new URLSearchParams();
+      if (filter?.belegId) q.set("belegId", filter.belegId);
+      if (filter?.belegTyp) q.set("belegTyp", filter.belegTyp);
+      const s = q.toString();
+      return api.get<EmailVersand[]>(`/email/versand${s ? `?${s}` : ""}`);
+    },
+  });
+export const useSendEmail = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<EmailVersand>) => api.post<EmailVersand>("/email/versand", data),
+    onSuccess: (_, vars) => {
+      qc.invalidateQueries({ queryKey: ["email", "versand"] });
+      qc.invalidateQueries({ queryKey: qk.aktivitaeten });
+      if (vars.belegTyp === "angebot" && vars.belegId) {
+        qc.invalidateQueries({ queryKey: qk.angebot(vars.belegId) });
+        qc.invalidateQueries({ queryKey: ["angebote"] });
+      }
+      if (vars.belegTyp === "rechnung" && vars.belegId) {
+        qc.invalidateQueries({ queryKey: qk.rechnung(vars.belegId) });
+        qc.invalidateQueries({ queryKey: ["rechnungen"] });
+      }
+    },
+  });
+};
