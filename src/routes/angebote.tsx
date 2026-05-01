@@ -142,14 +142,14 @@ function Page() {
             actions={
               <>
                 <PdfViewButton kind="angebot" beleg={a} />
-                <Link
-                  to="/angebote/$id"
-                  params={{ id: a.id }}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setEmailFuer(a); }}
                   className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-primary"
-                  title="Senden"
+                  title="Per E-Mail versenden"
                 >
                   <Send className="h-4 w-4" />
-                </Link>
+                </button>
                 <button
                   onClick={() =>
                     confirm(
@@ -216,14 +216,14 @@ function Page() {
                 <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-end gap-1 text-muted-foreground">
                     <PdfViewButton kind="angebot" beleg={a} />
-                    <Link
-                      to="/angebote/$id"
-                      params={{ id: a.id }}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setEmailFuer(a); }}
                       className="rounded-md p-1.5 hover:bg-muted hover:text-primary"
-                      title="Senden"
+                      title="Per E-Mail versenden"
                     >
                       <Send className="h-4 w-4" />
-                    </Link>
+                    </button>
                     <button
                       onClick={() =>
                         confirm(
