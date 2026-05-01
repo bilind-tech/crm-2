@@ -633,7 +633,8 @@ export const useEmailVersand = (filter?: { belegId?: string; belegTyp?: string }
 export const useSendEmail = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Partial<EmailVersand>) => api.post<EmailVersand>("/email/versand", data),
+    mutationFn: (data: Partial<EmailVersand> & { mahnStufe?: 1 | 2 | 3 }) =>
+      api.post<EmailVersand>("/email/versand", data),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ["email", "versand"] });
       qc.invalidateQueries({ queryKey: qk.aktivitaeten });
@@ -648,3 +649,43 @@ export const useSendEmail = () => {
     },
   });
 };
+
+// ---------- Mahnwesen ----------
+export const useMahnEinstellungen = () =>
+  useQuery({
+    queryKey: ["einstellungen", "mahnung"] as const,
+    queryFn: () => api.get<import("@/lib/api/types").MahnEinstellungen>("/einstellungen/mahnung"),
+  });
+
+export const useUpdateMahnEinstellungen = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<import("@/lib/api/types").MahnEinstellungen>) =>
+      api.patch<import("@/lib/api/types").MahnEinstellungen>("/einstellungen/mahnung", data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["einstellungen", "mahnung"] }),
+  });
+};
+
+export const useMahnungPausieren = (rechnungId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (bis: string | null) =>
+      api.post<Rechnung>(`/rechnungen/${rechnungId}/mahnung-pausieren`, { bis }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.rechnung(rechnungId) });
+      qc.invalidateQueries({ queryKey: ["rechnungen"] });
+    },
+  });
+};
+
+export const useInkassoMarkieren = (rechnungId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<Rechnung>(`/rechnungen/${rechnungId}/inkasso-markieren`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.rechnung(rechnungId) });
+      qc.invalidateQueries({ queryKey: ["rechnungen"] });
+    },
+  });
+};
+

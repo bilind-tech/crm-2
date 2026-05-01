@@ -21,6 +21,7 @@ import type {
   EmailVorlage,
   Firmendaten,
   Kunde,
+  MahnEinstellungen,
   Notiz,
   Nummernkreise,
   Objekt,
@@ -30,6 +31,7 @@ import type {
   SmtpEinstellungen,
   Textvorlage,
 } from "@/lib/api/types";
+import { STANDARD_MAHN_EINSTELLUNGEN, standardMahnVorlagen } from "@/lib/mahnung/defaults";
 
 function uuid(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
@@ -186,17 +188,7 @@ export function seed() {
       erstelltAm: jetzt,
       aktualisiertAm: jetzt,
     },
-    {
-      id: uuid(),
-      name: "Mahnung 1. Erinnerung",
-      kontext: "mahnung",
-      betreff: "Zahlungserinnerung zu Rechnung {{rechnung.nummer}}",
-      koerperHtml:
-        '<p>Sehr geehrte Damen und Herren,</p>\n<p>vermutlich ist es Ihrer Aufmerksamkeit entgangen — die Rechnung <strong>{{rechnung.nummer}}</strong> über <strong>{{rechnung.summe}}</strong> war am {{rechnung.faellig}} fällig. Es sind aktuell noch <strong>{{rechnung.offen}}</strong> offen.</p>\n<p>Wir bitten Sie freundlich um Begleichung in den nächsten Tagen.</p>\n<p>Mit freundlichen Grüßen</p>',
-      istStandard: true,
-      erstelltAm: jetzt,
-      aktualisiertAm: jetzt,
-    },
+    ...standardMahnVorlagen(jetzt, uuid),
   ];
 
   const emailSignaturen: EmailSignatur[] = [
@@ -211,6 +203,8 @@ export function seed() {
   ];
 
   const emailVersand: EmailVersand[] = [];
+
+  const mahnung: MahnEinstellungen = STANDARD_MAHN_EINSTELLUNGEN;
 
   return {
     unlocked: false,
@@ -235,6 +229,7 @@ export function seed() {
     sicherheit,
     appearance,
     backup,
+    mahnung,
     zaehler: { kunde: 0, objekt: 0, angebot: 0, rechnung: 0 },
   };
 }
