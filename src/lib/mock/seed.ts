@@ -161,6 +161,57 @@ export function seed() {
     zielordner: "/var/lib/mcc/backups",
   };
 
+  const jetzt = new Date().toISOString();
+
+  const emailVorlagen: EmailVorlage[] = [
+    {
+      id: uuid(),
+      name: "Angebot Standard",
+      kontext: "angebot",
+      betreff: "Ihr Angebot {{angebot.nummer}} von {{firma.name}}",
+      koerperHtml:
+        '<p>Sehr geehrte Damen und Herren,</p>\n<p>vielen Dank für Ihre Anfrage. Im Anhang finden Sie unser Angebot <strong>{{angebot.nummer}}</strong> über <strong>{{angebot.summe}}</strong>.</p>\n<p>Das Angebot ist gültig bis zum {{angebot.gueltigBis}}.</p>\n<p>Bei Rückfragen stehen wir Ihnen jederzeit gerne zur Verfügung.</p>\n<p>Mit freundlichen Grüßen</p>',
+      istStandard: true,
+      erstelltAm: jetzt,
+      aktualisiertAm: jetzt,
+    },
+    {
+      id: uuid(),
+      name: "Rechnung Standard",
+      kontext: "rechnung",
+      betreff: "Rechnung {{rechnung.nummer}} von {{firma.name}}",
+      koerperHtml:
+        '<p>Sehr geehrte Damen und Herren,</p>\n<p>im Anhang erhalten Sie unsere Rechnung <strong>{{rechnung.nummer}}</strong> über <strong>{{rechnung.summe}}</strong>.</p>\n<p>Wir bitten um Überweisung des Rechnungsbetrags bis zum <strong>{{rechnung.faellig}}</strong>.</p>\n<p>Mit freundlichen Grüßen</p>',
+      istStandard: true,
+      erstelltAm: jetzt,
+      aktualisiertAm: jetzt,
+    },
+    {
+      id: uuid(),
+      name: "Mahnung 1. Erinnerung",
+      kontext: "mahnung",
+      betreff: "Zahlungserinnerung zu Rechnung {{rechnung.nummer}}",
+      koerperHtml:
+        '<p>Sehr geehrte Damen und Herren,</p>\n<p>vermutlich ist es Ihrer Aufmerksamkeit entgangen — die Rechnung <strong>{{rechnung.nummer}}</strong> über <strong>{{rechnung.summe}}</strong> war am {{rechnung.faellig}} fällig. Es sind aktuell noch <strong>{{rechnung.offen}}</strong> offen.</p>\n<p>Wir bitten Sie freundlich um Begleichung in den nächsten Tagen.</p>\n<p>Mit freundlichen Grüßen</p>',
+      istStandard: true,
+      erstelltAm: jetzt,
+      aktualisiertAm: jetzt,
+    },
+  ];
+
+  const emailSignaturen: EmailSignatur[] = [
+    {
+      id: uuid(),
+      name: "Geschäftsführung",
+      html:
+        '<p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#1f2937">--<br/><strong>Raed Mustafa</strong> · Geschäftsführung<br/>My Clean Center GmbH<br/>Gartenstr. 16 · 53757 St. Augustin<br/>Tel: +49 (0) 2203 9429437<br/>E-Mail: info@my-cleancenter.de · www.mycleancenter.de</p>',
+      istStandard: true,
+      erstelltAm: jetzt,
+    },
+  ];
+
+  const emailVersand: EmailVersand[] = [];
+
   return {
     unlocked: false,
     masterPasswort: "040506",
@@ -175,6 +226,9 @@ export function seed() {
     benachrichtigungen,
     positionsvorlagen,
     textvorlagen,
+    emailVorlagen,
+    emailSignaturen,
+    emailVersand,
     firmendaten,
     smtp,
     nummernkreise,
