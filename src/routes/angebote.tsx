@@ -1,11 +1,13 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
 import { Search, Send, Trash2, ChevronRight, SlidersHorizontal, Check } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { PdfViewButton } from "@/components/pdf/PdfViewButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useAngebote, useDeleteAngebot } from "@/hooks/useApi";
+import { useAngebote, useDeleteAngebot, useKunde } from "@/hooks/useApi";
+import { useAngebotPdf } from "@/hooks/useBelegPdf";
+import { EmailVersandDialog } from "@/components/email/EmailVersandDialog";
 import { formatEUR, formatDate } from "@/lib/format";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
 import { PrimaryAction } from "@/components/layout/PrimaryAction";
@@ -15,7 +17,13 @@ import { AngebotForm } from "@/components/forms/AngebotForm";
 import type { Angebot } from "@/lib/api/types";
 import { useConfirm } from "@/hooks/useConfirm";
 
-export const Route = createFileRoute("/angebote")({ component: Page });
+export const Route = createFileRoute("/angebote")({ component: Layout });
+
+function Layout() {
+  const path = useRouterState({ select: (r) => r.location.pathname });
+  if (path !== "/angebote") return <Outlet />;
+  return <Page />;
+}
 
 const statusLabel: Record<string, string> = {
   entwurf: "Entwurf",
@@ -58,6 +66,7 @@ function Page() {
   const [filter, setFilter] = useState<string>("alle");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
+  const [emailFuer, setEmailFuer] = useState<Angebot | null>(null);
 
   const counts = useMemo(
     () => ({
@@ -133,14 +142,14 @@ function Page() {
             actions={
               <>
                 <PdfViewButton kind="angebot" beleg={a} />
-                <Link
-                  to="/angebote/$id"
-                  params={{ id: a.id }}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setEmailFuer(a); }}
                   className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-primary"
-                  title="Senden"
+                  title="Per E-Mail versenden"
                 >
                   <Send className="h-4 w-4" />
-                </Link>
+                </button>
                 <button
                   onClick={() =>
                     confirm(
@@ -207,14 +216,14 @@ function Page() {
                 <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center justify-end gap-1 text-muted-foreground">
                     <PdfViewButton kind="angebot" beleg={a} />
-                    <Link
-                      to="/angebote/$id"
-                      params={{ id: a.id }}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setEmailFuer(a); }}
                       className="rounded-md p-1.5 hover:bg-muted hover:text-primary"
-                      title="Senden"
+                      title="Per E-Mail versenden"
                     >
                       <Send className="h-4 w-4" />
-                    </Link>
+                    </button>
                     <button
                       onClick={() =>
                         confirm(
@@ -258,8 +267,31 @@ function Page() {
         <AngebotForm onClose={() => setOpen(false)} />
       </SlideOver>
 
+      {emailFuer && (
+        <AngebotEmailLauncher
+          angebot={emailFuer}
+          onClose={() => setEmailFuer(null)}
+        />
+      )}
+
       {confirmDialog}
     </div>
+  );
+}
+
+function AngebotEmailLauncher({ angebot, onClose }: { angebot: Angebot; onClose: () => void }) {
+  const { data: kunde } = useKunde(angebot.kundeId);
+  const pdf = useAngebotPdf(angebot);
+  return (
+    <EmailVersandDialog
+      open
+      onOpenChange={(o) => { if (!o) onClose(); }}
+      kontext="angebot"
+      kunde={kunde}
+      angebot={angebot}
+      pdfBlobUrl={pdf.url}
+      pdfDateiname={`${angebot.nummer}.pdf`}
+    />
   );
 }
 

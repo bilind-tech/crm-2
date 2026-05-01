@@ -1,9 +1,11 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { CheckCircle2, Trash2, ChevronRight } from "lucide-react";
+import { CheckCircle2, Trash2, ChevronRight, Send } from "lucide-react";
 import { PdfViewButton } from "@/components/pdf/PdfViewButton";
 import { Button } from "@/components/ui/button";
-import { useRechnungen, useDeleteRechnung } from "@/hooks/useApi";
+import { useRechnungen, useDeleteRechnung, useKunde } from "@/hooks/useApi";
+import { useRechnungPdf } from "@/hooks/useBelegPdf";
+import { EmailVersandDialog } from "@/components/email/EmailVersandDialog";
 import { formatEUR, formatDate } from "@/lib/format";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
 import { PrimaryAction } from "@/components/layout/PrimaryAction";
@@ -15,7 +17,13 @@ import { ZahlungErfassenDialog } from "@/components/forms/ZahlungErfassenDialog"
 import { useConfirm } from "@/hooks/useConfirm";
 import type { Rechnung } from "@/lib/api/types";
 
-export const Route = createFileRoute("/rechnungen")({ component: Page });
+export const Route = createFileRoute("/rechnungen")({ component: Layout });
+
+function Layout() {
+  const path = useRouterState({ select: (r) => r.location.pathname });
+  if (path !== "/rechnungen") return <Outlet />;
+  return <Page />;
+}
 
 const statusLabel: Record<string, string> = {
   entwurf: "Entwurf",
@@ -62,6 +70,7 @@ function Page() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [zahlungFuer, setZahlungFuer] = useState<Rechnung | null>(null);
+  const [emailFuer, setEmailFuer] = useState<Rechnung | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirm();
 
   const heute = new Date().toISOString().slice(0, 10);
@@ -174,9 +183,16 @@ function Page() {
               actions={
                 <>
                   <PdfViewButton kind="rechnung" beleg={r} />
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setEmailFuer(r); }}
+                    className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-primary"
+                    title="Per E-Mail versenden"
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
                   {r.status !== "bezahlt" && r.status !== "storniert" && (
                     <button
-                      onClick={() => setZahlungFuer(r)}
+                      onClick={(e) => { e.stopPropagation(); setZahlungFuer(r); }}
                       className="rounded-md p-2 text-success hover:bg-success/10"
                       title="Zahlung erfassen"
                     >
@@ -255,9 +271,16 @@ function Page() {
                   <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1 text-muted-foreground">
                       <PdfViewButton kind="rechnung" beleg={r} />
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEmailFuer(r); }}
+                        className="rounded-md p-1.5 hover:bg-muted hover:text-primary"
+                        title="Per E-Mail versenden"
+                      >
+                        <Send className="h-4 w-4" />
+                      </button>
                       {r.status !== "bezahlt" && r.status !== "storniert" && (
                         <button
-                          onClick={() => setZahlungFuer(r)}
+                          onClick={(e) => { e.stopPropagation(); setZahlungFuer(r); }}
                           className="rounded-md p-1.5 text-success hover:bg-success/10"
                           title="Zahlung erfassen"
                         >
@@ -315,7 +338,30 @@ function Page() {
         />
       )}
 
+      {emailFuer && (
+        <RechnungEmailLauncher
+          rechnung={emailFuer}
+          onClose={() => setEmailFuer(null)}
+        />
+      )}
+
       {confirmDialog}
     </div>
+  );
+}
+
+function RechnungEmailLauncher({ rechnung, onClose }: { rechnung: Rechnung; onClose: () => void }) {
+  const { data: kunde } = useKunde(rechnung.kundeId);
+  const pdf = useRechnungPdf(rechnung);
+  return (
+    <EmailVersandDialog
+      open
+      onOpenChange={(o) => { if (!o) onClose(); }}
+      kontext="rechnung"
+      kunde={kunde}
+      rechnung={rechnung}
+      pdfBlobUrl={pdf.url}
+      pdfDateiname={`${rechnung.nummer}.pdf`}
+    />
   );
 }
