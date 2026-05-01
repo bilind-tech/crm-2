@@ -215,6 +215,7 @@ function Page() {
         open={!!aktiv}
         onOpenChange={(v) => !v && setAktiv(null)}
       />
+      {confirmDialog}
     </div>
   );
 }
