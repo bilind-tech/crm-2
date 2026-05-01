@@ -101,8 +101,8 @@ function Page() {
               {naechste.length === 0 && (
                 <li className="py-3 text-sm text-muted-foreground">Keine weiteren Läufe geplant.</li>
               )}
-              {naechste.map((d, i) => (
-                <li key={i} className="flex items-center justify-between py-2.5 text-sm">
+              {naechste.map((d) => (
+                <li key={d.toISOString()} className="flex items-center justify-between py-2.5 text-sm">
                   <div>
                     <p className="font-medium">{periodeBezeichnung(da, d)}</p>
                     <p className="text-xs text-muted-foreground">Stichtag {formatDate(d.toISOString().slice(0, 10))}</p>

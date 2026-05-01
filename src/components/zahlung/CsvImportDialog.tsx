@@ -231,7 +231,7 @@ export function CsvImportDialog({
                   </thead>
                   <tbody className="divide-y divide-border">
                     {eingaenge.slice(0, 50).map((e, i) => (
-                      <tr key={i}>
+                      <tr key={`${e.buchungsdatum}-${e.betrag}-${i}`}>
                         <td className="whitespace-nowrap px-3 py-1.5">
                           {formatDate(e.buchungsdatum)}
                         </td>
