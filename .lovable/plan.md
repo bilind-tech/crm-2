@@ -311,24 +311,36 @@ Globale Einstellungen werden ergänzt um `dauerauftrag: { defaultModus, defaultS
 
 ---
 
-## Reihenfolge der Umsetzung (3 Schritte, je 1 "weiter")
+## Reihenfolge der Umsetzung — Status
 
-**Schritt 1 — Daten + Logik (Backend-Mock, reine Funktionen):**
+**Schritt 1 — Daten + Logik ✅ erledigt**
 - Typen, DB v7, Seed
 - `termine.ts`, `generator.ts`, `match.ts`, CSV-Parser
-- API-Endpunkte im Mock + Hooks
-- Scheduler-Tick (60s)
+- API-Endpunkte im Mock + Hooks (`useDauerauftraege`, `useZahlungseingaenge`)
+- Scheduler-Tick (60s) in `__root.tsx`
 
-**Schritt 2 — UI Daueraufträge:**
-- Liste, Neu/Detail, Posteingang
-- Sidebar-Eintrag + Badge
-- Dashboard-Widget "Wiederkehrender Umsatz"
-- Hinweis-Badge auf Rechnung-Detail
+**Schritt 2 — UI Daueraufträge ✅ erledigt**
+- `/dauerauftraege`, `/dauerauftraege/$id`, `/dauerauftraege/posteingang`
+- Sidebar-Eintrag + Entwurfs-Badge
+- Dashboard-Widget mit MRR
+- Settings-Tab "Daueraufträge"
 
-**Schritt 3 — UI Zahlungseingänge:**
-- Liste mit Vorschlägen, Zuordnen/Aufteilen/Ignorieren
-- Eingang-Erfassen-Dialog + CSV-Import-Dialog
-- Dashboard-Hinweis bei unzugeordneten Eingängen
-- Verknüpfung zur Mahn-Engine: Zahlung kommt → Mahn-Empfehlung wird neu berechnet
+**Schritt 3 — UI Zahlungseingänge ✅ erledigt**
+- `/zahlungseingaenge` mit KPIs, Filter, Liste
+- `CsvImportDialog` (Auto-Mapping, Vorschau)
+- `ManuellerEingangDialog`
+- `ZuordnenDialog` mit Top-5 Vorschlägen + Score-Badge + Sammelüberweisungen
+- Sidebar-Badge (offen + teilweise)
+- Dashboard-Widget
+- Settings-Tab "Zahlungsabgleich" (Auto-Schwellwert)
 
-Sag **"los Phase D"** und ich starte mit Schritt 1.
+**Schritt 4 — Integration ✅ erledigt**
+- Rechnungs-Detail: Zahlungen mit "Bank"-Badge, Notiz aus Verwendungszweck
+- Mahn-Engine reagiert automatisch (Status `bezahlt`/`teilbezahlt` → Mahnstufe wird neu bewertet)
+
+## Offen für Pi-Backend (Phase E+)
+- Echtes CAMT.053 statt CSV
+- Cron-Job für DA-Generierung statt Frontend-Scheduler
+- E-Mail-Auto-Versand bei DA-Lauf
+- Persistente Storage statt LocalStorage
+
