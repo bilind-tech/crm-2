@@ -1,6 +1,17 @@
+// =============================================================================
+// MOCK-BACKEND (nur Frontend-Entwicklung)
+// =============================================================================
 // In-Memory Mock-Backend mit localStorage-Persistenz.
-// Deckt alle in API_SPEC.md beschriebenen Routen ab.
-// Im Live-Modus (VITE_USE_MOCK=false) wird stattdessen das echte Pi-Backend kontaktiert.
+// Implementiert alle Endpoints, die in BACKEND_INTEGRATION.md spezifiziert sind.
+//
+// WICHTIG für Claude Code / Backend-Entwicklung:
+// - Diese Datei dient ausschließlich als Referenz-Implementierung.
+// - Beim Live-Backend-Switch (VITE_USE_MOCK=false in .env) wird sie nicht mehr
+//   verwendet. Stattdessen ruft `src/lib/api/client.ts` echte HTTP-Endpoints auf.
+// - Single Source of Truth für Datentypen: `src/lib/api/types.ts`.
+// - Frontend-Komponenten greifen NIEMALS direkt auf diese Datei zu — immer über
+//   die Hooks in `src/hooks/useApi.ts`.
+// =============================================================================
 
 import type {
   Aktivitaet,
