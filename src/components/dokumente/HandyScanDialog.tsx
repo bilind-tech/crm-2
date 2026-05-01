@@ -68,83 +68,89 @@ export function HandyScanDialog({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg bg-background">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] max-w-lg flex-col gap-0 overflow-hidden bg-background p-0">
+        <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle className="flex items-center gap-2">
             <Smartphone className="h-5 w-5 text-primary" />
             Vom Handy scannen
           </DialogTitle>
           <DialogDescription>
-            Scanne den QR-Code mit deinem Handy. Die Fotos erscheinen automatisch hier.
+            Scanne den QR-Code mit deinem Handy. Bilder & PDFs erscheinen automatisch hier.
           </DialogDescription>
         </DialogHeader>
 
-        {!session ? (
-          <div className="flex h-72 items-center justify-center text-sm text-muted-foreground">
-            Sitzung wird gestartet…
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex justify-center rounded-2xl border border-border bg-white p-5">
-              <QRCodeSVG value={uploadUrl} size={260} level="M" />
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          {!session ? (
+            <div className="flex h-72 items-center justify-center text-sm text-muted-foreground">
+              Sitzung wird gestartet…
             </div>
-
-            <button
-              type="button"
-              onClick={copyUrl}
-              className="flex w-full items-center justify-between gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2 text-left text-xs text-muted-foreground transition hover:bg-muted"
-            >
-              <span className="truncate">{uploadUrl}</span>
-              {copied ? (
-                <Check className="h-4 w-4 shrink-0 text-success" />
-              ) : (
-                <Copy className="h-4 w-4 shrink-0" />
-              )}
-            </button>
-
-            <div className="rounded-xl border border-border bg-card p-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">
-                  {status === "warten" ? "Warte auf Fotos…" : `${dateien.length} Foto(s) empfangen`}
-                </span>
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className={`h-2 w-2 rounded-full ${status === "aktiv" ? "bg-success animate-pulse" : "bg-muted-foreground/40"}`} />
-                  {status === "aktiv" ? "verbunden" : "wartet"}
-                </span>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex justify-center rounded-2xl border border-border bg-white p-4">
+                <QRCodeSVG value={uploadUrl} size={220} level="M" />
               </div>
 
-              {dateien.length > 0 && (
-                <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6">
-                  {dateien.map((d) => (
-                    <div
-                      key={d.id}
-                      className="aspect-square overflow-hidden rounded-lg border border-border bg-muted"
-                    >
-                      {d.url ? (
-                        <img
-                          src={d.url}
-                          alt={d.titel}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end">
               <button
                 type="button"
-                onClick={() => onOpenChange(false)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium hover:bg-muted"
+                onClick={copyUrl}
+                className="flex w-full items-center justify-between gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2 text-left text-xs text-muted-foreground transition hover:bg-muted"
               >
-                <X className="h-4 w-4" />
-                Sitzung beenden
+                <span className="truncate">{uploadUrl}</span>
+                {copied ? (
+                  <Check className="h-4 w-4 shrink-0 text-success" />
+                ) : (
+                  <Copy className="h-4 w-4 shrink-0" />
+                )}
               </button>
+
+              <div className="rounded-xl border border-border bg-card p-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">
+                    {status === "warten" ? "Warte auf Dateien…" : `${dateien.length} Datei(en) empfangen`}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span className={`h-2 w-2 rounded-full ${status === "aktiv" ? "bg-success animate-pulse" : "bg-muted-foreground/40"}`} />
+                    {status === "aktiv" ? "verbunden" : "wartet"}
+                  </span>
+                </div>
+
+                {dateien.length > 0 && (
+                  <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6">
+                    {dateien.map((d) => (
+                      <div
+                        key={d.id}
+                        className="aspect-square overflow-hidden rounded-lg border border-border bg-muted"
+                      >
+                        {d.url && d.mimeType?.startsWith("image/") ? (
+                          <img
+                            src={d.url}
+                            alt={d.titel}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full flex-col items-center justify-center p-1 text-[10px] text-muted-foreground">
+                            <span className="rounded bg-background px-1 py-0.5 font-semibold">PDF</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+
+        <div className="flex justify-end border-t border-border bg-card/50 px-6 py-3">
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-sm font-medium hover:bg-muted"
+          >
+            <X className="h-4 w-4" />
+            Sitzung beenden
+          </button>
+        </div>
       </DialogContent>
     </Dialog>
   );
