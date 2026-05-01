@@ -148,7 +148,7 @@ function Page() {
                   className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-primary"
                   title="Per E-Mail versenden"
                 >
-                  <Send className="h-4 w-4" />
+                  <Mail className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() =>
@@ -222,7 +222,7 @@ function Page() {
                       className="rounded-md p-1.5 hover:bg-muted hover:text-primary"
                       title="Per E-Mail versenden"
                     >
-                      <Send className="h-4 w-4" />
+                      <Mail className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() =>
