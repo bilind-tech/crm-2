@@ -8,11 +8,20 @@ let started = false;
 
 export interface SchedulerCheckResult {
   erzeugteLaeufe: number;
+  neueDokumentBenachrichtigungen?: number;
 }
 
 export async function checkLaeufeJetzt(): Promise<SchedulerCheckResult> {
   try {
-    return await api.post<SchedulerCheckResult>("/dauerauftrag-laeufe/check");
+    const lauf = await api.post<{ erzeugteLaeufe: number }>("/dauerauftrag-laeufe/check");
+    let neue = 0;
+    try {
+      const fristen = await api.post<{ neue: number }>("/dokumente/check-fristen");
+      neue = fristen?.neue ?? 0;
+    } catch {
+      /* ignore */
+    }
+    return { erzeugteLaeufe: lauf.erzeugteLaeufe, neueDokumentBenachrichtigungen: neue };
   } catch {
     return { erzeugteLaeufe: 0 };
   }
@@ -33,7 +42,9 @@ export function startScheduler(opts?: {
   // Erster Check beim Start (nach kleiner Verzögerung, damit App rendern darf)
   const run = async () => {
     const r = await checkLaeufeJetzt();
-    if (r.erzeugteLaeufe > 0) opts?.onResult?.(r);
+    if (r.erzeugteLaeufe > 0 || (r.neueDokumentBenachrichtigungen ?? 0) > 0) {
+      opts?.onResult?.(r);
+    }
   };
   setTimeout(run, 2_000);
   timerId = setInterval(run, interval);

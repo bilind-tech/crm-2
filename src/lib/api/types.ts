@@ -299,6 +299,10 @@ export interface Dokument {
   hochgeladenAm: ISODateTime;
   /** Wenn aus einer Handy-Scan-Session stammend */
   quelle?: "upload" | "drag-drop" | "handy-scan";
+  /** Bis wann das Dokument zu erledigen ist (z.B. Belege ans Steuerbüro). */
+  faelligAm?: ISODate;
+  /** Wann als erledigt markiert. */
+  erledigtAm?: ISODateTime;
 }
 
 // ---------- Upload-Session (Handy-Scan-Brücke) ----------

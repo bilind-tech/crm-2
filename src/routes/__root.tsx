@@ -80,15 +80,18 @@ function Shell() {
     if (!unlocked) return;
     startScheduler({
       onResult: (r) => {
+        const c = qcRef.current;
         if (r.erzeugteLaeufe > 0) {
           toast.success(`${r.erzeugteLaeufe} neue Rechnung(en) aus Daueraufträgen erzeugt`);
-          const c = qcRef.current;
           c.invalidateQueries({ queryKey: ["dauerauftraege"] });
           c.invalidateQueries({ queryKey: ["dauerauftrag-laeufe"] });
           c.invalidateQueries({ queryKey: ["rechnungen"] });
-          c.invalidateQueries({ queryKey: ["benachrichtigungen"] });
           c.invalidateQueries({ queryKey: ["aktivitaeten"] });
         }
+        if ((r.neueDokumentBenachrichtigungen ?? 0) > 0) {
+          c.invalidateQueries({ queryKey: ["dokumente"] });
+        }
+        c.invalidateQueries({ queryKey: ["benachrichtigungen"] });
       },
     });
   }, [unlocked]);

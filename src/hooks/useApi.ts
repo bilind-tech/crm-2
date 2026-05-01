@@ -370,6 +370,17 @@ export const useCreateDokument = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["dokumente"] }),
   });
 };
+export const useUpdateDokument = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...patch }: Partial<Dokument> & { id: string }) =>
+      api.patch<Dokument>(`/dokumente/${id}`, patch),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dokumente"] });
+      qc.invalidateQueries({ queryKey: ["benachrichtigungen"] });
+    },
+  });
+};
 export const useDeleteDokument = () => {
   const qc = useQueryClient();
   return useMutation({

@@ -1,36 +1,57 @@
-## KPI-Kacheln auf dem Handy: 2 Spalten, sauber, kein Text-Overflow
+## 1. Neue mobile FilterBar (alle Listenseiten)
 
-Aktuell: Auf den Listen-Seiten (Dashboard, Angebote, Rechnungen, Kunden, Dokumente) sind die 4 KPI-Kacheln auf dem Handy einspaltig untereinander → langes Scrollen, große Zahlen brechen aus dem Kästchen heraus.
+Aktuell: Pillen-Tabs brechen unschön um, doppelter Container, Suche separat darunter — wirkt überladen. Auf Touch zu klein.
 
-Ziel: Auf dem Handy **2 × 2 Raster**, kompakter aber weiterhin schlicht und clean — nichts wirkt eingequetscht, kein Text läuft heraus.
+Neu für Mobile (`<md`):
+- **Sticky Toolbar** direkt unter dem Header, eine Zeile, bündig:
+  - Kompaktes **Such-Icon-Feld** (volle Breite, dezent), Tap = Cursor rein, kein Modal-Sprung mehr.
+  - Rechts daneben ein **„Filter"-Button mit Gegenstand-Counter** (z. B. „Alle" / „Versendet · 1").
+- Klick auf den Filter-Button öffnet ein **Bottom-Sheet** (vom unteren Rand hoch, native-feel) mit:
+  - Großen, fingerfreundlichen Status-Zeilen (Häkchen + Label + Count rechts).
+  - Schließen automatisch nach Auswahl.
+- Status-Pillen werden auf Mobile **komplett ausgeblendet** (sie brachen vorher um). Auf Desktop/Tablet (`md:`) bleibt die heutige Pillen-Leiste 1:1 erhalten.
 
-### Änderungen
+Datei: `src/components/layout/FilterBar.tsx` (neu) — wird aus `src/routes/angebote.tsx` re-exportiert, um Imports in `rechnungen/kunden/objekte/dokumente.tsx` nicht zu brechen. Bottom-Sheet basiert auf dem vorhandenen `Dialog`/`Drawer` aus `src/components/ui/`.
 
-**1. `src/components/layout/PageHeader.tsx` — `KpiCard`**
+## 2. Dokumente erweitern: Titel, Frist, Mahn-Status
 
-- Padding kleiner auf Mobile: `p-3` statt `p-5` (`sm:p-5` bleibt für Desktop).
-- Label-Schrift kleiner und mit `truncate`: `text-[10px]` mobil, `sm:text-xs` Desktop.
-- Wert-Schrift kleiner und mit `truncate`: `text-lg` mobil, `sm:text-2xl` Desktop — verhindert Überlauf bei großen Zahlen wie „123.456,78 €".
-- Sublabel ebenfalls `truncate` und `text-[11px]` mobil.
-- Dekoratives Icon (rechts oben) wird auf Mobile **ausgeblendet** (`hidden sm:block`) — schafft den Platz, den die Zahl braucht.
-- Container bekommt `min-w-0`, damit `truncate` im Flex-Layout greift.
+### Datenmodell (`src/lib/api/types.ts`)
+`Dokument` bekommt:
+- `titel` ist bereits vorhanden — bleibt editierbar.
+- `faelligAm?: ISODate` — bis wann zu erledigen (z. B. „Belege ans Steuerbüro").
+- `erledigtAm?: ISODateTime` — als erledigt markiert.
+- bereits vorhandene `beschreibung`, `dokumentdatum`, `betrag`, `steuerrelevant` werden ebenfalls editierbar gemacht.
 
-**2. Grid-Layouts auf den fünf Seiten umstellen**
+Status leitet sich ab (kein zusätzliches Feld nötig):
+- `erledigtAm` gesetzt → **erledigt**
+- sonst `faelligAm < heute` → **überfällig**
+- sonst `faelligAm` in <= 3 Tagen → **bald fällig**
+- sonst → **offen**
 
-Überall, wo aktuell `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4` steht, wird auf der Handy-Breakpoint-Stufe ebenfalls auf 2 Spalten gewechselt:
+### Bearbeiten-Dialog `DokumentBearbeitenDialog`
+Neu unter `src/components/dokumente/DokumentBearbeitenDialog.tsx`:
+- Titel, Beschreibung, Typ, Dokumentdatum, **Frist (faelligAm)**, Betrag, „Steuerrelevant"-Toggle, „Erledigt"-Toggle.
+- Bild-/PDF-Vorschau oben.
+- Speichern → `useUpdateDokument` (PATCH).
 
-- `grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4`
+### Hooks & Mock-Backend
+- `useUpdateDokument` neu in `src/hooks/useApi.ts` (PATCH `/dokumente/:id`).
+- Mock-Backend: PATCH-Handler analog zu Angeboten (`Object.assign`).
 
-Betroffene Dateien:
-- `src/routes/index.tsx` (Dashboard)
-- `src/routes/angebote.tsx`
-- `src/routes/rechnungen.tsx`
-- `src/routes/kunden.tsx`
-- `src/routes/dokumente.tsx`
+### Dokumente-Liste
+- Tap auf Dokument-Karte/Zeile → öffnet Bearbeiten-Dialog.
+- Status-Badge sichtbar: grau „Offen", orange „Bald fällig", rot „Überfällig", grün „Erledigt".
+- Frist-Datum als Sublabel.
 
-### Ergebnis
+### Benachrichtigungen für überfällige Dokumente
+- Bestehender `scheduler` (`src/lib/mock/scheduler.ts`) bekommt einen zusätzlichen Pass: durchsucht alle Dokumente, bei denen `faelligAm < heute` und `erledigtAm == null` und für die noch keine Benachrichtigung existiert (Schlüssel: `dokument:<id>:ueberfaellig`) → erstellt `Benachrichtigung` mit Link `/dokumente`.
+- Erscheint dann sofort im vorhandenen Glocken-Popover oben rechts (nutzt `GET /benachrichtigungen`, ist bereits angeschlossen).
+- Wird ein Dokument als erledigt markiert → entsprechende ungelesene Benachrichtigung wird mit-gelöscht (Idempotenz).
 
-- 2 × 2 Raster auf Handy → eine Bildschirmhöhe statt vier.
-- Schrift bleibt lesbar und schlicht, dezenter als Desktop, aber nicht eingequetscht.
-- Lange Geldbeträge / hohe Zahlen werden notfalls mit `…` abgeschnitten statt das Kästchen zu sprengen.
-- Auf Tablet (`sm:`) und Desktop bleibt das bisherige Aussehen unverändert.
+### Dashboard-KPI
+- Neue kleine KPI „Offene Dokumente" mit Count, falls > 0 → tone `warning`. Auf Dokumente-Seite eigene KPI-Karte „Überfällig" ergänzen (ersetzt eine vorhandene Karte, damit es 4 bleiben).
+
+## Was NICHT angefasst wird
+- Vorhandener Drag&Drop-Uploader und Handy-Scan-Brücke bleiben unverändert.
+- Pillen-Filter auf Desktop/Tablet bleibt.
+- Bestehende Benachrichtigungen für andere Bereiche.

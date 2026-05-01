@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { Search, Send, Trash2, ChevronRight } from "lucide-react";
+import { Search, Send, Trash2, ChevronRight, SlidersHorizontal, Check } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { PdfViewButton } from "@/components/pdf/PdfViewButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -267,14 +268,29 @@ interface FilterBarProps {
   setFilter: (v: string) => void;
   q: string;
   setQ: (v: string) => void;
-  tabs: { value: string; label: string }[];
+  tabs: { value: string; label: string; count?: number }[];
   placeholder: string;
   extra?: React.ReactNode;
 }
 
-export function FilterBar({ filter, setFilter, q, setQ, tabs, placeholder, extra }: FilterBarProps) {
+export function FilterBar(props: FilterBarProps) {
   return (
-    <div className="flex w-full min-w-0 flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-2.5 shadow-sm sm:gap-3">
+    <>
+      {/* Mobile: kompakte Such-Leiste + Filter-Sheet */}
+      <div className="md:hidden">
+        <MobileFilterBar {...props} />
+      </div>
+      {/* Desktop/Tablet: Pillen-Leiste wie gehabt */}
+      <div className="hidden md:block">
+        <DesktopFilterBar {...props} />
+      </div>
+    </>
+  );
+}
+
+function DesktopFilterBar({ filter, setFilter, q, setQ, tabs, placeholder, extra }: FilterBarProps) {
+  return (
+    <div className="flex w-full min-w-0 flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-2.5 shadow-sm">
       <div className="flex flex-wrap gap-1 rounded-full bg-muted p-1">
         {tabs.map((t) => (
           <button
@@ -301,5 +317,76 @@ export function FilterBar({ filter, setFilter, q, setQ, tabs, placeholder, extra
         />
       </div>
     </div>
+  );
+}
+
+function MobileFilterBar({ filter, setFilter, q, setQ, tabs, placeholder }: FilterBarProps) {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const aktiv = tabs.find((t) => t.value === filter);
+  return (
+    <>
+      <div className="flex w-full min-w-0 items-center gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder={placeholder}
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="h-11 w-full rounded-xl border-border bg-card pl-9 text-sm"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
+          className="flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-sm font-medium hover:bg-muted"
+          aria-label="Filter wählen"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          <span className="max-w-[7rem] truncate">{aktiv?.label ?? "Alle"}</span>
+        </button>
+      </div>
+
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetContent
+          side="bottom"
+          className="rounded-t-2xl border-t bg-background p-0"
+        >
+          <div className="mx-auto mt-2 mb-1 h-1.5 w-10 rounded-full bg-muted-foreground/30" />
+          <SheetHeader className="px-5 pb-2 pt-3 text-left">
+            <SheetTitle className="text-base">Filter</SheetTitle>
+          </SheetHeader>
+          <div className="px-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            {tabs.map((t) => {
+              const istAktiv = t.value === filter;
+              return (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => {
+                    setFilter(t.value);
+                    setSheetOpen(false);
+                  }}
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition ${
+                    istAktiv ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                  }`}
+                >
+                  <span
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+                      istAktiv ? "border-primary bg-primary text-primary-foreground" : "border-border"
+                    }`}
+                  >
+                    {istAktiv && <Check className="h-3.5 w-3.5" />}
+                  </span>
+                  <span className="flex-1 font-medium">{t.label}</span>
+                  {typeof t.count === "number" && (
+                    <span className="text-xs text-muted-foreground">{t.count}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
