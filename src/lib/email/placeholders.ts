@@ -82,6 +82,22 @@ function flatten(ctx: PlaceholderContext): Record<string, string> {
     out["firma.iban"] = f.iban ?? "";
   }
 
+  if (ctx.mahnung && ctx.rechnung && ctx.mahnung.einstellungen) {
+    const stufeConfig = ctx.mahnung.einstellungen.stufen.find(
+      (s) => s.stufe === ctx.mahnung!.stufe,
+    );
+    if (stufeConfig) {
+      const z = bestimmeMahnZustand(ctx.rechnung, ctx.mahnung.einstellungen);
+      const neueFrist = berechneNeueFrist(stufeConfig);
+      const gesamt = z.offenEUR + stufeConfig.gebuehr;
+      out["mahnung.stufe"] = stufenLabel(ctx.mahnung.stufe, ctx.mahnung.einstellungen);
+      out["mahnung.gebuehr"] = formatEUR(stufeConfig.gebuehr);
+      out["mahnung.neueFrist"] = formatDate(neueFrist);
+      out["mahnung.gesamtForderung"] = formatEUR(gesamt);
+      out["mahnung.tageUeberfaellig"] = String(Math.max(0, z.tageUeberfaellig));
+    }
+  }
+
   return out;
 }
 
