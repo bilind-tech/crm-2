@@ -27,7 +27,7 @@ export function QuickCreate({
   const navigate = useNavigate();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="quick-create-dialog max-w-lg">
         <DialogHeader>
           <DialogTitle>Schnell anlegen</DialogTitle>
           <DialogDescription>Was möchtest du erstellen?</DialogDescription>
