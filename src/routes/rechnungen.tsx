@@ -1,9 +1,11 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { CheckCircle2, Trash2, ChevronRight } from "lucide-react";
+import { CheckCircle2, Trash2, ChevronRight, Send } from "lucide-react";
 import { PdfViewButton } from "@/components/pdf/PdfViewButton";
 import { Button } from "@/components/ui/button";
-import { useRechnungen, useDeleteRechnung } from "@/hooks/useApi";
+import { useRechnungen, useDeleteRechnung, useKunde } from "@/hooks/useApi";
+import { useRechnungPdf } from "@/hooks/useBelegPdf";
+import { EmailVersandDialog } from "@/components/email/EmailVersandDialog";
 import { formatEUR, formatDate } from "@/lib/format";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
 import { PrimaryAction } from "@/components/layout/PrimaryAction";
@@ -15,7 +17,13 @@ import { ZahlungErfassenDialog } from "@/components/forms/ZahlungErfassenDialog"
 import { useConfirm } from "@/hooks/useConfirm";
 import type { Rechnung } from "@/lib/api/types";
 
-export const Route = createFileRoute("/rechnungen")({ component: Page });
+export const Route = createFileRoute("/rechnungen")({ component: Layout });
+
+function Layout() {
+  const path = useRouterState({ select: (r) => r.location.pathname });
+  if (path !== "/rechnungen") return <Outlet />;
+  return <Page />;
+}
 
 const statusLabel: Record<string, string> = {
   entwurf: "Entwurf",
