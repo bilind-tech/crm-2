@@ -157,6 +157,18 @@ function Page() {
               </ul>
             </div>
           )}
+
+          {r.status === "ueberfaellig" && (
+            <Button
+              variant="outline"
+              className="w-full rounded-lg border-warning/40 bg-warning/10 text-warning-foreground hover:bg-warning/20"
+              onClick={() => setEmailOpen(true)}
+            >
+              <Send className="mr-1.5 h-4 w-4" /> Mahnung senden
+            </Button>
+          )}
+
+          <EmailVersandHistorie belegId={r.id} belegTyp="rechnung" />
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-border bg-muted/40 shadow-sm">
