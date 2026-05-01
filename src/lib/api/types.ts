@@ -303,6 +303,10 @@ export type AktivitaetTyp =
   | "dokument_hochgeladen"
   | "einstellung_geaendert"
   | "backup_erstellt"
+  | "dauerauftrag_angelegt"
+  | "dauerauftrag_lauf_erzeugt"
+  | "zahlungseingang_zugeordnet"
+  | "zahlungseingang_importiert"
   | "system";
 
 export interface Aktivitaet {
