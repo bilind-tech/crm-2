@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Bell, Search } from "lucide-react";
+import { Bell, Plus, Search } from "lucide-react";
 import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { useNavigate } from "@tanstack/react-router";
 import { SidebarTrigger } from "@/components/ui/sidebar";
