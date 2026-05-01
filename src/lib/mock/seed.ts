@@ -229,6 +229,7 @@ export function seed() {
     sicherheit,
     appearance,
     backup,
+    mahnung,
     zaehler: { kunde: 0, objekt: 0, angebot: 0, rechnung: 0 },
   };
 }
