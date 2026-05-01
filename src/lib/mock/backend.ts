@@ -493,7 +493,7 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     d.zaehler.angebot += 1;
     const neu: Angebot = {
       id: uuid(),
-      nummer: nextNumber(d.nummernkreise.angebotPraefix, d.zaehler.angebot),
+      nummer: nextCustomerNumber(d, a.kundeId, d.nummernkreise.angebotPraefix, d.zaehler.angebot),
       kundeId: a.kundeId!,
       objektId: a.objektId,
       ansprechpartnerId: a.ansprechpartnerId,
@@ -560,7 +560,7 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     faellig.setDate(faellig.getDate() + (kunde?.zahlungszielTage ?? 14));
     const r: Rechnung = {
       id: uuid(),
-      nummer: nextNumber(d.nummernkreise.rechnungPraefix, d.zaehler.rechnung),
+      nummer: nextCustomerNumber(d, a.kundeId, d.nummernkreise.rechnungPraefix, d.zaehler.rechnung),
       kundeId: a.kundeId,
       objektId: a.objektId,
       quellAngebotId: a.id,
@@ -595,7 +595,7 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     const dup: Angebot = {
       ...a,
       id: uuid(),
-      nummer: nextNumber(d.nummernkreise.angebotPraefix, d.zaehler.angebot),
+      nummer: nextCustomerNumber(d, a.kundeId, d.nummernkreise.angebotPraefix, d.zaehler.angebot),
       status: "entwurf",
       versendetAm: undefined,
       positionen: a.positionen.map((p) => ({ ...p, id: uuid() })),
@@ -627,7 +627,7 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     faellig.setDate(faellig.getDate() + (kunde?.zahlungszielTage ?? 14));
     const neu: Rechnung = {
       id: uuid(),
-      nummer: nextNumber(d.nummernkreise.rechnungPraefix, d.zaehler.rechnung),
+      nummer: nextCustomerNumber(d, r.kundeId, d.nummernkreise.rechnungPraefix, d.zaehler.rechnung),
       kundeId: r.kundeId!,
       objektId: r.objektId,
       ansprechpartnerId: r.ansprechpartnerId,
@@ -1541,7 +1541,7 @@ function erzeugeLaufIntern(
 
   d.zaehler.rechnung += 1;
   const rechnungId = uuid();
-  const rechnungNummer = nextNumber(d.nummernkreise.rechnungPraefix, d.zaehler.rechnung);
+  const rechnungNummer = nextCustomerNumber(d, da.kundeId, d.nummernkreise.rechnungPraefix, d.zaehler.rechnung);
   const kunde = d.kunden.find((k) => k.id === da.kundeId);
 
   try {
