@@ -1,6 +1,13 @@
 import { Trash2, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatEUR } from "@/lib/format";
 import type { Position, Einheit } from "@/lib/api/types";
 
@@ -108,17 +115,17 @@ export function PositionenEditor({ positionen, onChange, defaultSteuersatz = 19 
                   />
                 </td>
                 <td className="px-3 py-2 w-24">
-                  <select
-                    className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  <Select
                     value={p.einheit}
-                    onChange={(e) => update(i, { einheit: e.target.value as Einheit })}
+                    onValueChange={(v) => update(i, { einheit: v as Einheit })}
                   >
-                    {EINHEITEN.map((u) => (
-                      <option key={u.value} value={u.value}>
-                        {u.label}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {EINHEITEN.map((u) => (
+                        <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </td>
                 <td className="px-3 py-2 w-28">
                   <Input

@@ -4,6 +4,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useKunden, useCreateObjekt } from "@/hooks/useApi";
 import { toast } from "sonner";
 import type { Reinigungsfrequenz, ObjektTyp } from "@/lib/api/types";
@@ -58,33 +65,30 @@ export function ObjektForm({ onClose, defaultKundeId }: Props) {
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Kunde *">
-          <select
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-            value={kundeId}
-            onChange={(e) => setKundeId(e.target.value)}
-          >
-            <option value="">Kunde wählen…</option>
-            {kunden.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.firmenname || `${k.vorname ?? ""} ${k.nachname ?? ""}`.trim()}
-              </option>
-            ))}
-          </select>
+          <Select value={kundeId || undefined} onValueChange={setKundeId}>
+            <SelectTrigger><SelectValue placeholder="Kunde wählen…" /></SelectTrigger>
+            <SelectContent>
+              {kunden.map((k) => (
+                <SelectItem key={k.id} value={k.id}>
+                  {k.firmenname || `${k.vorname ?? ""} ${k.nachname ?? ""}`.trim()}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
         <Field label="Objekttyp">
-          <select
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-            value={typ}
-            onChange={(e) => setTyp(e.target.value as ObjektTyp)}
-          >
-            <option value="buero">Büro</option>
-            <option value="wohnen">Wohnen</option>
-            <option value="gewerbe">Gewerbe</option>
-            <option value="industrie">Industrie</option>
-            <option value="medizin">Medizin</option>
-            <option value="bildung">Bildung</option>
-            <option value="sonstiges">Sonstiges</option>
-          </select>
+          <Select value={typ} onValueChange={(v) => setTyp(v as ObjektTyp)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="buero">Büro</SelectItem>
+              <SelectItem value="wohnen">Wohnen</SelectItem>
+              <SelectItem value="gewerbe">Gewerbe</SelectItem>
+              <SelectItem value="industrie">Industrie</SelectItem>
+              <SelectItem value="medizin">Medizin</SelectItem>
+              <SelectItem value="bildung">Bildung</SelectItem>
+              <SelectItem value="sonstiges">Sonstiges</SelectItem>
+            </SelectContent>
+          </Select>
         </Field>
       </div>
       <Field label="Bezeichnung *">
@@ -104,18 +108,17 @@ export function ObjektForm({ onClose, defaultKundeId }: Props) {
           />
         </Field>
         <Field label="Reinigungsfrequenz">
-          <select
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-            value={frequenz}
-            onChange={(e) => setFrequenz(e.target.value as Reinigungsfrequenz)}
-          >
-            <option value="taeglich">Täglich</option>
-            <option value="woechentlich">Wöchentlich</option>
-            <option value="14taegig">14-tägig</option>
-            <option value="monatlich">Monatlich</option>
-            <option value="quartalsweise">Quartalsweise</option>
-            <option value="auf_abruf">Auf Abruf</option>
-          </select>
+          <Select value={frequenz} onValueChange={(v) => setFrequenz(v as Reinigungsfrequenz)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="taeglich">Täglich</SelectItem>
+              <SelectItem value="woechentlich">Wöchentlich</SelectItem>
+              <SelectItem value="14taegig">14-tägig</SelectItem>
+              <SelectItem value="monatlich">Monatlich</SelectItem>
+              <SelectItem value="quartalsweise">Quartalsweise</SelectItem>
+              <SelectItem value="auf_abruf">Auf Abruf</SelectItem>
+            </SelectContent>
+          </Select>
         </Field>
       </div>
       <Field label="Zugang / Hinweise">

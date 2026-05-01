@@ -3,6 +3,13 @@ import { Plus, UserCircle2, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useKunde, useCreateAnsprechpartner } from "@/hooks/useApi";
 import type { Ansprechpartner } from "@/lib/api/types";
 import { toast } from "sonner";
@@ -158,16 +165,15 @@ export function AnsprechpartnerPicker({ kundeId, value, onChange }: Props) {
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
               <Label className="text-xs text-muted-foreground">Anrede</Label>
-              <select
-                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                value={anrede}
-                onChange={(e) => setAnrede(e.target.value as typeof anrede)}
-              >
-                <option value="herr">Herr</option>
-                <option value="frau">Frau</option>
-                <option value="divers">Divers</option>
-                <option value="keine">—</option>
-              </select>
+              <Select value={anrede} onValueChange={(v) => setAnrede(v as typeof anrede)}>
+                <SelectTrigger className="mt-1 h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="herr">Herr</SelectItem>
+                  <SelectItem value="frau">Frau</SelectItem>
+                  <SelectItem value="divers">Divers</SelectItem>
+                  <SelectItem value="keine">—</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">Vorname</Label>

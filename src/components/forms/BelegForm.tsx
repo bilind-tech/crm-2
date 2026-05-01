@@ -6,6 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useKunden, useObjekte, useCreateAngebot, useCreateRechnung } from "@/hooks/useApi";
 import { formatEUR, todayISO, addDays } from "@/lib/format";
 import { toast } from "sonner";
@@ -155,34 +162,37 @@ export function BelegForm({ mode, onClose, defaultKundeId }: Props) {
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Kunde *">
-          <select
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-            value={kundeId}
-            onChange={(e) => {
-              setKundeId(e.target.value);
+          <Select
+            value={kundeId || undefined}
+            onValueChange={(v) => {
+              setKundeId(v);
               setObjektId("");
             }}
           >
-            <option value="">Kunde wählen…</option>
-            {kunden.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.firmenname || `${k.vorname ?? ""} ${k.nachname ?? ""}`.trim()} ({k.nummer})
-              </option>
-            ))}
-          </select>
+            <SelectTrigger><SelectValue placeholder="Kunde wählen…" /></SelectTrigger>
+            <SelectContent>
+              {kunden.map((k) => (
+                <SelectItem key={k.id} value={k.id}>
+                  {k.firmenname || `${k.vorname ?? ""} ${k.nachname ?? ""}`.trim()} ({k.nummer})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
         <Field label="Objekt (optional)">
-          <select
-            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
-            value={objektId}
-            onChange={(e) => setObjektId(e.target.value)}
+          <Select
+            value={objektId || "__none__"}
+            onValueChange={(v) => setObjektId(v === "__none__" ? "" : v)}
             disabled={!kundeId}
           >
-            <option value="">{kundeId ? "Kein Objekt" : "Erst Kunde wählen"}</option>
-            {objekteAlle.map((o) => (
-              <option key={o.id} value={o.id}>{o.name}</option>
-            ))}
-          </select>
+            <SelectTrigger><SelectValue placeholder={kundeId ? "Kein Objekt" : "Erst Kunde wählen"} /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Kein Objekt</SelectItem>
+              {objekteAlle.map((o) => (
+                <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
       </div>
 
@@ -232,15 +242,17 @@ export function BelegForm({ mode, onClose, defaultKundeId }: Props) {
                   value={r.menge}
                   onChange={(e) => updateRow(i, { menge: Number(e.target.value) || 0 })}
                 />
-                <select
-                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                <Select
                   value={r.einheit}
-                  onChange={(e) => updateRow(i, { einheit: e.target.value as Einheit })}
+                  onValueChange={(v) => updateRow(i, { einheit: v as Einheit })}
                 >
-                  {EINHEITEN.map((e) => (
-                    <option key={e.value} value={e.value}>{e.label}</option>
-                  ))}
-                </select>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {EINHEITEN.map((u) => (
+                      <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Input
                   className="h-9 text-right"
                   type="number"

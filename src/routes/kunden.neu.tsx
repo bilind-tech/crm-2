@@ -4,6 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useCreateKunde } from "@/hooks/useApi";
 import { toast } from "sonner";
 
@@ -19,10 +26,18 @@ function Page() {
       <Card>
         <CardHeader><CardTitle>Stammdaten</CardTitle></CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
-          <div className="sm:col-span-2"><Label>Typ</Label>
-            <select className="mt-1 w-full rounded-md border bg-background p-2 text-sm" value={form.typ} onChange={(e) => setForm({ ...form, typ: e.target.value as "firma" | "privat" })}>
-              <option value="firma">Firma</option><option value="privat">Privat</option>
-            </select>
+          <div className="sm:col-span-2">
+            <Label>Typ</Label>
+            <Select
+              value={form.typ}
+              onValueChange={(v) => setForm({ ...form, typ: v as "firma" | "privat" })}
+            >
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="firma">Firma</SelectItem>
+                <SelectItem value="privat">Privat</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           {form.typ === "firma" && (<div className="sm:col-span-2"><Label>Firmenname</Label><Input value={form.firmenname} onChange={(e) => setForm({ ...form, firmenname: e.target.value })} /></div>)}
           <div><Label>Vorname</Label><Input value={form.vorname} onChange={(e) => setForm({ ...form, vorname: e.target.value })} /></div>
