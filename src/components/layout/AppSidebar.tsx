@@ -82,6 +82,13 @@ export function AppSidebar() {
       badge: mahn.aktionEmpfohlen,
       badgeTone: mahn.inkassoReif > 0 ? "danger" : "warning",
     },
+    {
+      title: "Zahlungseingänge",
+      url: "/zahlungseingaenge",
+      icon: Banknote,
+      badge: offeneZahlungen,
+      badgeTone: "primary",
+    },
     { title: "Dokumente", url: "/dokumente", icon: FolderClosed },
   ];
   const system: NavItem[] = [
