@@ -1476,3 +1476,151 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
 function matchRoute(method: string, path: string, expectedMethod: string, pattern: string): boolean {
   return method === expectedMethod && match(path, pattern) !== null;
 }
+
+// =============================================================================
+// Dauerauftrag-Scheduler-Helpers (intern)
+// =============================================================================
+
+/**
+ * Erzeugt einen einzelnen Lauf für einen Dauerauftrag und die zugehörige Rechnung.
+ * Idempotent: prüft (dauerauftragId, periode) — existiert der Lauf schon, liefert er ihn zurück.
+ */
+function erzeugeLaufIntern(
+  d: DB,
+  da: Dauerauftrag,
+  stichtag: Date,
+  forceEvenIfPaused = false,
+): DauerauftragLauf {
+  const periode = periodeFuer(da, stichtag);
+  const existing = d.dauerauftragLaeufe.find(
+    (l) => l.dauerauftragId === da.id && l.periode === periode,
+  );
+  if (existing) return existing;
+
+  // Pausierung respektieren — Lauf wird als "uebersprungen" markiert
+  if (!forceEvenIfPaused && istPausiert(da, stichtag)) {
+    const lauf: DauerauftragLauf = {
+      id: uuid(),
+      dauerauftragId: da.id,
+      periode,
+      geplantFuer: isoDate(stichtag),
+      status: "uebersprungen",
+      ausgefuehrtAm: now(),
+    };
+    d.dauerauftragLaeufe.push(lauf);
+    return lauf;
+  }
+
+  // Sonderpositionen für diese Periode konsumieren
+  const sonderpositionen = d.dauerauftragSonderpositionen.filter(
+    (sp) => sp.dauerauftragId === da.id && sp.fuerPeriode === periode && !sp.verbrauchtAm,
+  );
+
+  d.zaehler.rechnung += 1;
+  const rechnungId = uuid();
+  const rechnungNummer = nextNumber(d.nummernkreise.rechnungPraefix, d.zaehler.rechnung);
+  const kunde = d.kunden.find((k) => k.id === da.kundeId);
+
+  try {
+    const rechnung = erzeugeRechnungAusLauf({
+      da,
+      kunde,
+      stichtag,
+      sonderpositionen,
+      rechnungId,
+      rechnungNummer,
+      jetztIso: now(),
+    });
+    d.rechnungen.push(rechnung);
+
+    for (const sp of sonderpositionen) sp.verbrauchtAm = now();
+    da.letzteAusfuehrung = isoDate(stichtag);
+
+    const lauf: DauerauftragLauf = {
+      id: uuid(),
+      dauerauftragId: da.id,
+      periode,
+      geplantFuer: isoDate(stichtag),
+      ausgefuehrtAm: now(),
+      rechnungId: rechnung.id,
+      status: "erzeugt",
+    };
+    d.dauerauftragLaeufe.push(lauf);
+
+    logAktivitaet(
+      "dauerauftrag_lauf_erzeugt",
+      `Dauerauftrag ${da.nummer} → Rechnung ${rechnung.nummer} (${periode})`,
+      { typ: "rechnung", id: rechnung.id },
+    );
+
+    if (da.modus === "vollautomatisch") {
+      d.benachrichtigungen.unshift({
+        id: uuid(),
+        zeitpunkt: now(),
+        typ: "info",
+        titel: "Rechnung automatisch versendet",
+        text: `${da.nummer}: Rechnung ${rechnung.nummer} (${periode}) wurde automatisch erstellt und versendet.`,
+        gelesen: false,
+        link: { route: "/rechnungen/$id", params: { id: rechnung.id } },
+      });
+    } else {
+      d.benachrichtigungen.unshift({
+        id: uuid(),
+        zeitpunkt: now(),
+        typ: "info",
+        titel: "Neuer Rechnungs-Entwurf",
+        text: `${da.nummer}: Rechnung ${rechnung.nummer} (${periode}) wartet im Posteingang.`,
+        gelesen: false,
+        link: { route: "/dauerauftraege/posteingang", params: {} },
+      });
+    }
+
+    return lauf;
+  } catch (err) {
+    const lauf: DauerauftragLauf = {
+      id: uuid(),
+      dauerauftragId: da.id,
+      periode,
+      geplantFuer: isoDate(stichtag),
+      status: "fehler",
+      fehlerGrund: err instanceof Error ? err.message : String(err),
+    };
+    d.dauerauftragLaeufe.push(lauf);
+    return lauf;
+  }
+}
+
+/**
+ * Prüft alle aktiven Daueraufträge auf fällige Läufe.
+ * Wird vom Frontend-Scheduler im Mock und vom Pi-Cron im Live-Modus aufgerufen.
+ */
+function pruefeFaelligeLaeufeIntern(d: DB): DauerauftragLauf[] {
+  const heute = new Date();
+  const erzeugte: DauerauftragLauf[] = [];
+
+  for (const da of d.dauerauftraege) {
+    if (da.status === "beendet") continue;
+
+    const ab = da.letzteAusfuehrung
+      ? (() => {
+          const next = new Date(da.letzteAusfuehrung);
+          next.setDate(next.getDate() + 1);
+          return next;
+        })()
+      : new Date(da.laufzeitVon);
+
+    // Sicherheitsbegrenzung: max. 24 nachzuholende Läufe pro Tick
+    const stichtage = berechneNaechsteLauftermine(da, ab, 24).filter((t) => t <= heute);
+
+    for (const stichtag of stichtage) {
+      const periode = periodeFuer(da, stichtag);
+      const exists = d.dauerauftragLaeufe.some(
+        (l) => l.dauerauftragId === da.id && l.periode === periode,
+      );
+      if (exists) continue;
+      const lauf = erzeugeLaufIntern(d, da, stichtag);
+      if (lauf.status === "erzeugt") erzeugte.push(lauf);
+    }
+  }
+  return erzeugte;
+}
