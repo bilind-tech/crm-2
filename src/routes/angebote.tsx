@@ -297,6 +297,47 @@ function AngebotEmailLauncher({ angebot, onClose }: { angebot: Angebot; onClose:
   );
 }
 
+function AngebotAnnahmeButtons({ angebot, size = "md" }: { angebot: Angebot; size?: "sm" | "md" }) {
+  const upd = useUpdateAngebot(angebot.id);
+  if (angebot.status !== "versendet") return null;
+  const setStatus = (s: "angenommen" | "abgelehnt", e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    upd.mutate(
+      { status: s },
+      {
+        onSuccess: () =>
+          toast.success(
+            s === "angenommen"
+              ? `Angebot ${angebot.nummer} als angenommen markiert`
+              : `Angebot ${angebot.nummer} als abgelehnt markiert`,
+          ),
+      },
+    );
+  };
+  const klass = size === "sm" ? "p-1.5" : "p-2";
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => setStatus("angenommen", e)}
+        className={`rounded-md ${klass} text-success hover:bg-success/10`}
+        title="Als angenommen markieren"
+      >
+        <ThumbsUp className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={(e) => setStatus("abgelehnt", e)}
+        className={`rounded-md ${klass} text-muted-foreground hover:bg-muted hover:text-destructive`}
+        title="Als abgelehnt markieren"
+      >
+        <ThumbsDown className="h-4 w-4" />
+      </button>
+    </>
+  );
+}
+
 interface FilterBarProps {
   filter: string;
   setFilter: (v: string) => void;
