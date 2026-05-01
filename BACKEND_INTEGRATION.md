@@ -25,7 +25,7 @@ src/
 │   │   └── types.ts       ← Single Source of Truth für alle Datenmodelle
 │   └── mock/
 │       ├── backend.ts     ← Spec-Backend (REST-Routen 1:1)
-│       └── seed.ts        ← Beispieldaten + Master-Passwort
+│       └── seed.ts        ← Initial-Konfig (Firmendaten, Vorlagen, Master-Passwort) — KEINE Demo-Geschäftsdaten
 ├── hooks/
 │   └── useApi.ts          ← React-Query-Hooks pro Entität (kein fetch in Komponenten!)
 └── routes/                ← Pages konsumieren ausschließlich Hooks aus useApi
