@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { LoadingPlaceholder } from "@/components/layout/LoadingPlaceholder";
 import { useState } from "react";
 import { Pencil, Archive, Building2, Plus } from "lucide-react";
 import { useKunde } from "@/hooks/useApi";
@@ -23,7 +24,7 @@ function Page() {
   const [openAngebot, setOpenAngebot] = useState(false);
   const [openRechnung, setOpenRechnung] = useState(false);
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Lade …</p>;
+  if (isLoading) return <LoadingPlaceholder />;
   if (!k) {
     return (
       <p className="text-sm">

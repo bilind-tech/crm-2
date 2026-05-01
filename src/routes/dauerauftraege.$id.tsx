@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { LoadingPlaceholder } from "@/components/layout/LoadingPlaceholder";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Pause, Play, PlayCircle, Square, FileText, Trash2, Repeat } from "lucide-react";
@@ -37,7 +38,7 @@ function Page() {
   const [showBeendeBestaetigung, setShowBeendeBestaetigung] = useState(false);
   const { confirm, dialog: confirmDialog } = useConfirm();
 
-  if (!da) return <p className="text-sm text-muted-foreground">Lade …</p>;
+  if (!da) return <LoadingPlaceholder />;
 
   const s = summenRechnung(da.positionen, da.rabattGesamt);
   const heute = new Date();

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { LoadingPlaceholder } from "@/components/layout/LoadingPlaceholder";
 import { toast } from "sonner";
 import { Save } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -19,7 +20,7 @@ export function DauerauftragTab() {
     if (data) setForm(data);
   }, [data]);
 
-  if (!form) return <p className="text-sm text-muted-foreground">Lade …</p>;
+  if (!form) return <LoadingPlaceholder />;
 
   const dirty = JSON.stringify(form) !== JSON.stringify(data);
 

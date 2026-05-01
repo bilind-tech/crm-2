@@ -3,6 +3,7 @@
 // Eingebettet in src/routes/einstellungen.tsx via Subkomponenten.
 
 import { useEffect, useState } from "react";
+import { LoadingPlaceholder } from "@/components/layout/LoadingPlaceholder";
 import { toast } from "sonner";
 import { Plus, Trash2, Pencil, Star, Check, AlertCircle, Loader2, Eye, Code2 } from "lucide-react";
 
@@ -533,7 +534,7 @@ export function SmtpTab() {
     }
   }, [smtp]);
 
-  if (!smtp) return <p className="text-sm text-muted-foreground">Lade …</p>;
+  if (!smtp) return <LoadingPlaceholder />;
 
   const handleSpeichern = () => {
     const payload: Record<string, unknown> = {

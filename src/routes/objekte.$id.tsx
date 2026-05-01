@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { LoadingPlaceholder } from "@/components/layout/LoadingPlaceholder";
 import { useObjekt } from "@/hooks/useApi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -6,7 +7,7 @@ export const Route = createFileRoute("/objekte/$id")({ component: Page });
 function Page() {
   const { id } = Route.useParams();
   const { data: o } = useObjekt(id);
-  if (!o) return <p className="text-sm">Lade …</p>;
+  if (!o) return <LoadingPlaceholder />;
   return (
     <div className="space-y-4">
       <div><Link to="/objekte" className="text-xs text-muted-foreground hover:underline">← Objekte</Link>

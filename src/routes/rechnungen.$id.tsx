@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { LoadingPlaceholder } from "@/components/layout/LoadingPlaceholder";
 import { useState } from "react";
 import { Download, Send, CheckCircle2, Wallet, Banknote } from "lucide-react";
 import { useRechnung, useAngebot, useKunde } from "@/hooks/useApi";
@@ -26,7 +27,7 @@ function Page() {
   const { data: quellAngebot } = useAngebot(r?.quellAngebotId ?? "");
   const { data: kunde } = useKunde(r?.kundeId ?? "");
 
-  if (!r) return <p className="text-sm text-muted-foreground">Lade …</p>;
+  if (!r) return <LoadingPlaceholder />;
   const s = summenRechnung(r.positionen, r.rabattGesamt);
   const bezahlt = r.zahlungen.reduce((a, z) => a + z.betrag, 0);
   const offen = Math.max(0, s.brutto - bezahlt);
