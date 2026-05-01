@@ -52,7 +52,7 @@ export function AppSidebar() {
     const r = alleRechnungen.find((rr) => rr.id === l.rechnungId);
     return r?.status === "entwurf";
   }).length;
-  const { data: zeOffen = [] } = useZahlungseingaenge("offen");
+  
 
   const uebersicht: NavItem[] = [
     { title: "Dashboard", url: "/", icon: LayoutDashboard, exact: true },
