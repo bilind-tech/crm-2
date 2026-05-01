@@ -27,6 +27,7 @@ import { CsvImportDialog } from "@/components/zahlung/CsvImportDialog";
 import { ManuellerEingangDialog } from "@/components/zahlung/ManuellerEingangDialog";
 import { ZuordnenDialog } from "@/components/zahlung/ZuordnenDialog";
 import type { Zahlungseingang, ZahlungseingangStatus } from "@/lib/api/types";
+import { useConfirm } from "@/hooks/useConfirm";
 
 export const Route = createFileRoute("/zahlungseingaenge")({ component: Page });
 
