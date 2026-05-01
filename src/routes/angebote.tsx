@@ -9,6 +9,7 @@ import { formatEUR, formatDate } from "@/lib/format";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
 import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { SlideOver } from "@/components/ui/slide-over";
+import { MobileListCard } from "@/components/ui/mobile-list-card";
 import { AngebotForm } from "@/components/forms/AngebotForm";
 import type { Angebot } from "@/lib/api/types";
 import { useConfirm } from "@/hooks/useConfirm";
@@ -113,7 +114,61 @@ function Page() {
         placeholder="Suche nach Nummer, Titel, Kunde…"
       />
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      {/* Mobil: Card-View */}
+      <div className="space-y-2 md:hidden">
+        {filtered.map((a) => (
+          <MobileListCard
+            key={a.id}
+            onClick={() => navigate({ to: "/angebote/$id", params: { id: a.id } })}
+            title={a.titel}
+            meta={
+              <>
+                <span className="font-mono">{a.nummer}</span>
+                <span>· gültig bis {formatDate(a.gueltigBis)}</span>
+              </>
+            }
+            trailing={formatEUR(summe(a))}
+            badge={statusBadge(a.status)}
+            actions={
+              <>
+                <PdfViewButton kind="angebot" beleg={a} />
+                <Link
+                  to="/angebote/$id"
+                  params={{ id: a.id }}
+                  className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-primary"
+                  title="Senden"
+                >
+                  <Send className="h-4 w-4" />
+                </Link>
+                <button
+                  onClick={() =>
+                    confirm(
+                      {
+                        title: "Angebot löschen?",
+                        description: `Angebot ${a.nummer} dauerhaft entfernen.`,
+                        variant: "destructive",
+                        confirmLabel: "Löschen",
+                      },
+                      () => del.mutate(a.id),
+                    )
+                  }
+                  className="rounded-md p-2 text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </>
+            }
+          />
+        ))}
+        {filtered.length === 0 && (
+          <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+            Keine Angebote gefunden.
+          </div>
+        )}
+      </div>
+
+      {/* Desktop: Tabelle */}
+      <div className="hidden overflow-hidden rounded-2xl border border-border bg-card shadow-sm md:block">
         <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>

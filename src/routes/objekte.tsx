@@ -6,6 +6,7 @@ import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
 import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { FilterBar } from "@/routes/angebote";
 import { SlideOver } from "@/components/ui/slide-over";
+import { MobileListCard } from "@/components/ui/mobile-list-card";
 import { ObjektForm } from "@/components/forms/ObjektForm";
 
 export const Route = createFileRoute("/objekte")({ component: Page });
@@ -66,7 +67,37 @@ function Page() {
         placeholder="Suche nach Name, Nummer, Ort…"
       />
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      {/* Mobil: Card-View */}
+      <div className="space-y-2 md:hidden">
+        {filtered.map((o) => (
+          <MobileListCard
+            key={o.id}
+            onClick={() => navigate({ to: "/objekte/$id", params: { id: o.id } })}
+            title={o.name}
+            meta={
+              <>
+                <span className="font-mono">{o.nummer}</span>
+                {o.ort && <span>· {o.ort}</span>}
+                <span>· {o.frequenz.replace("_", " ")}</span>
+                {o.qmZuReinigen != null && <span>· {o.qmZuReinigen} m²</span>}
+              </>
+            }
+            badge={
+              <span className="inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-medium capitalize">
+                {o.status}
+              </span>
+            }
+          />
+        ))}
+        {filtered.length === 0 && (
+          <div className="rounded-xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
+            Keine Objekte gefunden.
+          </div>
+        )}
+      </div>
+
+      {/* Desktop: Tabelle */}
+      <div className="hidden overflow-hidden rounded-2xl border border-border bg-card shadow-sm md:block">
         <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
