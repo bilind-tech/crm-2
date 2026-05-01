@@ -782,6 +782,85 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     return undefined as T;
   }
 
+  // ---- Upload-Sessions (Handy-Scan-Brücke) ----
+  else if (m === "POST" && match(path, "/upload-sessions")) {
+    const tokenChars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    let token = "";
+    for (let i = 0; i < 24; i++) token += tokenChars[Math.floor(Math.random() * tokenChars.length)];
+    const jetzt = Date.now();
+    const session: UploadSession = {
+      id: uuid(),
+      token,
+      erstelltAm: new Date(jetzt).toISOString(),
+      ablaufAm: new Date(jetzt + 15 * 60 * 1000).toISOString(),
+      beendet: false,
+      dokumentIds: [],
+    };
+    if (!d.uploadSessions) d.uploadSessions = [];
+    d.uploadSessions.push(session);
+    // alte Sessions aufräumen (>1h)
+    d.uploadSessions = d.uploadSessions.filter(
+      (s) => jetzt - new Date(s.erstelltAm).getTime() < 60 * 60 * 1000,
+    );
+    persist();
+    result = session;
+  } else if (matchRoute(m, path, "GET", "/upload-sessions/:token")) {
+    const token = match(path, "/upload-sessions/:token")!.token;
+    const session = (d.uploadSessions ?? []).find((s) => s.token === token);
+    if (!session) throw new ApiError("Upload-Sitzung nicht gefunden", 404);
+    if (Date.now() > new Date(session.ablaufAm).getTime()) {
+      throw new ApiError("Upload-Sitzung abgelaufen", 410);
+    }
+    const dateien = d.dokumente.filter((dok) => session.dokumentIds.includes(dok.id));
+    result = { ...session, dateien };
+  } else if (matchRoute(m, path, "POST", "/upload-sessions/:token/dateien")) {
+    const token = match(path, "/upload-sessions/:token/dateien")!.token;
+    const session = (d.uploadSessions ?? []).find((s) => s.token === token);
+    if (!session) throw new ApiError("Upload-Sitzung nicht gefunden", 404);
+    if (session.beendet) throw new ApiError("Upload-Sitzung beendet", 410);
+    if (Date.now() > new Date(session.ablaufAm).getTime()) {
+      throw new ApiError("Upload-Sitzung abgelaufen", 410);
+    }
+    const payload = body as { dateien: Partial<Dokument>[] };
+    const erzeugt: Dokument[] = [];
+    for (const dok of payload.dateien ?? []) {
+      const neu: Dokument = {
+        id: uuid(),
+        titel: dok.titel ?? "Foto vom Handy",
+        beschreibung: dok.beschreibung,
+        typ: dok.typ ?? "bild",
+        kundeId: dok.kundeId,
+        objektId: dok.objektId,
+        dateiname: dok.dateiname ?? "foto.jpg",
+        mimeType: dok.mimeType ?? "image/jpeg",
+        groesseBytes: dok.groesseBytes ?? 0,
+        url: dok.url ?? "",
+        dokumentdatum: dok.dokumentdatum ?? new Date().toISOString().slice(0, 10),
+        betrag: dok.betrag,
+        steuerrelevant: dok.steuerrelevant ?? false,
+        hochgeladenAm: now(),
+        quelle: "handy-scan",
+      };
+      d.dokumente.push(neu);
+      session.dokumentIds.push(neu.id);
+      erzeugt.push(neu);
+    }
+    logAktivitaet(
+      "dokument_hochgeladen",
+      `${erzeugt.length} Foto(s) per Handy-Scan hochgeladen`,
+    );
+    persist();
+    result = { dateien: erzeugt };
+  } else if (matchRoute(m, path, "POST", "/upload-sessions/:token/beenden")) {
+    const token = match(path, "/upload-sessions/:token/beenden")!.token;
+    const session = (d.uploadSessions ?? []).find((s) => s.token === token);
+    if (session) {
+      session.beendet = true;
+      persist();
+    }
+    return undefined as T;
+  }
+
   // ---- Notizen ----
   else if (m === "POST" && match(path, "/notizen")) {
     const n = body as Partial<Notiz>;
