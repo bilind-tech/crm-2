@@ -168,6 +168,42 @@ function footer(firma: Firmendaten) {
 }
 
 function leistungstabelle(positionen: Position[]) {
+  const hatPauschal = positionen.some((p) => p.modus === "pauschal");
+
+  if (hatPauschal) {
+    // Layout im Stil des Beispiels: Ausführung | Leistung | Preis
+    const body: unknown[][] = [
+      [
+        { text: "Ausführung", bold: true, fillColor: "#1e3a8a", color: "#fff", fontSize: 9 },
+        { text: "Leistung", bold: true, fillColor: "#1e3a8a", color: "#fff", fontSize: 9 },
+        { text: "Preis", bold: true, fillColor: "#1e3a8a", color: "#fff", fontSize: 9, alignment: "right" },
+      ],
+    ];
+    positionen.forEach((p) => {
+      const ausf =
+        p.ausfuehrung ??
+        (p.modus === "pauschal"
+          ? "Pauschal"
+          : `${p.menge.toLocaleString("de-DE")} ${p.einheit}`);
+      body.push([
+        { text: ausf, fontSize: 9, bold: true },
+        beschreibungBlock(p.beschreibung || ""),
+        { text: eur(summe(p)), fontSize: 9, alignment: "right", bold: true },
+      ]);
+    });
+    return {
+      table: { headerRows: 1, widths: [90, "*", 70], body },
+      layout: {
+        hLineWidth: () => 0.5,
+        vLineWidth: () => 0,
+        hLineColor: () => "#e2e8f0",
+        paddingTop: () => 8,
+        paddingBottom: () => 8,
+      },
+    };
+  }
+
+  // Klassisches Layout (alle Positionen sind Einzelpositionen)
   const body: unknown[][] = [
     [
       { text: "Pos.", bold: true, fillColor: "#1e3a8a", color: "#fff", fontSize: 9 },
@@ -181,7 +217,7 @@ function leistungstabelle(positionen: Position[]) {
   positionen.forEach((p, i) => {
     body.push([
       { text: String(i + 1), fontSize: 9 },
-      { text: p.beschreibung, fontSize: 9 },
+      beschreibungBlock(p.beschreibung || ""),
       { text: p.menge.toLocaleString("de-DE"), fontSize: 9, alignment: "right" },
       { text: p.einheit, fontSize: 9 },
       { text: eur(p.einzelpreisNetto), fontSize: 9, alignment: "right" },
@@ -189,11 +225,7 @@ function leistungstabelle(positionen: Position[]) {
     ]);
   });
   return {
-    table: {
-      headerRows: 1,
-      widths: [22, "*", 40, 40, 60, 60],
-      body,
-    },
+    table: { headerRows: 1, widths: [22, "*", 40, 40, 60, 60], body },
     layout: {
       hLineWidth: () => 0.5,
       vLineWidth: () => 0,
