@@ -27,6 +27,7 @@ import type {
   DauerauftragLauf,
   DauerauftragSonderposition,
   Dokument,
+  UploadSession,
   EmailSignatur,
   EmailVersand,
   EmailVorlage,
@@ -99,6 +100,7 @@ interface DB {
   dauerauftragLaeufe: DauerauftragLauf[];
   dauerauftragSonderpositionen: DauerauftragSonderposition[];
   dauerauftragEinstellungen: DauerauftragEinstellungen;
+  uploadSessions: UploadSession[];
   zaehler: { kunde: number; objekt: number; angebot: number; rechnung: number; dauerauftrag: number };
   /** Pro Kunde + "YYYY-MM" laufende Nummer für Rechnungen/Angebote mit eigenem Kürzel. */
   zaehlerProKunde?: Record<string, Record<string, number>>;
