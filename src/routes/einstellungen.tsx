@@ -25,6 +25,7 @@ import {
   EmailSignaturenTab,
   SmtpTab,
 } from "@/components/email/EmailEinstellungen";
+import { MahnwesenTab } from "@/components/mahnung/MahnwesenTab";
 import type { Firmendaten } from "@/lib/api/types";
 
 export const Route = createFileRoute("/einstellungen")({ component: Page });
@@ -92,8 +93,9 @@ function Page() {
       {tab === "email-vorlagen" && <EmailVorlagenTab />}
       {tab === "email-signaturen" && <EmailSignaturenTab />}
       {tab === "smtp" && <SmtpTab />}
+      {tab === "mahnwesen" && <MahnwesenTab />}
 
-      {!["firmendaten", "email-vorlagen", "email-signaturen", "smtp"].includes(tab) && (
+      {!["firmendaten", "email-vorlagen", "email-signaturen", "smtp", "mahnwesen"].includes(tab) && (
         <div className="rounded-2xl border border-border bg-card p-12 text-center shadow-sm">
           <p className="text-base font-medium">
             {tabs.find((t) => t.id === tab)?.label} folgt
