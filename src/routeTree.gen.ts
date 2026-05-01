@@ -28,6 +28,7 @@ import { Route as DauerauftraegePosteingangRouteImport } from './routes/dauerauf
 import { Route as DauerauftraegeIdRouteImport } from './routes/dauerauftraege.$id'
 import { Route as AngeboteNeuRouteImport } from './routes/angebote.neu'
 import { Route as AngeboteIdRouteImport } from './routes/angebote.$id'
+import { Route as MUploadSessionRouteImport } from './routes/m.upload.$session'
 
 const RechnungenRoute = RechnungenRouteImport.update({
   id: '/rechnungen',
@@ -125,6 +126,11 @@ const AngeboteIdRoute = AngeboteIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => AngeboteRoute,
 } as any)
+const MUploadSessionRoute = MUploadSessionRouteImport.update({
+  id: '/m/upload/$session',
+  path: '/m/upload/$session',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -146,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/objekte/neu': typeof ObjekteNeuRoute
   '/rechnungen/$id': typeof RechnungenIdRoute
   '/rechnungen/neu': typeof RechnungenNeuRoute
+  '/m/upload/$session': typeof MUploadSessionRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -167,6 +174,7 @@ export interface FileRoutesByTo {
   '/objekte/neu': typeof ObjekteNeuRoute
   '/rechnungen/$id': typeof RechnungenIdRoute
   '/rechnungen/neu': typeof RechnungenNeuRoute
+  '/m/upload/$session': typeof MUploadSessionRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -189,6 +197,7 @@ export interface FileRoutesById {
   '/objekte/neu': typeof ObjekteNeuRoute
   '/rechnungen/$id': typeof RechnungenIdRoute
   '/rechnungen/neu': typeof RechnungenNeuRoute
+  '/m/upload/$session': typeof MUploadSessionRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -212,6 +221,7 @@ export interface FileRouteTypes {
     | '/objekte/neu'
     | '/rechnungen/$id'
     | '/rechnungen/neu'
+    | '/m/upload/$session'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -233,6 +243,7 @@ export interface FileRouteTypes {
     | '/objekte/neu'
     | '/rechnungen/$id'
     | '/rechnungen/neu'
+    | '/m/upload/$session'
   id:
     | '__root__'
     | '/'
@@ -254,6 +265,7 @@ export interface FileRouteTypes {
     | '/objekte/neu'
     | '/rechnungen/$id'
     | '/rechnungen/neu'
+    | '/m/upload/$session'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -266,6 +278,7 @@ export interface RootRouteChildren {
   KundenRoute: typeof KundenRouteWithChildren
   ObjekteRoute: typeof ObjekteRouteWithChildren
   RechnungenRoute: typeof RechnungenRouteWithChildren
+  MUploadSessionRoute: typeof MUploadSessionRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -403,6 +416,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AngeboteIdRouteImport
       parentRoute: typeof AngeboteRoute
     }
+    '/m/upload/$session': {
+      id: '/m/upload/$session'
+      path: '/m/upload/$session'
+      fullPath: '/m/upload/$session'
+      preLoaderRoute: typeof MUploadSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -484,6 +504,7 @@ const rootRouteChildren: RootRouteChildren = {
   KundenRoute: KundenRouteWithChildren,
   ObjekteRoute: ObjekteRouteWithChildren,
   RechnungenRoute: RechnungenRouteWithChildren,
+  MUploadSessionRoute: MUploadSessionRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

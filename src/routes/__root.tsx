@@ -72,6 +72,10 @@ function Shell() {
   const qc = useQueryClient();
   const qcRef = useRef(qc);
   qcRef.current = qc;
+
+  // Standalone-Routen ohne Sidebar/Header/Lock (z.B. Handy-Upload-Brücke)
+  const isStandalone = pathname.startsWith("/m/");
+
   useEffect(() => {
     if (!unlocked) return;
     startScheduler({
@@ -88,6 +92,15 @@ function Shell() {
       },
     });
   }, [unlocked]);
+
+  if (isStandalone) {
+    return (
+      <div className="min-h-screen w-full overflow-x-hidden bg-background">
+        <Outlet />
+      </div>
+    );
+  }
+
   if (!unlocked) return <LockScreen />;
   return (
     <SidebarProvider>
