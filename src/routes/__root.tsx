@@ -70,21 +70,24 @@ function Shell() {
   const { unlocked } = useAuth();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const qc = useQueryClient();
+  const qcRef = useRef(qc);
+  qcRef.current = qc;
   useEffect(() => {
     if (!unlocked) return;
     startScheduler({
       onResult: (r) => {
         if (r.erzeugteLaeufe > 0) {
           toast.success(`${r.erzeugteLaeufe} neue Rechnung(en) aus Daueraufträgen erzeugt`);
-          qc.invalidateQueries({ queryKey: ["dauerauftraege"] });
-          qc.invalidateQueries({ queryKey: ["dauerauftrag-laeufe"] });
-          qc.invalidateQueries({ queryKey: ["rechnungen"] });
-          qc.invalidateQueries({ queryKey: ["benachrichtigungen"] });
-          qc.invalidateQueries({ queryKey: ["aktivitaeten"] });
+          const c = qcRef.current;
+          c.invalidateQueries({ queryKey: ["dauerauftraege"] });
+          c.invalidateQueries({ queryKey: ["dauerauftrag-laeufe"] });
+          c.invalidateQueries({ queryKey: ["rechnungen"] });
+          c.invalidateQueries({ queryKey: ["benachrichtigungen"] });
+          c.invalidateQueries({ queryKey: ["aktivitaeten"] });
         }
       },
     });
-  }, [unlocked, qc]);
+  }, [unlocked]);
   if (!unlocked) return <LockScreen />;
   return (
     <SidebarProvider>
