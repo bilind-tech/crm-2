@@ -267,8 +267,31 @@ function Page() {
         <AngebotForm onClose={() => setOpen(false)} />
       </SlideOver>
 
+      {emailFuer && (
+        <AngebotEmailLauncher
+          angebot={emailFuer}
+          onClose={() => setEmailFuer(null)}
+        />
+      )}
+
       {confirmDialog}
     </div>
+  );
+}
+
+function AngebotEmailLauncher({ angebot, onClose }: { angebot: Angebot; onClose: () => void }) {
+  const { data: kunde } = useKunde(angebot.kundeId);
+  const pdf = useAngebotPdf(angebot);
+  return (
+    <EmailVersandDialog
+      open
+      onOpenChange={(o) => { if (!o) onClose(); }}
+      kontext="angebot"
+      kunde={kunde}
+      angebot={angebot}
+      pdfBlobUrl={pdf.url}
+      pdfDateiname={`${angebot.nummer}.pdf`}
+    />
   );
 }
 
