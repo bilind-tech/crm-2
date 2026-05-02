@@ -1,17 +1,15 @@
-// API-Client. Routet basierend auf dem Pfad-Prefix:
-// - /auth/* und /einstellungen/* -> echtes Pi-Backend (Cookie-Auth)
-// - alles andere -> Mock-Backend (in-memory)
+// API-Client. Routet basierend auf Prefix:
+// - /auth/* und /einstellungen/* -> Pi-Backend (Cookie-Auth)
+// - alles andere -> Mock-Backend
 //
-// Wenn das Pi-Backend nicht erreichbar ist und VITE_USE_MOCK !== "false",
-// fällt der Auth-/Einstellungs-Pfad still zurück auf das Mock-Backend.
-// So funktioniert die App im Demo-Modus unverändert weiter.
-//
-// Override per Env:
-//   VITE_USE_MOCK=false     -> nie Mock (alles ans Pi-Backend)
-//   VITE_API_BASE_URL=...   -> Default-Backend-URL (Pi)
+// Wenn Backend offline (Status 0):
+// - Wenn der User KEINE Backend-URL gespeichert hat (Demo-Modus): still auf Mock fallback.
+// - Wenn der User EINE URL gespeichert hat: ApiError "backend-offline" hochwerfen,
+//   damit die UI den Offline-Zustand anzeigen kann statt klammheimlich Mock-Daten zu nehmen.
 
 import { mockBackend } from "@/lib/mock/backend";
 import { piApi, PiApiError } from "@/lib/api/piClient";
+import { isBackendUrlExplicit } from "@/lib/api/backendUrl";
 
 const USE_MOCK =
   (import.meta.env.VITE_USE_MOCK ?? "true").toString().toLowerCase() !== "false";
@@ -26,40 +24,16 @@ export class ApiError extends Error {
   }
 }
 
-// Step 1: nur diese Auth-/Einstellungs-Pfade laufen schon ans Pi-Backend.
-// Alle anderen /einstellungen/*-Pfade (Vorlagen, Backup-Historie, …)
-// bleiben im Mock, bis ihr jeweiliger Step das Backend liefert.
-const PI_AUTH_PATHS = new Set([
-  "/auth/me",
-  "/auth/setup",
-  "/auth/login",
-  "/auth/logout",
-  "/auth/passwort-aendern",
-]);
-const PI_SETTINGS_PATHS = new Set([
-  "/einstellungen/firma",
-  "/einstellungen/smtp",
-  "/einstellungen/smtp/test",
-  "/einstellungen/smtp/passwort",
-  "/einstellungen/nummernkreise",
-  "/einstellungen/sicherheit",
-  "/einstellungen/erscheinung",
-  "/einstellungen/backup",
-  "/einstellungen/google-drive",
-  "/einstellungen/google-drive/disconnect",
-  "/einstellungen/mahnung",
-  "/einstellungen/dauerauftrag",
-  "/einstellungen/steuer",
-  "/einstellungen/stundenzettel",
-  "/einstellungen/sitzungen",
-  "/einstellungen/sitzungen/alle-beenden",
-]);
+const PI_PREFIXES = ["/auth/", "/einstellungen/"];
+// Ausnahmen: /einstellungen/* die noch nicht im Pi-Backend leben → Mock
+const MOCK_OVERRIDE_PREFIXES = [
+  "/einstellungen/vorlagen",
+  "/einstellungen/backup-historie",
+];
 
 function isPiPath(p: string): boolean {
-  if (PI_AUTH_PATHS.has(p) || PI_SETTINGS_PATHS.has(p)) return true;
-  // Sub-Pfade z.B. /einstellungen/sitzungen/<token>
-  if (p.startsWith("/einstellungen/sitzungen/")) return true;
-  return false;
+  if (MOCK_OVERRIDE_PREFIXES.some((x) => p === x || p.startsWith(`${x}/`))) return false;
+  return PI_PREFIXES.some((pref) => p === pref.slice(0, -1) || p.startsWith(pref));
 }
 
 async function viaPi<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -72,7 +46,7 @@ async function viaPi<T>(method: string, path: string, body?: unknown): Promise<T
       case "PATCH":
         return await piApi.patch<T>(path, body);
       case "PUT":
-        return await piApi.patch<T>(path, body); // PUT als PATCH semantisch
+        return await piApi.patch<T>(path, body);
       case "DELETE":
         return await piApi.delete<T>(path);
       default:
@@ -80,9 +54,12 @@ async function viaPi<T>(method: string, path: string, body?: unknown): Promise<T
     }
   } catch (err) {
     if (err instanceof PiApiError) {
-      // Backend offline (Status 0) -> ggf. Fallback auf Mock
-      if (err.status === 0 && USE_MOCK) {
-        return mockBackend<T>(method, path, body);
+      if (err.status === 0) {
+        // Nur stiller Fallback wenn KEINE Backend-URL konfiguriert ist
+        if (!isBackendUrlExplicit() && USE_MOCK) {
+          return mockBackend<T>(method, path, body);
+        }
+        throw new ApiError("Backend offline", 0, err.body);
       }
       throw new ApiError(err.message, err.status, err.body);
     }
@@ -90,16 +67,16 @@ async function viaPi<T>(method: string, path: string, body?: unknown): Promise<T
   }
 }
 
+function viaMockOrPi<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (isPiPath(path)) return viaPi<T>(method, path, body);
+  return USE_MOCK ? mockBackend<T>(method, path, body) : viaPi<T>(method, path, body);
+}
+
 export const api = {
   isMock: USE_MOCK,
-  get: <T>(path: string) =>
-    isPiPath(path) ? viaPi<T>("GET", path) : USE_MOCK ? mockBackend<T>("GET", path) : viaPi<T>("GET", path),
-  post: <T>(path: string, body?: unknown) =>
-    isPiPath(path) ? viaPi<T>("POST", path, body) : USE_MOCK ? mockBackend<T>("POST", path, body) : viaPi<T>("POST", path, body),
-  patch: <T>(path: string, body?: unknown) =>
-    isPiPath(path) ? viaPi<T>("PATCH", path, body) : USE_MOCK ? mockBackend<T>("PATCH", path, body) : viaPi<T>("PATCH", path, body),
-  put: <T>(path: string, body?: unknown) =>
-    isPiPath(path) ? viaPi<T>("PUT", path, body) : USE_MOCK ? mockBackend<T>("PUT", path, body) : viaPi<T>("PUT", path, body),
-  delete: <T>(path: string) =>
-    isPiPath(path) ? viaPi<T>("DELETE", path) : USE_MOCK ? mockBackend<T>("DELETE", path) : viaPi<T>("DELETE", path),
+  get: <T>(path: string) => viaMockOrPi<T>("GET", path),
+  post: <T>(path: string, body?: unknown) => viaMockOrPi<T>("POST", path, body),
+  patch: <T>(path: string, body?: unknown) => viaMockOrPi<T>("PATCH", path, body),
+  put: <T>(path: string, body?: unknown) => viaMockOrPi<T>("PUT", path, body),
+  delete: <T>(path: string) => viaMockOrPi<T>("DELETE", path),
 };

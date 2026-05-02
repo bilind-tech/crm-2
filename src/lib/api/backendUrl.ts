@@ -18,6 +18,14 @@ export function getBackendUrl(): string {
   return (stored ?? defaultUrl()).replace(/\/$/, "");
 }
 
+/** True wenn der User explizit eine Backend-URL hinterlegt hat (oder VITE_API_BASE_URL gesetzt ist). */
+export function isBackendUrlExplicit(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.localStorage.getItem(STORAGE_KEY)) return true;
+  const fromEnv = (import.meta.env.VITE_API_BASE_URL ?? "").toString().trim();
+  return fromEnv.length > 0;
+}
+
 export function setBackendUrl(url: string): void {
   if (typeof window === "undefined") return;
   const clean = url.trim().replace(/\/$/, "");
