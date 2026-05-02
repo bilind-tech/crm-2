@@ -159,11 +159,8 @@ function Page() {
           { value: "bezahlt", label: "Bezahlt" },
         ]}
         placeholder="Suche nach Nummer, Titel, Kunde…"
-      />
-
-      <ZeitraumFilter
-        value={zeitraum}
-        onChange={setZeitraum}
+        zeitraum={zeitraum}
+        setZeitraum={setZeitraum}
         verfuegbareDaten={alle.map((r) => r.rechnungsdatum)}
       />
 
