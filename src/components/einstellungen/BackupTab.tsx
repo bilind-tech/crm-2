@@ -38,9 +38,12 @@ import {
   useUpdateBackup,
   useCreateBackup,
   useBackupHistorie,
+  useBackupInArbeit,
+  useRestoreStatus,
   useRestoreBackup,
   useUploadBackup,
   useRestoreUploadedBackup,
+  useDeleteBackup,
 } from "@/hooks/useApi";
 import type { BackupEinstellungen, BackupEintrag } from "@/lib/api/types";
 import { Field, Section, StickySaveBar } from "./_shared";
@@ -49,6 +52,7 @@ import { RestoreBackupDialog } from "./RestoreBackupDialog";
 import { BackupUploadDropzone } from "./BackupUploadDropzone";
 import { useQueryClient } from "@tanstack/react-query";
 import { qk } from "@/hooks/useApi";
+import { getBackendUrl } from "@/lib/api/backendUrl";
 import { cn } from "@/lib/utils";
 
 function formatBytes(b: number): string {
