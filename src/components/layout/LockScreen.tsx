@@ -122,7 +122,15 @@ function LoginForm({ onRecovery }: { onRecovery: () => void }) {
     }
   }
 
-  if (lockedUntil) {
+  const countdown = useCountdown(lockedUntil);
+  const istNochGesperrt = lockedUntil ? new Date(lockedUntil).getTime() > Date.now() : false;
+
+  // Wenn Countdown abgelaufen, Lock zurücksetzen
+  useEffect(() => {
+    if (lockedUntil && !istNochGesperrt) setLockedUntil(null);
+  }, [lockedUntil, istNochGesperrt]);
+
+  if (lockedUntil && istNochGesperrt) {
     return (
       <Wrapper sub="Konto vorübergehend gesperrt.">
         <div className="space-y-3 text-sm">
@@ -131,10 +139,16 @@ function LoginForm({ onRecovery }: { onRecovery: () => void }) {
               <ShieldAlert className="h-4 w-4" />
               Konto gesperrt
             </div>
-            Zu viele Fehlversuche. Entsperrt um <strong>{formatLockedUntil(lockedUntil)}</strong>.
+            <p>
+              Zu viele Fehlversuche. Erneut möglich in{" "}
+              <strong className="font-mono text-base">{countdown}</strong>
+            </p>
+            <p className="mt-1 text-xs opacity-80">
+              Entsperrt um {formatLockedUntil(lockedUntil)}
+            </p>
           </div>
-          <Button type="button" variant="secondary" className="w-full" onClick={() => setLockedUntil(null)}>
-            Zurück
+          <Button type="button" variant="secondary" className="w-full" disabled>
+            Anmelden in {countdown}
           </Button>
         </div>
       </Wrapper>
