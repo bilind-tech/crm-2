@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { SlideOver } from "@/components/ui/slide-over";
 import { ObjektForm } from "@/components/forms/ObjektForm";
+import { AnsprechpartnerTab } from "@/components/kunden/AnsprechpartnerTab";
 import { AngebotForm } from "@/components/forms/AngebotForm";
 import { RechnungForm } from "@/components/forms/RechnungForm";
 import { formatEUR, formatDate } from "@/lib/format";
@@ -163,27 +164,7 @@ function Page() {
         </TabsContent>
 
         <TabsContent value="ansprechpartner" className="mt-6">
-          {k.ansprechpartner.length === 0 ? (
-            <Empty text="Noch keine Ansprechpartner hinterlegt." />
-          ) : (
-            <ul className="divide-y divide-border rounded-2xl border border-border bg-card">
-              {k.ansprechpartner.map((a) => (
-                <li key={a.id} className="flex items-center justify-between p-4">
-                  <div>
-                    <p className="font-medium">{`${a.vorname ?? ""} ${a.nachname ?? ""}`.trim() || "—"}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {[a.position, a.email, a.telefon].filter(Boolean).join(" · ") || "—"}
-                    </p>
-                  </div>
-                  {a.primaer && (
-                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                      Primär
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+          <AnsprechpartnerTab kundeId={k.id} liste={k.ansprechpartner} />
         </TabsContent>
 
         <TabsContent value="objekte" className="mt-6 space-y-3">
@@ -355,7 +336,7 @@ function Page() {
       </Tabs>
 
       <SlideOver open={openObjekt} onOpenChange={setOpenObjekt} title="Neues Objekt">
-        <ObjektForm onClose={() => setOpenObjekt(false)} defaultKundeId={k.id} />
+        <ObjektForm kompakt onClose={() => setOpenObjekt(false)} defaultKundeId={k.id} />
       </SlideOver>
       <SlideOver open={openAngebot} onOpenChange={setOpenAngebot} title="Neues Angebot" description={`Für ${fullName}`}>
         <AngebotForm onClose={() => setOpenAngebot(false)} defaultKundeId={k.id} />
