@@ -1,7 +1,4 @@
-// Auth-Provider — verbindet sich mit dem Pi-Backend wenn erreichbar,
-// fällt auf 'mock-lock' (kein Backend konfiguriert) oder 'backend-offline'
-// (Backend konfiguriert aber nicht erreichbar) zurück.
-
+// Auth-Provider — Single-User-Modus.
 import {
   createContext,
   useCallback,
@@ -27,7 +24,6 @@ export type AuthMode =
 interface PiUser {
   id: string;
   username: string;
-  rolle?: "owner" | "mitarbeiter";
 }
 
 interface SetupResult {
@@ -39,8 +35,8 @@ interface AuthState {
   user: PiUser | null;
   unlocked: boolean;
   loading: boolean;
-  setup: (input: { username: string; password: string; setupToken: string }) => Promise<SetupResult>;
-  login: (input: { username: string; password: string }) => Promise<void>;
+  setup: (input: { password: string; setupToken: string }) => Promise<SetupResult>;
+  login: (input: { password: string }) => Promise<void>;
   logout: () => Promise<void>;
   changePassword: (alt: string, neu: string) => Promise<void>;
   refreshMe: () => Promise<void>;
@@ -48,7 +44,6 @@ interface AuthState {
   lock: () => Promise<void>;
   setAutoLockMinutes: (m: number) => void;
   autoLockMinutes: number;
-  istOwner: boolean;
 }
 
 const Ctx = createContext<AuthState | null>(null);
@@ -86,7 +81,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         if (err.status === 0) {
           setUser(null);
-          // Wenn URL explizit gesetzt → Offline-Screen, sonst Demo-Mock
           setMode(isBackendUrlExplicit() ? "backend-offline" : "mock-lock");
           return;
         }
@@ -101,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshMe, backendStatus]);
 
   const setup = useCallback(
-    async (input: { username: string; password: string; setupToken: string }): Promise<SetupResult> => {
+    async (input: { password: string; setupToken: string }): Promise<SetupResult> => {
       setLoading(true);
       try {
         const res = await piApi.post<MeResponse & { recoveryCode: string }>("/auth/setup", input);
@@ -116,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const login = useCallback(async (input: { username: string; password: string }) => {
+  const login = useCallback(async (input: { password: string }) => {
     setLoading(true);
     try {
       const res = await piApi.post<MeResponse>("/auth/login", input);
@@ -204,7 +198,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       lock,
       autoLockMinutes,
       setAutoLockMinutes,
-      istOwner: user?.rolle === "owner",
     }),
     [mode, user, loading, setup, login, logout, changePassword, refreshMe, unlock, lock, autoLockMinutes],
   );
