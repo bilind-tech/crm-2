@@ -205,7 +205,7 @@ function SessionsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
   async function alleBeenden() {
     setBusy(true);
     try {
-      await piApi.del("/auth/sessions");
+      await piApi.delete("/auth/sessions");
       toast.success("Andere Sessions beendet");
       await laden();
     } finally {
@@ -216,7 +216,7 @@ function SessionsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
   async function beenden(token: string) {
     setBusy(true);
     try {
-      await piApi.del(`/auth/sessions/${encodeURIComponent(token)}`);
+      await piApi.delete(`/auth/sessions/${encodeURIComponent(token)}`);
       await laden();
     } finally {
       setBusy(false);
