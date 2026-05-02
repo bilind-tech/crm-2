@@ -23,6 +23,8 @@ import {
 } from "../auth/sessions.js";
 import { createConnection } from "node:net";
 import { resetTransport } from "../email/transport.js";
+import { flachZuUi, uiPatchZuFlach } from "../mahnung/settings-adapter.js";
+import { MahnungSchema } from "../settings/schemas.js";
 
 function loadArea(name: keyof typeof AREAS): unknown {
   const a = AREAS[name];
@@ -72,7 +74,7 @@ export async function einstellungenRoutes(app: FastifyInstance): Promise<void> {
     "sicherheit",
     "erscheinung",
     "backup",
-    "mahnung",
+    // "mahnung" wird unten mit eigenem Mapper bedient
     "dauerauftrag",
     "steuer",
     "stundenzettel",
@@ -90,6 +92,23 @@ export async function einstellungenRoutes(app: FastifyInstance): Promise<void> {
       return r.value;
     });
   }
+
+  // -------- Mahnung — flach intern, nested für UI --------
+  app.get("/einstellungen/mahnung", async () => {
+    const flach = MahnungSchema.parse(getSetting("mahnung") ?? {});
+    return flachZuUi(flach);
+  });
+  app.patch("/einstellungen/mahnung", async (req, reply) => {
+    const patch = uiPatchZuFlach((req.body ?? {}) as Record<string, unknown>);
+    const r = patchArea("mahnung", patch);
+    if (!r.ok) {
+      reply.status(r.status);
+      return { error: r.error, issues: r.issues };
+    }
+    audit({ userId: req.user?.id, action: "settings.mahnung.patch", ip: req.ip });
+    emit("einstellung:geaendert", { key: "mahnung", userId: req.user?.id ?? null });
+    return flachZuUi(r.value as z.infer<typeof MahnungSchema>);
+  });
 
   // SMTP — Passwort separat verschlüsselt
   app.get("/einstellungen/smtp", async () => {

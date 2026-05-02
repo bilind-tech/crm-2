@@ -3,6 +3,7 @@
 import { listDokumente, fristAlreadyLogged, logFristBenachrichtigung } from "./repo.js";
 import { fristStatus, isNotifyStatus } from "./frist.js";
 import { record } from "../aktivitaet/repo.js";
+import { runSteuerFristCheck } from "../steuern/fristen.js";
 
 export interface FristCheckResult {
   geprueft: number;
@@ -42,6 +43,12 @@ export function runFristCheck(now = new Date()): FristCheckResult {
     });
     logFristBenachrichtigung(d.id, tag, status);
     benachrichtigt++;
+  }
+  // Zusätzlich: manuelle Steuer-Posten prüfen.
+  try {
+    runSteuerFristCheck(now);
+  } catch {
+    /* swallow */
   }
   return { geprueft: dokumente.length, benachrichtigt, uebersprungen };
 }

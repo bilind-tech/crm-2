@@ -293,10 +293,37 @@ export interface MahnStufeConfig {
   emailVorlageId?: ID;
 }
 
+export type MahnModus = "aus" | "vorschlag" | "auto";
+
 export interface MahnEinstellungen {
   autoVorschlagAktiv: boolean;
   /** Genau drei Stufen, sortiert nach stufe asc. */
   stufen: MahnStufeConfig[];
+  // Step 13 — Automatik:
+  modus: MahnModus;
+  cronZeit: string;
+  nurAnWerktagen: boolean;
+  benachrichtigungBeiVorschlag: boolean;
+  benachrichtigungBeiAutoversand: boolean;
+}
+
+export interface MahnLauf {
+  id: ID;
+  gestartetAm: ISODateTime;
+  beendetAm?: ISODateTime | null;
+  ausgeloestDurch: "cron" | "manuell";
+  modus: MahnModus;
+  geprueft: number;
+  vorschlaege: number;
+  versendet: number;
+  uebersprungen: number;
+  fehler: number;
+  notiz?: string | null;
+}
+
+export interface MahnStatus {
+  einstellungen: MahnEinstellungen;
+  letzterLauf: MahnLauf | null;
 }
 
 // ---------- Dokumente ----------

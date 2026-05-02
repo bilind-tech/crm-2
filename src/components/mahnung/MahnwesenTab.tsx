@@ -19,9 +19,16 @@ import {
 import {
   useEmailVorlagen,
   useMahnEinstellungen,
+  useMahnJetztPruefen,
+  useMahnStatus,
   useUpdateMahnEinstellungen,
 } from "@/hooks/useApi";
-import type { MahnEinstellungen, MahnStufe, MahnStufeConfig } from "@/lib/api/types";
+import type {
+  MahnEinstellungen,
+  MahnModus,
+  MahnStufe,
+  MahnStufeConfig,
+} from "@/lib/api/types";
 
 export function MahnwesenTab() {
   const { data, isLoading } = useMahnEinstellungen();
@@ -88,6 +95,9 @@ export function MahnwesenTab() {
           />
         </div>
       </div>
+
+      <AutomatikKarte form={form} setForm={setForm} />
+
 
       {form.stufen
         .slice()
@@ -209,3 +219,90 @@ function StufenKarte({
     </div>
   );
 }
+
+
+function AutomatikKarte({
+  form,
+  setForm,
+}: {
+  form: MahnEinstellungen;
+  setForm: (f: MahnEinstellungen) => void;
+}) {
+  const status = useMahnStatus();
+  const pruefen = useMahnJetztPruefen();
+
+  const setM = (patch: Partial<MahnEinstellungen>) => setForm({ ...form, ...patch });
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <div className="mb-4 flex items-center gap-2">
+        <Bell className="h-4 w-4 text-primary" />
+        <h2 className="text-lg font-semibold">Mahn-Automatik</h2>
+      </div>
+      <p className="mb-5 text-sm text-muted-foreground">
+        Modus „Vorschlag" erzeugt Hinweise im Cockpit, „Auto" verschickt Mahnungen
+        automatisch per E-Mail (idempotent: pro Stufe nur einmal).
+      </p>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">Modus</Label>
+          <Select value={form.modus} onValueChange={(v) => setM({ modus: v as MahnModus })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="aus">Aus</SelectItem>
+              <SelectItem value="vorschlag">Vorschlag</SelectItem>
+              <SelectItem value="auto">Auto-Versand</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">Cron-Zeit (HH:MM)</Label>
+          <Input
+            value={form.cronZeit}
+            onChange={(e) => setM({ cronZeit: e.target.value })}
+            placeholder="08:30"
+          />
+        </div>
+
+        <div className="flex items-center justify-between rounded-xl border border-border bg-muted/30 p-3 sm:col-span-2">
+          <div>
+            <p className="text-sm font-medium">Nur an Werktagen laufen</p>
+            <p className="text-xs text-muted-foreground">Mo–Fr, kein Lauf am Wochenende.</p>
+          </div>
+          <Switch
+            checked={form.nurAnWerktagen}
+            onCheckedChange={(v) => setM({ nurAnWerktagen: v })}
+          />
+        </div>
+      </div>
+
+      <div className="mt-5 flex flex-col gap-3 rounded-xl border border-border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-xs text-muted-foreground">
+          {status.data?.letzterLauf
+            ? `Letzter Lauf: ${new Date(status.data.letzterLauf.gestartetAm).toLocaleString("de-DE")} — ${status.data.letzterLauf.versendet} versendet, ${status.data.letzterLauf.vorschlaege} Vorschläge, ${status.data.letzterLauf.fehler} Fehler`
+            : "Noch kein Lauf"}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="rounded-full"
+          disabled={pruefen.isPending}
+          onClick={() => {
+            pruefen.mutate(undefined, {
+              onSuccess: (r) =>
+                toast.success(
+                  `Lauf abgeschlossen: ${r.versendet} versendet, ${r.vorschlaege} Vorschläge`,
+                ),
+              onError: () => toast.error("Lauf fehlgeschlagen"),
+            });
+          }}
+        >
+          {pruefen.isPending ? "Prüfe …" : "Jetzt prüfen"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+

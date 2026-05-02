@@ -30,6 +30,11 @@ export const STANDARD_MAHN_STUFEN: MahnStufeConfig[] = [
 export const STANDARD_MAHN_EINSTELLUNGEN: MahnEinstellungen = {
   autoVorschlagAktiv: true,
   stufen: STANDARD_MAHN_STUFEN,
+  modus: "vorschlag",
+  cronZeit: "08:30",
+  nurAnWerktagen: true,
+  benachrichtigungBeiVorschlag: true,
+  benachrichtigungBeiAutoversand: true,
 };
 
 /** Erzeugt 3 Standard-E-Mail-Vorlagen für die Mahnstufen. */

@@ -882,6 +882,40 @@ export const useUpdateMahnEinstellungen = () => {
   });
 };
 
+export const useMahnStatus = () =>
+  useQuery({
+    queryKey: ["mahnung", "status"] as const,
+    queryFn: () => api.get<import("@/lib/api/types").MahnStatus>("/mahnung/status"),
+    staleTime: 15_000,
+  });
+
+export const useMahnLaeufe = () =>
+  useQuery({
+    queryKey: ["mahnung", "laeufe"] as const,
+    queryFn: () => api.get<import("@/lib/api/types").MahnLauf[]>("/mahnung/laeufe"),
+    staleTime: 15_000,
+  });
+
+export const useMahnJetztPruefen = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (modus?: import("@/lib/api/types").MahnModus) =>
+      api.post<{
+        laufId: string;
+        modus: import("@/lib/api/types").MahnModus;
+        geprueft: number;
+        vorschlaege: number;
+        versendet: number;
+        uebersprungen: number;
+        fehler: number;
+      }>("/mahnung/jetzt-pruefen", modus ? { modus } : {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["mahnung"] });
+      qc.invalidateQueries({ queryKey: ["rechnungen"] });
+    },
+  });
+};
+
 export const useMahnungPausieren = (rechnungId: string) => {
   const qc = useQueryClient();
   return useMutation({
