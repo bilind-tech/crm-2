@@ -25,6 +25,7 @@ Teilzahlungen sind Kernfeature: mehrere Zahlungen pro Rechnung, Status leitet si
 - [Backend Step 4 — Belege](mem://features/backend-step4-belege) — Angebote, Rechnungen, Positionen, Teilzahlungen, atomare Belegnummern, FTS5, Status-Engine, Scheduler
 - [Backend Step 5 — PDF](mem://features/backend-step5-pdf) — pdfmake server-side, SHA256-File-Cache, Event-Invalidation, /…/pdf + /pdf/meta + /pdf/regenerieren, ETag/304/X-Pdf-Cache, Frontend-Hook mit Backend-Bevorzugung + Browser-Fallback
 - [Hardware Setup](mem://reference/hardware) — Pi 5 + USB-SSD, Pi-OS-Lite, Imager-Schritte
+- [Backend Step 7 — Aktivität+SSE](mem://features/backend-step7-aktivitaet-sse) — zentraler Event-Bus, Aktivitäts-/Benachrichtigungs-Pipeline, SSE mit Last-Event-ID-Resume, Mapping-Tabelle
 - [Google Drive Integration](mem://features/google-drive) — OAuth-Flow, Ordnerstruktur, Dateinamen, Status-UI
 - [Keine Deko-Icons & Gradients](mem://design/no-decorative-icons) — Sparkles verboten, Dialoge ohne Gradient
 - [Document Lifecycle](mem://features/document-lifecycle) — Angebot/Rechnung Statusfluss, manuelle vs. automatische Übergänge, Backend-TODOs
