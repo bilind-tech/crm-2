@@ -1,4 +1,4 @@
-import { Trash2, Plus, FileText, Receipt } from "lucide-react";
+import { Trash2, Plus, FileText, Receipt, ChevronUp, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
