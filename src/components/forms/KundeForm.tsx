@@ -12,10 +12,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SmartInput, smartValue } from "@/components/ui/smart-input";
-import { useCreateKunde } from "@/hooks/useApi";
+import { useCreateKunde, useKuerzelFrei } from "@/hooks/useApi";
+import { useCreateDauerauftrag } from "@/hooks/useDauerauftraege";
 import { toast } from "sonner";
 import { useNavigate } from "@tanstack/react-router";
-import type { Kunde } from "@/lib/api/types";
+import type { Kunde, DauerauftragFrequenz, DauerauftragModus, Position } from "@/lib/api/types";
+import { cn } from "@/lib/utils";
 
 const PHONE_PREFIX = "+49 ";
 const WEB_PREFIX = "https://";
