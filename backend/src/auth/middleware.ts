@@ -1,11 +1,12 @@
 // requireAuth-Middleware (Fastify preHandler) + Cookie-Helpers.
+// Single-User-Modus: keine Rollen, kein RBAC.
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { resolveSession, SESSION_COOKIE, SLIDING_DAYS } from "./sessions.js";
 import { config } from "../config.js";
 
 declare module "fastify" {
   interface FastifyRequest {
-    user?: { id: string; username: string; rolle: "owner" | "mitarbeiter" };
+    user?: { id: string; username: string };
   }
 }
 
@@ -37,20 +38,12 @@ export async function requireAuth(req: FastifyRequest, reply: FastifyReply): Pro
   }
   const { findeBenutzer } = await import("./users-repo.js");
   const u = findeBenutzer(sess.userId);
-  if (!u || u.aktiv !== 1) {
+  if (!u) {
     reply.status(401).send({ error: "unauthenticated" });
     return;
   }
-  req.user = { id: sess.userId, username: sess.username, rolle: u.rolle };
+  req.user = { id: sess.userId, username: sess.username };
   if (sess.refreshed) {
     setSessionCookie(reply, sess.token);
-  }
-}
-
-export async function requireOwner(req: FastifyRequest, reply: FastifyReply): Promise<void> {
-  await requireAuth(req, reply);
-  if (reply.sent) return;
-  if (req.user?.rolle !== "owner") {
-    reply.status(403).send({ error: "forbidden", message: "Nur Owner darf diese Aktion ausführen." });
   }
 }
