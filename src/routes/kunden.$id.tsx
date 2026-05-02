@@ -66,7 +66,7 @@ function Page() {
         }
         actions={
           <>
-            <Button variant="outline" className="rounded-lg">
+            <Button variant="outline" className="rounded-lg" onClick={() => setOpenEdit(true)}>
               <Pencil className="mr-1.5 h-4 w-4" /> Bearbeiten
             </Button>
             <Button variant="outline" className="rounded-lg">
