@@ -68,7 +68,7 @@ function Page() {
   const { data: rechnungen = [] } = useRechnungen();
   const { data: dokumente = [] } = useDokumente();
   const { data: einstellungen } = useSteuerEinstellungen();
-  const { posten: manuellePosten, remove: removeManuell } = useManuellePosten();
+  const { posten: manuellePosten, update: updateManuell, remove: removeManuell } = useManuellePosten();
   const { map: bezahltMap, setBezahlt, removeBezahlt } = useBezahltMarkierungen();
 
   const [neuOpen, setNeuOpen] = useState(false);
@@ -129,8 +129,25 @@ function Page() {
   const handleBezahlt = (postenId: string, betrag?: number) => {
     if (postenId.startsWith("auto-")) {
       setBezahlt(postenId, { bezahltAm: todayISO(), tatsaechlicherBetrag: betrag });
+    } else if (postenId.startsWith("man-")) {
+      updateManuell(postenId, {
+        status: "bezahlt",
+        bezahltAm: todayISO(),
+        tatsaechlicherBetrag: betrag,
+      });
     }
-    // Manuelle Posten werden im Dialog selbst aktualisiert
+  };
+
+  const handleWiderrufen = (postenId: string) => {
+    if (postenId.startsWith("auto-")) {
+      removeBezahlt(postenId);
+    } else if (postenId.startsWith("man-")) {
+      updateManuell(postenId, {
+        status: "offen",
+        bezahltAm: undefined,
+        tatsaechlicherBetrag: undefined,
+      });
+    }
   };
 
   return (
@@ -181,8 +198,12 @@ function Page() {
         <KpiCard
           label="Empfohlene Rücklage"
           value={formatEUR(kennzahlen.empfohleneRuecklage)}
-          sublabel={`${einstellungen.ruecklageSatz}% vom YTD-Gewinn (${formatEUR(kennzahlen.gewinnYtd)})`}
-          tone="primary"
+          sublabel={
+            kennzahlen.gewinnYtd < 0
+              ? `Verlust YTD ${formatEUR(kennzahlen.gewinnYtd)} — keine Rücklage nötig`
+              : `${einstellungen.ruecklageSatz}% vom YTD-Gewinn (${formatEUR(kennzahlen.gewinnYtd)})`
+          }
+          tone={kennzahlen.gewinnYtd < 0 ? "default" : "primary"}
           icon={Building2}
         />
       </div>
@@ -263,9 +284,7 @@ function Page() {
                 key={p.id}
                 posten={p}
                 onClick={() => setDetailDialog(p)}
-                onWiderrufen={
-                  p.id.startsWith("auto-") ? () => removeBezahlt(p.id) : undefined
-                }
+                onWiderrufen={() => handleWiderrufen(p.id)}
                 onLoeschen={p.id.startsWith("man-") ? () => removeManuell(p.id) : undefined}
               />
             ))}

@@ -20,7 +20,8 @@ interface Props {
 }
 
 function parseEUInput(s: string): number {
-  const cleaned = s.replace(/\s/g, "").replace(",", ".");
+  // Tausenderpunkte entfernen, dann Komma → Punkt
+  const cleaned = s.replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
   const n = parseFloat(cleaned);
   return isNaN(n) ? 0 : n;
 }

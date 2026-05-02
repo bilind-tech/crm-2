@@ -73,6 +73,11 @@ export function SteuerDetailDialog({ posten, onOpenChange }: Props) {
                 {grundlage.vorsteuer != null && (
                   <Row label="Vorsteuer aus Belegen" value={`− ${formatEUR(grundlage.vorsteuer)}`} />
                 )}
+                {grundlage.vorsteuer != null && grundlage.vorsteuer > 0 && (
+                  <p className="col-span-full mt-1 text-xs text-muted-foreground">
+                    Vorsteuer pro Beleg aus dessen USt-Satz berechnet (Default 19 %).
+                  </p>
+                )}
                 {grundlage.nettoEinnahmen != null && (
                   <Row label="Netto-Einnahmen YTD" value={formatEUR(grundlage.nettoEinnahmen)} />
                 )}

@@ -320,6 +320,8 @@ export interface Dokument {
   dokumentdatum?: ISODate;
   betrag?: number;
   steuerrelevant: boolean;
+  /** USt-Satz des Belegs in % (für Vorsteuer-Berechnung). Default 19. */
+  ustSatz?: number;
   hochgeladenAm: ISODateTime;
   /** Wenn aus einer Handy-Scan-Session stammend */
   quelle?: "upload" | "drag-drop" | "handy-scan";
