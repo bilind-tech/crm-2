@@ -43,7 +43,7 @@ async function buildApp() {
   ensureMasterKey(config.keyPath);
   openDatabase(config.dbPath);
   for (const d of [config.uploadsDir, config.backupsDir, config.logsDir]) ensureDir(d);
-  const a = Fastify({ logger: false, trustProxy: true });
+  const a = Fastify({ logger: { level: "error" }, trustProxy: true });
   await a.register(helmet, { contentSecurityPolicy: false });
   await a.register(cookie);
   await a.register(rateLimit, { max: 1000, timeWindow: "1 minute" });
