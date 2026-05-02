@@ -118,8 +118,6 @@ export function DokumentViewer({ dokument, open, onOpenChange, onEdit }: Props) 
             </div>
           )}
         </div>
-          )}
-        </div>
 
         {/* Footer */}
         <div className="flex flex-col gap-2 border-t border-border bg-card px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between sm:px-5">
