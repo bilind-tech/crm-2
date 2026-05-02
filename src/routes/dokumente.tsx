@@ -91,11 +91,19 @@ function Page() {
     } else if (filter === "steuer") {
       list = list.filter((d) => d.steuerrelevant);
     }
+    if (kundeFilter !== "alle") list = list.filter((d) => d.kundeId === kundeFilter);
+    if (objektFilter !== "alle") list = list.filter((d) => d.objektId === objektFilter);
     if (q.trim()) {
       const t = q.toLowerCase();
-      list = list.filter(
-        (d) => d.titel.toLowerCase().includes(t) || d.dateiname.toLowerCase().includes(t),
-      );
+      list = list.filter((d) => {
+        const kundenName = d.kundeId ? (kundeMap.get(d.kundeId) ?? "").toLowerCase() : "";
+        return (
+          d.titel.toLowerCase().includes(t) ||
+          d.dateiname.toLowerCase().includes(t) ||
+          (d.beschreibung ?? "").toLowerCase().includes(t) ||
+          kundenName.includes(t)
+        );
+      });
     }
     return [...list].sort((a, b) => {
       // Überfällige zuerst, dann nach Frist, dann nach Hochgeladen-Datum
@@ -105,7 +113,7 @@ function Page() {
       if (prio[sa] !== prio[sb]) return prio[sa] - prio[sb];
       return new Date(b.hochgeladenAm).getTime() - new Date(a.hochgeladenAm).getTime();
     });
-  }, [alle, filter, q]);
+  }, [alle, filter, q, kundeFilter, objektFilter, kundeMap]);
 
   return (
     <div className="space-y-6">
