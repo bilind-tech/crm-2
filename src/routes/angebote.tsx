@@ -347,10 +347,11 @@ function AngebotAnnahmeButtons({ angebot, size = "md" }: { angebot: Angebot; siz
       <button
         type="button"
         onClick={(e) => setStatus("abgelehnt", e)}
-        className={`rounded-md ${klass} text-muted-foreground hover:bg-muted hover:text-destructive`}
-        title="Als abgelehnt markieren"
+        className={`inline-flex items-center rounded-md border border-border bg-background font-medium text-muted-foreground hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive ${base}`}
+        title="Angebot wurde vom Kunden abgelehnt"
       >
-        <ThumbsDown className="h-4 w-4" />
+        <ThumbsDown className={sm ? "h-3.5 w-3.5" : "h-4 w-4"} />
+        <span>Ablehnen</span>
       </button>
     </>
   );
