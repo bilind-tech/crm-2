@@ -113,7 +113,8 @@ export const useKunde = (id: string) =>
 export const useCreateKunde = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Partial<Kunde>) => api.post<Kunde>("/kunden", data),
+    mutationFn: (data: Partial<Kunde> & { startZaehlerAktuellerMonat?: number }) =>
+      api.post<Kunde>("/kunden", data),
     onSuccess: (neu) => {
       // Detail-Daten für die frisch angelegte Kunden-ID vorab in den Cache
       // schreiben, damit /kunden/:id ohne Lade-Lücke direkt rendert.
@@ -135,13 +136,22 @@ export const useCreateKunde = () => {
 export const useUpdateKunde = (id: string) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Partial<Kunde>) => api.patch<Kunde>(`/kunden/${id}`, data),
+    mutationFn: (data: Partial<Kunde> & { startZaehlerAktuellerMonat?: number }) =>
+      api.patch<Kunde>(`/kunden/${id}`, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.kunden });
       qc.invalidateQueries({ queryKey: qk.kunde(id) });
+      qc.invalidateQueries({ queryKey: ["kunden", id, "zaehler"] });
     },
   });
 };
+
+export const useKundenZaehler = (id: string) =>
+  useQuery({
+    queryKey: ["kunden", id, "zaehler"],
+    queryFn: () => api.get<{ periode: string; naechsterStart: number }>(`/kunden/${id}/zaehler`),
+    enabled: !!id,
+  });
 
 export const useDeleteKunde = () => {
   const qc = useQueryClient();
