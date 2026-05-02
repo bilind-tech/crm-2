@@ -322,6 +322,45 @@ function ModusSwitch({
   );
 }
 
+function MwStStepper({
+  value,
+  onChange,
+  min = 0,
+  max = 25,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+}) {
+  const clamp = (n: number) => Math.max(min, Math.min(max, n));
+  return (
+    <div className="flex h-11 items-stretch overflow-hidden rounded-md border border-input bg-background">
+      <div className="flex flex-1 items-center justify-center text-base font-semibold tabular-nums">
+        {value}&nbsp;%
+      </div>
+      <div className="flex w-9 flex-col border-l border-input">
+        <button
+          type="button"
+          onClick={() => onChange(clamp(value + 1))}
+          aria-label="MwSt erhöhen"
+          className="flex flex-1 items-center justify-center text-muted-foreground transition hover:bg-muted hover:text-foreground"
+        >
+          <ChevronUp className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange(clamp(value - 1))}
+          aria-label="MwSt verringern"
+          className="flex flex-1 items-center justify-center border-t border-input text-muted-foreground transition hover:bg-muted hover:text-foreground"
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function toApiPositionen(draft: PositionDraft[]): Position[] {
   return draft.map((p) => ({
     id: p.id,
