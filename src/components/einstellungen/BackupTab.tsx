@@ -86,11 +86,14 @@ function formatDateTime(iso: string): string {
 export function BackupTab() {
   const { data, isLoading } = useBackup();
   const { data: historie = [] } = useBackupHistorie();
+  const { data: laufendeBackups = [] } = useBackupInArbeit();
+  const { data: restoreState } = useRestoreStatus();
   const update = useUpdateBackup();
   const create = useCreateBackup();
   const restore = useRestoreBackup();
   const uploadBackup = useUploadBackup();
   const restoreUpload = useRestoreUploadedBackup();
+  const deleteBackup = useDeleteBackup();
   const qc = useQueryClient();
   const [form, setForm] = useState<BackupEinstellungen | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<BackupEintrag | null>(null);
@@ -105,15 +108,25 @@ export function BackupTab() {
     if (data) setForm(data);
   }, [data]);
 
-  // Live-Polling: solange ein Backup "in_arbeit" ist, alle 600 ms refetchen
-  const hatLaufendes = historie.some((b) => b.status === "in_arbeit");
+  // Wenn Live-Backup fertig wird, Historie sofort neu laden
+  const inArbeitCount = laufendeBackups.length;
   useEffect(() => {
-    if (!hatLaufendes) return;
-    const t = setInterval(() => {
+    if (inArbeitCount === 0) {
       qc.invalidateQueries({ queryKey: qk.einstellungen.backupHistorie });
-    }, 600);
-    return () => clearInterval(t);
-  }, [hatLaufendes, qc]);
+    }
+  }, [inArbeitCount, qc]);
+
+  // Wenn Restore fertig wird, Historie sofort neu laden
+  const restorePhase = restoreState?.restore?.phase;
+  useEffect(() => {
+    if (restorePhase === "done") {
+      qc.invalidateQueries({ queryKey: qk.einstellungen.backupHistorie });
+      toast.success("Wiederherstellung abgeschlossen.");
+    }
+    if (restorePhase === "rollback" || restorePhase === "error") {
+      toast.error("Wiederherstellung fehlgeschlagen — vorheriger Stand wurde wiederhergestellt.");
+    }
+  }, [restorePhase, qc]);
 
   // WICHTIG: Alle Hooks müssen VOR dem ersten frühen Return stehen,
   // sonst React-Error #310 (Rules of Hooks).
@@ -130,14 +143,17 @@ export function BackupTab() {
 
   const dirty = JSON.stringify(form) !== JSON.stringify(data);
 
-  const inArbeit = historie.filter((b) => b.status === "in_arbeit");
+  const inArbeit = laufendeBackups;
   const erfolge = historie.filter((b) => b.status === "erfolg");
   const dailies = erfolge.filter((b) => b.kategorie === "daily");
   const weeklies = erfolge.filter((b) => b.kategorie === "weekly");
   const monthlies = erfolge.filter((b) => b.kategorie === "monthly");
   const sondern = erfolge.filter(
-    (b) => b.kategorie === "manuell" || b.kategorie === "pre-restore" || b.kategorie === "pre-update",
+    (b) => b.kategorie === "manuell" || b.kategorie === "manual"
+      || b.kategorie === "pre-restore" || b.kategorie === "pre-update",
   );
+  const hatLaufendes = inArbeit.length > 0;
+  const maintenanceActive = !!restoreState?.maintenance.active;
 
   const save = () =>
     update.mutate(form, { onSuccess: () => toast.success("Backup-Einstellungen gespeichert") });
@@ -149,18 +165,25 @@ export function BackupTab() {
     });
 
   const handleDownload = (b: BackupEintrag) => {
-    // FRONTEND-STUB: erzeugt einen Dummy-Blob mit dem Dateinamen.
-    // Im Live-Backend: GET /backup/:id/download → echte .sqlite.gz
-    const blob = new Blob([`-- Mock-Backup ${b.dateiname}\n-- size: ${b.groesseBytes} bytes`], {
-      type: "application/octet-stream",
-    });
-    const url = URL.createObjectURL(blob);
+    // Echter Stream-Download vom Pi-Backend.
+    // Cookies (credentials) werden über das anchor mitgesendet, weil das Backend
+    // auf derselben Origin liegt (LAN). Bei Cross-Origin müsste man via fetch+blob laden.
+    const url = `${getBackendUrl()}/backup/${b.id}/download`;
     const a = document.createElement("a");
     a.href = url;
     a.download = b.dateiname;
+    a.rel = "noopener";
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
-    toast.success(`${b.dateiname} heruntergeladen`);
+    a.remove();
+  };
+
+  const handleDelete = (b: BackupEintrag) => {
+    if (!confirm(`Backup „${b.dateiname}" wirklich löschen?`)) return;
+    deleteBackup.mutate(b.id, {
+      onSuccess: () => toast.success("Backup gelöscht"),
+      onError: (e) => toast.error((e as Error).message),
+    });
   };
 
   return (
