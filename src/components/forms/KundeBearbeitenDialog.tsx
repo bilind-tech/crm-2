@@ -125,15 +125,6 @@ export function KundeBearbeitenDialog({ kunde, open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-background max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Kunde bearbeiten</DialogTitle>
-          <DialogDescription>
-            Stammdaten und Belegnummern dieses Kunden anpassen.
-          </DialogDescription>
-        </DialogHeader>
-
-        <Tabs defaultValue="stamm" className="mt-2">
       <DialogContent className="bg-background w-[calc(100vw-1rem)] max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>Kunde bearbeiten</DialogTitle>
