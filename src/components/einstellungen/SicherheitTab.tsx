@@ -14,8 +14,11 @@ import type { SicherheitsEinstellungen } from "@/lib/api/types";
 import { Field, Section, StickySaveBar } from "./_shared";
 import { LoadingPlaceholder } from "@/components/layout/LoadingPlaceholder";
 import { useConfirm } from "@/hooks/useConfirm";
+import { useAuth } from "@/lib/auth";
+import { BenutzerVerwaltung } from "./BenutzerVerwaltung";
 
 export function SicherheitTab() {
+  const { istOwner } = useAuth();
   const { data, isLoading } = useSicherheit();
   const { data: sitzungen = [] } = useSitzungen();
   const update = useUpdateSicherheit();
@@ -97,6 +100,8 @@ export function SicherheitTab() {
           </div>
         )}
       </Section>
+
+      {istOwner && <BenutzerVerwaltung />}
 
       {dialog}
 
