@@ -18,6 +18,7 @@ import type {
   EmailVorlage,
   Firmendaten,
   GoogleDriveEinstellungen,
+  InstallierteVersion,
   Kunde,
   Notiz,
   Nummernkreise,
@@ -28,8 +29,11 @@ import type {
   SitzungEintrag,
   SmtpEinstellungen,
   SuchTreffer,
+  SystemInfo,
   Textvorlage,
   UmsatzPunkt,
+  UpdateLauf,
+  UpdatePackageInfo,
   Warnung,
   Zahlung,
 } from "@/lib/api/types";
@@ -64,6 +68,9 @@ export const qk = {
     sitzungen: ["einstellungen", "sitzungen"] as const,
     positionsvorlagen: ["einstellungen", "positionsvorlagen"] as const,
     textvorlagen: ["einstellungen", "textvorlagen"] as const,
+    systemInfo: ["system", "info"] as const,
+    updateHistorie: ["system", "update", "historie"] as const,
+    updateLauf: (id: string) => ["system", "update", "lauf", id] as const,
   },
   email: {
     vorlagen: ["email", "vorlagen"] as const,
@@ -564,10 +571,42 @@ export const useUpdateBackup = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.einstellungen.backup }),
   });
 };
-export const useCreateBackup = () =>
-  useMutation({
-    mutationFn: () => api.post<{ erfolg: boolean; nachricht: string; groesseBytes?: number }>("/backup/erstellen"),
+export const useCreateBackup = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<BackupEintrag>("/backup/erstellen"),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.einstellungen.backupHistorie }),
   });
+};
+
+export const useRestoreBackup = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (backupId: string) =>
+      api.post<{ erfolg: boolean; restoredFrom: string; restoredAt: string }>(
+        `/backup/${backupId}/restore`,
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.einstellungen.backupHistorie }),
+  });
+};
+
+export const useUploadBackup = () =>
+  useMutation({
+    mutationFn: (file: File) =>
+      api.post<{ uploadId: string; fileName: string; sizeBytes: number; vermutetesDatum?: string; valide: boolean }>(
+        "/backup/upload",
+        { fileName: file.name, sizeBytes: file.size },
+      ),
+  });
+
+export const useRestoreUploadedBackup = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (uploadId: string) =>
+      api.post<{ erfolg: boolean }>(`/backup/upload/${uploadId}/restore`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.einstellungen.backupHistorie }),
+  });
+};
 
 export const usePositionsvorlagen = () =>
   useQuery({ queryKey: qk.einstellungen.positionsvorlagen, queryFn: () => api.get<Positionsvorlage[]>("/einstellungen/positionsvorlagen") });
@@ -816,3 +855,62 @@ export const useAlleSitzungenBeenden = () => {
   });
 };
 
+
+// ---------- System & Updates ----------
+export const useSystemInfo = () =>
+  useQuery({
+    queryKey: qk.einstellungen.systemInfo,
+    queryFn: () => api.get<SystemInfo>("/system/info"),
+  });
+
+export const useUpdateHistorie = () =>
+  useQuery({
+    queryKey: qk.einstellungen.updateHistorie,
+    queryFn: () => api.get<InstallierteVersion[]>("/system/update/historie"),
+  });
+
+export const useValidateUpdate = () =>
+  useMutation({
+    mutationFn: (file: File) =>
+      api.post<UpdatePackageInfo>("/system/update/validate", {
+        fileName: file.name,
+        sizeBytes: file.size,
+      }),
+  });
+
+export const useInstallUpdate = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (uploadId: string) =>
+      api.post<UpdateLauf>(`/system/update/install/${uploadId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.einstellungen.systemInfo });
+      qc.invalidateQueries({ queryKey: qk.einstellungen.updateHistorie });
+    },
+  });
+};
+
+/** Polling-Query für laufendes Update — läuft alle 500 ms während status="laeuft". */
+export const useUpdateLauf = (id: string | null) =>
+  useQuery({
+    queryKey: id ? qk.einstellungen.updateLauf(id) : ["system", "update", "lauf", "none"],
+    queryFn: () => api.get<UpdateLauf>(`/system/update/lauf/${id}`),
+    enabled: !!id,
+    refetchInterval: (q) => {
+      const data = q.state.data as UpdateLauf | undefined;
+      if (!data) return 500;
+      return data.status === "laeuft" || data.status === "rollback" ? 500 : false;
+    },
+  });
+
+export const useRollbackUpdate = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (version: string) =>
+      api.post<UpdateLauf>(`/system/update/rollback/${encodeURIComponent(version)}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.einstellungen.systemInfo });
+      qc.invalidateQueries({ queryKey: qk.einstellungen.updateHistorie });
+    },
+  });
+};

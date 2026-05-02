@@ -17,6 +17,7 @@ import {
   Server,
   Repeat,
   Shield,
+  Package,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,6 +43,7 @@ import { NummernkreiseTab } from "@/components/einstellungen/NummernkreiseTab";
 import { VorlagenTab } from "@/components/einstellungen/VorlagenTab";
 import { GoogleDriveTab } from "@/components/einstellungen/GoogleDriveTab";
 import { BackupTab } from "@/components/einstellungen/BackupTab";
+import { SystemUpdateTab } from "@/components/einstellungen/SystemUpdateTab";
 import { SicherheitTab } from "@/components/einstellungen/SicherheitTab";
 import { VerlaufTab } from "@/components/einstellungen/VerlaufTab";
 import type { Firmendaten } from "@/lib/api/types";
@@ -61,6 +63,7 @@ type TabId =
   | "vorlagen"
   | "drive"
   | "backup"
+  | "system-update"
   | "sicherheit"
   | "verlauf";
 
@@ -77,7 +80,8 @@ const tabs: { id: TabId; label: string; icon: typeof Building2; gruppe: string }
   { id: "dauerauftrag", label: "Daueraufträge", icon: Repeat, gruppe: "Belege" },
 
   { id: "drive", label: "Google Drive", icon: Cloud, gruppe: "System" },
-  { id: "backup", label: "Backup & Export", icon: Save, gruppe: "System" },
+  { id: "backup", label: "Backup & Wiederherstellen", icon: Save, gruppe: "System" },
+  { id: "system-update", label: "System & Updates", icon: Package, gruppe: "System" },
   { id: "sicherheit", label: "Sicherheit", icon: Shield, gruppe: "System" },
   { id: "erscheinungsbild", label: "Erscheinungsbild", icon: Palette, gruppe: "System" },
   { id: "verlauf", label: "Verlauf", icon: History, gruppe: "System" },
@@ -191,6 +195,7 @@ function Page() {
           {tab === "vorlagen" && <VorlagenTab />}
           {tab === "drive" && <GoogleDriveTab />}
           {tab === "backup" && <BackupTab />}
+          {tab === "system-update" && <SystemUpdateTab />}
           {tab === "sicherheit" && <SicherheitTab />}
           {tab === "verlauf" && <VerlaufTab />}
         </div>

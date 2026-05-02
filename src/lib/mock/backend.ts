@@ -34,6 +34,7 @@ import type {
   Firmendaten,
   GoogleDriveEinstellungen,
   ID,
+  InstallierteVersion,
   Kunde,
   MahnEinstellungen,
   MahnStufe,
@@ -49,8 +50,12 @@ import type {
   SitzungEintrag,
   SmtpEinstellungen,
   SuchTreffer,
+  SystemInfo,
   Textvorlage,
   UmsatzPunkt,
+  UpdateLauf,
+  UpdatePackageInfo,
+  UpdateStepStatus,
   Warnung,
   Zahlung,
 } from "@/lib/api/types";
@@ -104,6 +109,14 @@ interface DB {
   zaehler: { kunde: number; objekt: number; angebot: number; rechnung: number; dauerauftrag: number };
   /** Pro Kunde + "YYYY-MM" laufende Nummer für Rechnungen/Angebote mit eigenem Kürzel. */
   zaehlerProKunde?: Record<string, Record<string, number>>;
+  /** System-Info (CRM-Version, Stack, Hardware). */
+  systemInfo?: SystemInfo;
+  /** Versionshistorie — die aktive Version steht oben. */
+  installedVersionen?: InstallierteVersion[];
+  /** Laufende & abgeschlossene Update-Läufe. */
+  updateLaeufe?: UpdateLauf[];
+  /** Frisch validierte Update-Pakete, die auf Install-Bestätigung warten. */
+  updateUploads?: Record<string, UpdatePackageInfo>;
 }
 
 let db: DB | null = null;
@@ -1598,12 +1611,93 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
   }
 
   else if (m === "POST" && match(path, "/backup/erstellen")) {
-    logAktivitaet("backup_erstellt", "Backup erstellt (Mock)");
+    // ─────────────────────────────────────────────────────────────────────
+    // FRONTEND-MOCK — im Pi-Backend wird hier:
+    //   1. sqlite3 "VACUUM INTO" / .backup-API auf data.sqlite ausgeführt
+    //   2. Datei mit gzip komprimiert
+    //   3. nach DATA_DIR/backups/{kategorie}/{name}.sqlite.gz verschoben
+    //   4. Eintrag in backup_history-Tabelle mit abgeschlossenAm=NOW
+    //   5. Optional: Drive-Spiegel-Upload anstoßen
+    //   6. Rotation: alte Backups jenseits behaltenDaily/Weekly/Monthly löschen
+    // Kein Eintrag erscheint mit status="erfolg" bevor wirklich auf Disk!
+    // ─────────────────────────────────────────────────────────────────────
+    const eintrag = startBackupMock(d, "manuell", "manuell");
+    persist();
+    result = eintrag;
+  } else if (m === "GET" && match(path, "/backup/in-arbeit")) {
+    result = (d.backupHistorie ?? []).filter((b) => b.status === "in_arbeit");
+  } else if (m === "POST" && (path.startsWith("/backup/") && path.endsWith("/restore"))) {
+    // /backup/:id/restore — legt pre-restore-Backup an, simuliert Restore
+    const id = path.split("/")[2];
+    const target = (d.backupHistorie ?? []).find((b) => b.id === id);
+    if (!target || target.status !== "erfolg") {
+      throw new ApiError("Backup nicht gefunden oder nicht abgeschlossen", 404);
+    }
+    startBackupMock(d, "vor-restore", "pre-restore");
+    logAktivitaet("backup_erstellt", `Wiederherstellung gestartet: ${target.dateiname}`);
+    persist();
+    // FRONTEND-MOCK — im Live-Backend würde hier der Service kurz pausieren,
+    // die Datei entpackt, atomar nach data.sqlite umbenannt und neu gestartet.
+    result = { erfolg: true, restoredFrom: target.dateiname, restoredAt: target.zeitpunktStart };
+  } else if (m === "POST" && match(path, "/backup/upload")) {
+    // FRONTEND-MOCK — im Live-Backend kommt hier ein Multipart-Upload an,
+    // die Datei wird in /tmp/backup-upload.sqlite.gz validiert (Header-Magic),
+    // dann zur Restore-Bestätigung als Vorschau angeboten.
+    const fileName = (body as { fileName?: string })?.fileName ?? "uploaded-backup.sqlite.gz";
+    const sizeBytes = (body as { sizeBytes?: number })?.sizeBytes ?? 0;
     result = {
-      erfolg: true,
-      nachricht: "Backup im Mock-Modus simuliert. Im Live-Modus liefert das Pi-Backend ein ZIP.",
-      groesseBytes: JSON.stringify(d).length,
+      uploadId: uuid(),
+      fileName,
+      sizeBytes,
+      vermutetesDatum: extrahierteDatumAusName(fileName),
+      valide: /\.(sqlite|sqlite\.gz|db)$/i.test(fileName),
     };
+  } else if (m === "POST" && (path.startsWith("/backup/upload/") && path.endsWith("/restore"))) {
+    // /backup/upload/:uploadId/restore
+    startBackupMock(d, "vor-restore", "pre-restore");
+    persist();
+    result = { erfolg: true };
+  }
+
+  // ─── System & Updates ───────────────────────────────────────────────
+  else if (m === "GET" && match(path, "/system/info")) {
+    result = ensureSystemInfo(d);
+  } else if (m === "GET" && match(path, "/system/update/historie")) {
+    result = ensureVersionen(d);
+  } else if (m === "POST" && match(path, "/system/update/validate")) {
+    // FRONTEND-MOCK — im Pi-Backend wird hier:
+    //   1. ZIP in /tmp/update-{id}/ entpackt (mit Zip-Bomb-Schutz)
+    //   2. package.json gelesen, Version + name validiert
+    //   3. db/migrations/ gegen schema_migrations-Tabelle abgeglichen
+    //   4. PackageInfo zurückgegeben — INSTALLATION passiert noch NICHT
+    const fileName = (body as { fileName?: string })?.fileName ?? "update.zip";
+    const sizeBytes = (body as { sizeBytes?: number })?.sizeBytes ?? 0;
+    const info = mockValidateUpdate(fileName, sizeBytes, d);
+    if (!d.updateUploads) d.updateUploads = {};
+    d.updateUploads[info.uploadId] = info;
+    persist();
+    result = info;
+  } else if (m === "POST" && (path.startsWith("/system/update/install/"))) {
+    // /system/update/install/:uploadId
+    const uploadId = path.split("/")[4];
+    const info = d.updateUploads?.[uploadId];
+    if (!info || !info.valide) {
+      throw new ApiError("Update-Paket nicht gefunden oder ungültig", 400);
+    }
+    const lauf = startUpdateLaufMock(d, info);
+    persist();
+    result = lauf;
+  } else if (m === "GET" && (path.startsWith("/system/update/lauf/"))) {
+    const id = path.split("/")[4];
+    const lauf = d.updateLaeufe?.find((l) => l.id === id);
+    if (!lauf) throw new ApiError("Update-Lauf nicht gefunden", 404);
+    result = lauf;
+  } else if (m === "POST" && (path.startsWith("/system/update/rollback/"))) {
+    // /system/update/rollback/:version
+    const version = decodeURIComponent(path.split("/")[4]);
+    const lauf = startRollbackMock(d, version);
+    persist();
+    result = lauf;
   }
 
   if (result === undefined) {
@@ -1762,4 +1856,374 @@ function pruefeFaelligeLaeufeIntern(d: DB): DauerauftragLauf[] {
     }
   }
   return erzeugte;
+}
+
+// =============================================================================
+// Backup-Mock-Helfer
+// =============================================================================
+// FRONTEND-STUB-HINWEIS: Diese Funktionen simulieren auf dem Frontend, was
+// das spätere Pi-Backend wirklich macht. Sie schreiben NIEMALS auf Disk und
+// erzeugen keine echten SQLite-Dateien.
+//
+// Pi-Backend (POST /backup/erstellen) MUSS:
+//   1. Eintrag mit status="in_arbeit", abgeschlossenAm=null in DB anlegen
+//   2. sqlite3 .backup-API auf data.sqlite aufrufen
+//   3. Komprimieren mit gzip
+//   4. fs.rename atomar nach DATA_DIR/backups/{kategorie}/{name}.sqlite.gz
+//   5. ERST DANN: status="erfolg", abgeschlossenAm=NOW() setzen
+//   6. Bei Fehler: status="fehler" + Fehlertext, NICHTS in Liste anzeigen
+//   7. Optional: Drive-Spiegel im Hintergrund
+//   8. Rotation: alte Backups jenseits behaltenDaily/Weekly/Monthly löschen
+// =============================================================================
+
+function startBackupMock(
+  d: DB,
+  ausloeser: BackupAusloeserMock,
+  kategorie: BackupKategorieMock,
+): BackupEintrag {
+  const id = uuid();
+  const startISO = now();
+  const datePart = startISO.slice(0, 10);
+  const eintrag: BackupEintrag = {
+    id,
+    zeitpunkt: startISO,
+    zeitpunktStart: startISO,
+    abgeschlossenAm: null,
+    kategorie,
+    ausloeser,
+    groesseBytes: 0,
+    status: "in_arbeit",
+    dateiname: `data-${kategorie}-${datePart}.sqlite.gz`,
+    driveStatus: d.backup.driveSpiegel ? "pending" : undefined,
+  };
+  if (!d.backupHistorie) d.backupHistorie = [];
+  d.backupHistorie.unshift(eintrag);
+
+  // Nach 1500ms „abschließen" — simuliert echten sqlite3-Backup
+  if (typeof setTimeout !== "undefined") {
+    setTimeout(() => {
+      const live = load();
+      const x = live.backupHistorie.find((b) => b.id === id);
+      if (!x) return;
+      x.status = "erfolg";
+      x.abgeschlossenAm = now();
+      x.groesseBytes = 11_500_000 + Math.floor(Math.random() * 1_500_000);
+      if (live.backup.driveSpiegel) {
+        // Drive-Sync separat asynchron
+        setTimeout(() => {
+          const live2 = load();
+          const x2 = live2.backupHistorie.find((b) => b.id === id);
+          if (x2) {
+            x2.driveStatus = "synced";
+            persist();
+          }
+        }, 1200);
+      }
+      // Rotation anwenden
+      rotateBackups(live);
+      persist();
+    }, 1500);
+  }
+  return eintrag;
+}
+
+type BackupKategorieMock = BackupEintrag["kategorie"];
+type BackupAusloeserMock = BackupEintrag["ausloeser"];
+
+function rotateBackups(d: DB) {
+  const limits: Record<string, number> = {
+    daily: d.backup.behaltenDaily,
+    weekly: d.backup.behaltenWeekly,
+    monthly: d.backup.behaltenMonthly,
+  };
+  const groups: Record<string, BackupEintrag[]> = { daily: [], weekly: [], monthly: [] };
+  for (const b of d.backupHistorie) {
+    if (b.status !== "erfolg") continue;
+    if (groups[b.kategorie]) groups[b.kategorie].push(b);
+  }
+  for (const [kat, limit] of Object.entries(limits)) {
+    const list = groups[kat]
+      .sort((a, b) => (b.abgeschlossenAm ?? "").localeCompare(a.abgeschlossenAm ?? ""));
+    const drop = list.slice(limit);
+    for (const x of drop) {
+      d.backupHistorie = d.backupHistorie.filter((b) => b.id !== x.id);
+    }
+  }
+  // Sonderbackups (manuell, pre-restore, pre-update) max 30 Tage
+  const cutoff = Date.now() - 30 * 24 * 3600 * 1000;
+  d.backupHistorie = d.backupHistorie.filter((b) => {
+    if (b.kategorie === "daily" || b.kategorie === "weekly" || b.kategorie === "monthly") return true;
+    return new Date(b.abgeschlossenAm ?? b.zeitpunktStart).getTime() > cutoff;
+  });
+}
+
+function extrahierteDatumAusName(name: string): string | undefined {
+  const m1 = name.match(/(\d{4}-\d{2}-\d{2})/);
+  return m1?.[1];
+}
+
+// =============================================================================
+// System-Update-Mock
+// =============================================================================
+// FRONTEND-STUB-HINWEIS: Es wird KEIN Code installiert, KEIN ZIP entpackt.
+// Die Steps sind reine UI-Simulation mit setTimeout.
+//
+// Pi-Backend (POST /system/update/install/:uploadId) MUSS:
+//   1. Vor JEDEM Schritt loggen in update_runs-Tabelle
+//   2. Sicherheits-Backup VOR npm install erstellen
+//   3. Code in /opt/mycleancenter/quarantine/ entpacken
+//   4. npm ci --production darin laufen lassen
+//   5. node migrate.js auf data.sqlite ausführen (idempotent, schema_migrations)
+//   6. Atomar via fs.rename zu /opt/mycleancenter/current/ wechseln
+//      (alten Code zu /opt/mycleancenter/previous/ rotieren, max 1 Vorgänger)
+//   7. systemctl restart mycleancenter
+//   8. Smoke-Test: GET /api/health
+//   9. Bei JEDEM Fehler: rename rückwärts, restart, Fehler an Frontend
+//  10. Endpunkt nur für authentifizierte Admin-User, max 200MB Upload
+// =============================================================================
+
+function ensureSystemInfo(d: DB): SystemInfo {
+  if (!d.systemInfo) {
+    d.systemInfo = {
+      appName: "myCleanCenter CRM",
+      version: "1.4.2",
+      installedAt: new Date(Date.now() - 4 * 24 * 3600 * 1000).toISOString(),
+      node: "20.11.0",
+      sqlite: "3.45.1",
+      hardware: "Raspberry Pi 5 · 8 GB RAM · USB-SSD",
+    };
+  }
+  return d.systemInfo;
+}
+
+function ensureVersionen(d: DB): InstallierteVersion[] {
+  if (!d.installedVersionen || d.installedVersionen.length === 0) {
+    const aktiv = ensureSystemInfo(d);
+    d.installedVersionen = [
+      { version: aktiv.version, installedAt: aktiv.installedAt, istAktiv: true, rollbackVerfuegbar: false },
+      {
+        version: "1.4.1",
+        installedAt: new Date(Date.now() - 17 * 24 * 3600 * 1000).toISOString(),
+        istAktiv: false,
+        rollbackVerfuegbar: true,
+      },
+      {
+        version: "1.4.0",
+        installedAt: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
+        istAktiv: false,
+        rollbackVerfuegbar: false,
+      },
+    ];
+  }
+  return d.installedVersionen;
+}
+
+function mockValidateUpdate(fileName: string, sizeBytes: number, d: DB): UpdatePackageInfo {
+  const aktuell = ensureSystemInfo(d).version;
+  const versionMatch = fileName.match(/(\d+\.\d+\.\d+)/);
+  const detektiert = versionMatch?.[1];
+  const valide = !!detektiert && /\.(zip)$/i.test(fileName) && sizeBytes <= 200 * 1024 * 1024;
+
+  if (!valide) {
+    return {
+      uploadId: uuid(),
+      fileName,
+      sizeBytes,
+      version: detektiert ?? "",
+      pendingMigrations: [],
+      warnings: [],
+      valide: false,
+      fehlerGrund: !detektiert
+        ? "Versionsnummer im Dateinamen nicht gefunden (erwartet z.B. mycleancenter-1.5.0.zip)"
+        : sizeBytes > 200 * 1024 * 1024
+          ? "Datei größer als 200 MB"
+          : "Nur .zip-Dateien werden akzeptiert",
+    };
+  }
+
+  const migrations: string[] = [];
+  if (detektiert && detektiert > aktuell) {
+    migrations.push("005_add_property_address_history", "006_add_email_attachments");
+  }
+  return {
+    uploadId: uuid(),
+    fileName,
+    sizeBytes,
+    version: detektiert!,
+    pendingMigrations: migrations,
+    warnings: detektiert! < aktuell
+      ? [`Downgrade von ${aktuell} auf ${detektiert} — Daten könnten inkompatibel sein`]
+      : ["Backend-Service wird ~10 Sekunden neu starten"],
+    valide: true,
+  };
+}
+
+interface MockUpdateRunner {
+  steps: { id: UpdateStepStatus["id"]; label: string; durationMs: number; tickDetail?: (i: number, total: number) => string }[];
+}
+
+function getUpdateRunner(): MockUpdateRunner {
+  return {
+    steps: [
+      { id: "entpacken", label: "ZIP entpacken", durationMs: 600 },
+      { id: "backup", label: "Sicherheits-Backup erstellen", durationMs: 1500 },
+      { id: "quarantaene", label: "Code in Quarantäne kopieren", durationMs: 800 },
+      {
+        id: "install",
+        label: "Abhängigkeiten installieren",
+        durationMs: 6000,
+        tickDetail: (i, total) => `${i} / ${total} Pakete`,
+      },
+      { id: "migrations", label: "Datenbank-Migrations ausführen", durationMs: 1200 },
+      { id: "neustart", label: "Service neu starten", durationMs: 2000 },
+      { id: "smoketest", label: "Smoke-Test", durationMs: 800 },
+    ],
+  };
+}
+
+function startUpdateLaufMock(d: DB, info: UpdatePackageInfo): UpdateLauf {
+  const runner = getUpdateRunner();
+  const aktiveVersion = ensureSystemInfo(d).version;
+  const lauf: UpdateLauf = {
+    id: uuid(),
+    von: aktiveVersion,
+    zu: info.version,
+    startetAm: now(),
+    beendetAm: null,
+    status: "laeuft",
+    steps: runner.steps.map((s) => ({ id: s.id, label: s.label, status: "wartet" })),
+  };
+  if (!d.updateLaeufe) d.updateLaeufe = [];
+  d.updateLaeufe.unshift(lauf);
+
+  if (typeof setTimeout === "undefined") return lauf;
+
+  let cumulative = 0;
+  runner.steps.forEach((step, idx) => {
+    // Step-Start
+    setTimeout(() => {
+      const live = load();
+      const liveLauf = live.updateLaeufe?.find((l) => l.id === lauf.id);
+      if (!liveLauf || liveLauf.status !== "laeuft") return;
+      const liveStep = liveLauf.steps[idx];
+      liveStep.status = "laeuft";
+      persist();
+
+      // Optional: tickDetail
+      if (step.tickDetail) {
+        const total = 120;
+        const tickIv = Math.max(120, Math.floor(step.durationMs / 30));
+        let i = 0;
+        const handle = setInterval(() => {
+          i = Math.min(total, i + Math.ceil(total / (step.durationMs / tickIv)));
+          const live2 = load();
+          const lauf2 = live2.updateLaeufe?.find((l) => l.id === lauf.id);
+          if (!lauf2 || lauf2.status !== "laeuft") {
+            clearInterval(handle);
+            return;
+          }
+          lauf2.steps[idx].detail = step.tickDetail!(i, total);
+          persist();
+          if (i >= total) clearInterval(handle);
+        }, tickIv);
+      }
+    }, cumulative);
+
+    cumulative += step.durationMs;
+
+    // Step-Ende
+    setTimeout(() => {
+      const live = load();
+      const liveLauf = live.updateLaeufe?.find((l) => l.id === lauf.id);
+      if (!liveLauf || liveLauf.status !== "laeuft") return;
+      liveLauf.steps[idx].status = "ok";
+      persist();
+    }, cumulative);
+  });
+
+  // Gesamterfolg
+  setTimeout(() => {
+    const live = load();
+    const liveLauf = live.updateLaeufe?.find((l) => l.id === lauf.id);
+    if (!liveLauf || liveLauf.status !== "laeuft") return;
+    liveLauf.status = "erfolg";
+    liveLauf.beendetAm = now();
+    // Versionen umstellen
+    const versionen = ensureVersionen(live);
+    for (const v of versionen) {
+      v.istAktiv = false;
+      v.rollbackVerfuegbar = false;
+    }
+    versionen.unshift({
+      version: info.version,
+      installedAt: now(),
+      istAktiv: true,
+      rollbackVerfuegbar: false,
+    });
+    if (versionen[1]) versionen[1].rollbackVerfuegbar = true;
+    if (live.systemInfo) {
+      live.systemInfo.version = info.version;
+      live.systemInfo.installedAt = now();
+    }
+    logAktivitaet("einstellung_geaendert", `Update auf Version ${info.version} installiert`);
+    persist();
+  }, cumulative + 200);
+
+  return lauf;
+}
+
+function startRollbackMock(d: DB, version: string): UpdateLauf {
+  const aktiv = ensureSystemInfo(d).version;
+  const lauf: UpdateLauf = {
+    id: uuid(),
+    von: aktiv,
+    zu: version,
+    startetAm: now(),
+    beendetAm: null,
+    status: "rollback",
+    steps: [
+      { id: "rollback", label: `Rollback auf ${version}`, status: "laeuft" },
+      { id: "neustart", label: "Service neu starten", status: "wartet" },
+      { id: "smoketest", label: "Smoke-Test", status: "wartet" },
+    ],
+  };
+  if (!d.updateLaeufe) d.updateLaeufe = [];
+  d.updateLaeufe.unshift(lauf);
+
+  if (typeof setTimeout === "undefined") return lauf;
+
+  setTimeout(() => {
+    const live = load();
+    const l = live.updateLaeufe?.find((x) => x.id === lauf.id);
+    if (!l) return;
+    l.steps[0].status = "ok";
+    l.steps[1].status = "laeuft";
+    persist();
+  }, 2000);
+  setTimeout(() => {
+    const live = load();
+    const l = live.updateLaeufe?.find((x) => x.id === lauf.id);
+    if (!l) return;
+    l.steps[1].status = "ok";
+    l.steps[2].status = "laeuft";
+    persist();
+  }, 4000);
+  setTimeout(() => {
+    const live = load();
+    const l = live.updateLaeufe?.find((x) => x.id === lauf.id);
+    if (!l) return;
+    l.steps[2].status = "ok";
+    l.status = "erfolg";
+    l.beendetAm = now();
+    const versionen = ensureVersionen(live);
+    for (const v of versionen) {
+      v.istAktiv = v.version === version;
+      v.rollbackVerfuegbar = false;
+    }
+    if (live.systemInfo) live.systemInfo.version = version;
+    logAktivitaet("einstellung_geaendert", `Rollback auf Version ${version}`);
+    persist();
+  }, 5000);
+
+  return lauf;
 }
