@@ -1306,7 +1306,7 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     logAktivitaet("einstellung_geaendert", "Backup-Einstellungen aktualisiert");
     persist();
     result = d.backup;
-  } else if (m === "GET" && match(path, "/einstellungen/backup/historie")) {
+  } else if (m === "GET" && (match(path, "/einstellungen/backup/historie") || match(path, "/backup/historie"))) {
     result = d.backupHistorie ?? [];
   } else if (m === "GET" && match(path, "/einstellungen/google-drive")) {
     result = d.googleDrive;
