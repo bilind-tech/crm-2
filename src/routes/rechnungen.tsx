@@ -106,13 +106,14 @@ function Page() {
       if (filter === "teilbezahlt") list = list.filter((r) => r.status === "teilbezahlt");
       else list = list.filter((r) => r.status === filter);
     }
+    if (nurDA) list = list.filter((r) => r.optionen?.wiederkehrend === true);
     list = list.filter((r) => passtInZeitraum(r.rechnungsdatum, zeitraum));
     if (q.trim()) {
       const t = q.toLowerCase();
       list = list.filter((r) => r.nummer.toLowerCase().includes(t) || r.titel.toLowerCase().includes(t));
     }
     return [...list].sort((a, b) => b.rechnungsdatum.localeCompare(a.rechnungsdatum));
-  }, [alle, filter, q, zeitraum]);
+  }, [alle, filter, q, zeitraum, nurDA]);
 
   return (
     <div className="space-y-6">
