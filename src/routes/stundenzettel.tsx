@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Clock, ExternalLink, RefreshCw, Settings as SettingsIcon, AlertTriangle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { getStundenzettelUrl } from "@/lib/stundenzettel/config";
+import { useStundenzettelUrl } from "@/lib/stundenzettel/config";
 
 export const Route = createFileRoute("/stundenzettel")({ component: Page });
 
@@ -58,17 +58,10 @@ function analysiereUmfeld(url: string): Hindernis {
 }
 
 function Page() {
-  const [url, setUrl] = useState("");
+  const { url } = useStundenzettelUrl();
   const [reloadKey, setReloadKey] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [headerBlocked, setHeaderBlocked] = useState(false);
-
-  useEffect(() => {
-    const sync = () => setUrl(getStundenzettelUrl());
-    sync();
-    window.addEventListener("stundenzettel-url-changed", sync);
-    return () => window.removeEventListener("stundenzettel-url-changed", sync);
-  }, []);
 
   const hindernis = useMemo(() => analysiereUmfeld(url), [url]);
 

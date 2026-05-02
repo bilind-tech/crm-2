@@ -1,0 +1,39 @@
+[Unit]
+Description=MyCleanCenter CRM Backend
+Documentation=https://github.com/mycleancenter/crm
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mycleancenter
+Group=mycleancenter
+WorkingDirectory=/opt/mycleancenter/current/backend
+Environment=NODE_ENV=production
+Environment=DATA_DIR=/var/lib/mycleancenter
+Environment=PORT=8787
+Environment=HOST=0.0.0.0
+# CORS muss in Production explizit gesetzt werden — kommagetrennte Liste der erlaubten Origins.
+# Beispiel: http://mycleancenter.local,https://mycleancenter.local
+Environment=CORS_ORIGINS=http://mycleancenter.local,http://mycleancenter.local:80
+ExecStart=/usr/bin/node dist/server.js
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mycleancenter
+
+# Sicherheits-Hardening
+ProtectSystem=strict
+ReadWritePaths=/var/lib/mycleancenter
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

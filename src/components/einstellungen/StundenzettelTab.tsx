@@ -1,34 +1,37 @@
 // Einstellungen-Tab für die externe Stundenzettel-App.
-// Hier wird die URL hinterlegt, unter der die App im LAN erreichbar ist.
+// Die URL liegt im Backend — alle Geräte im LAN sehen denselben Stand.
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ExternalLink, Save as SaveIcon, Clock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { getStundenzettelUrl, setStundenzettelUrl } from "@/lib/stundenzettel/config";
+import {
+  useStundenzettelUrl,
+  useSetStundenzettelUrl,
+} from "@/lib/stundenzettel/config";
 
 export function StundenzettelTab() {
-  const [url, setUrl] = useState("");
-  const [initial, setInitial] = useState("");
+  const { url: serverUrl, isLoading } = useStundenzettelUrl();
+  const setUrl = useSetStundenzettelUrl();
+  const [draft, setDraft] = useState("");
 
   useEffect(() => {
-    const v = getStundenzettelUrl();
-    setUrl(v);
-    setInitial(v);
-  }, []);
+    setDraft(serverUrl);
+  }, [serverUrl]);
 
-  const dirty = url.trim() !== initial.trim();
-  const valid = !url.trim() || /^https?:\/\/.+/i.test(url.trim());
+  const dirty = draft.trim() !== serverUrl.trim();
+  const valid = !draft.trim() || /^https?:\/\/.+/i.test(draft.trim());
 
   const save = () => {
     if (!valid) {
       toast.error("URL muss mit http:// oder https:// beginnen.");
       return;
     }
-    setStundenzettelUrl(url);
-    setInitial(url.trim());
-    toast.success("Stundenzettel-URL gespeichert");
+    setUrl.mutate(draft, {
+      onSuccess: () => toast.success("Stundenzettel-URL gespeichert"),
+      onError: () => toast.error("Speichern fehlgeschlagen"),
+    });
   };
 
   return (
@@ -51,13 +54,14 @@ export function StundenzettelTab() {
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">Adresse der Stundenzettel-App</Label>
             <Input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
               placeholder="z. B. http://mycleancenter.local:4001"
+              disabled={isLoading}
             />
             <p className="text-xs text-muted-foreground">
-              Lokale LAN-Adresse oder eigene Domain. Leer lassen, solange die App noch
-              nicht eingerichtet ist.
+              Lokale LAN-Adresse oder eigene Domain. Gilt geräteübergreifend für alle
+              Browser im Netzwerk. Leer lassen, solange die App noch nicht eingerichtet ist.
             </p>
             {!valid && (
               <p className="text-xs text-destructive">
@@ -67,15 +71,19 @@ export function StundenzettelTab() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={save} disabled={!dirty || !valid} className="gap-1.5 rounded-full px-5">
+            <Button
+              onClick={save}
+              disabled={!dirty || !valid || setUrl.isPending}
+              className="gap-1.5 rounded-full px-5"
+            >
               <SaveIcon className="h-4 w-4" />
-              Speichern
+              {setUrl.isPending ? "Speichern…" : "Speichern"}
             </Button>
-            {initial && (
+            {serverUrl && (
               <Button
                 variant="outline"
                 className="gap-1.5 rounded-full px-5"
-                onClick={() => window.open(initial, "_blank", "noopener,noreferrer")}
+                onClick={() => window.open(serverUrl, "_blank", "noopener,noreferrer")}
               >
                 <ExternalLink className="h-4 w-4" />
                 In neuem Tab öffnen
