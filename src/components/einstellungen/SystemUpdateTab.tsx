@@ -15,6 +15,15 @@
 //   6. Update-Endpunkt nur für authentifizierte Admin-User
 //   7. Datei-Upload max 200 MB, Zip-Bomb-Schutz beim Entpacken
 //   8. Migrations idempotent (schema_migrations-Tabelle prüft, was schon lief)
+//
+// ROLLBACK-VERTRAG (POST /system/update/rollback/:version):
+//   - Body: { passwort: string }  → bcrypt-Vergleich serverseitig (nie clientseitig)
+//   - Bei falschem Passwort: 401, Service unverändert weiter
+//   - Vor dem Code-Swap: pre-rollback-{ts}.sqlite.gz im Backup-Ordner anlegen
+//   - DATA_DIR (/var/lib/mycleancenter/) wird NIEMALS angefasst — auch nicht
+//     gelesen-mit-Lock. Nur /opt/mycleancenter/current/ wird via fs.rename
+//     getauscht (current → broken-{ts}, previous → current).
+//   - Bei Fehler: kein halb-getauschter Zustand, Service mit altem Code weiter.
 // =============================================================================
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
