@@ -37,6 +37,10 @@ import type {
   UpdatePackageInfo,
   Warnung,
   Zahlung,
+  BenutzerEintrag,
+  BenutzerRolle,
+  BenutzerAnlegenResponse,
+  BenutzerResetResponse,
 } from "@/lib/api/types";
 
 export const qk = {
