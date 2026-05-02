@@ -32,7 +32,9 @@ export function PdfViewerDialog({
   errorMessage,
   fileName,
   drive,
+  editTarget,
 }: Props) {
+  const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const [numPages, setNumPages] = useState<number>(0);
