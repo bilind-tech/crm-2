@@ -254,7 +254,7 @@ export function KundeBearbeitenDialog({ kunde, open, onOpenChange }: Props) {
 
         <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Abbrechen</Button>
-          <Button onClick={speichern} disabled={update.isPending}>
+          <Button onClick={speichern} disabled={update.isPending || !!kuerzelKonflikt}>
             {update.isPending ? "Speichere…" : "Speichern"}
           </Button>
         </div>
