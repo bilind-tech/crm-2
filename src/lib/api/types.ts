@@ -323,6 +323,8 @@ export interface Dokument {
   faelligAm?: ISODate;
   /** Wann als erledigt markiert. */
   erledigtAm?: ISODateTime;
+  /** Status der Drive-Synchronisation. */
+  drive?: DriveSyncInfo;
 }
 
 // ---------- Upload-Session (Handy-Scan-Brücke) ----------
