@@ -10,6 +10,7 @@ interface MobileListCardProps {
   trailing?: React.ReactNode;
   badge?: React.ReactNode;
   actions?: React.ReactNode;
+  footer?: React.ReactNode;
   className?: string;
 }
 
