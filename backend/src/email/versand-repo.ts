@@ -1,6 +1,7 @@
 // Versand-Queue Repository.
 import crypto from "node:crypto";
 import { getDatabase } from "../db/index.js";
+import { emit } from "../events/bus.js";
 
 export type EmailVersandStatus = "pending" | "sending" | "gesendet" | "fehler" | "manuell";
 export type BelegArt = "angebot" | "rechnung";
@@ -149,6 +150,11 @@ export function markErfolg(id: string, messageId: string | null): void {
     `UPDATE email_versand SET status='gesendet', versendet_am=datetime('now'),
       message_id=?, fehler_text=NULL, geaendert_am=datetime('now'), versuche = versuche + 1 WHERE id=?`,
   ).run(messageId, id);
+  const cur = getById(id);
+  emit("email:versand-changed", {
+    id, status: "gesendet",
+    belegArt: cur?.belegArt ?? null, belegId: cur?.belegId ?? null, fehlerText: null,
+  });
 }
 
 export function markFehler(id: string, error: string): void {
@@ -156,7 +162,8 @@ export function markFehler(id: string, error: string): void {
   const cur = getById(id);
   if (!cur) return;
   const versuche = cur.versuche + 1;
-  if (versuche >= BACKOFF_MIN.length + 1) {
+  const finalFail = versuche >= BACKOFF_MIN.length + 1;
+  if (finalFail) {
     db.prepare(`UPDATE email_versand SET status='manuell', fehler_text=?, versuche=?, geaendert_am=datetime('now'), naechster_versuch_at=NULL WHERE id=?`)
       .run(error.slice(0, 1000), versuche, id);
   } else {
@@ -164,6 +171,11 @@ export function markFehler(id: string, error: string): void {
     db.prepare(`UPDATE email_versand SET status='pending', fehler_text=?, versuche=?, naechster_versuch_at=?, geaendert_am=datetime('now') WHERE id=?`)
       .run(error.slice(0, 1000), versuche, plusMin(min), id);
   }
+  emit("email:versand-changed", {
+    id, status: finalFail ? "manuell" : "pending",
+    belegArt: cur.belegArt ?? null, belegId: cur.belegId ?? null,
+    fehlerText: error.slice(0, 1000),
+  });
 }
 
 export function retry(id: string): boolean {

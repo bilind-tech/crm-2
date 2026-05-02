@@ -37,6 +37,14 @@ const PI_PREFIXES = [
   // Step 4
   "/angebote/",
   "/rechnungen/",
+  // Step 6
+  "/email/",
+  "/drive/",
+  // Step 7
+  "/aktivitaeten",
+  "/benachrichtigungen",
+  "/audit",
+  "/events/",
 ];
 // Ausnahmen: /einstellungen/* die noch nicht im Pi-Backend leben → Mock
 const MOCK_OVERRIDE_PREFIXES = [

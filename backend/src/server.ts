@@ -15,8 +15,15 @@ import { backupRoutes } from "./routes/backup.js";
 import { stammdatenRoutes } from "./routes/stammdaten.js";
 import { belegeRoutes } from "./routes/belege.js";
 import { belegePdfRoutes } from "./routes/belege-pdf.js";
+import { aktivitaetRoutes } from "./routes/aktivitaet.js";
+import { benachrichtigungRoutes } from "./routes/benachrichtigung.js";
+import { auditRoutes } from "./routes/audit.js";
+import { eventsRoutes } from "./routes/events.js";
 import { startBelegeScheduler } from "./belege/scheduler.js";
 import { wirePdfCacheInvalidation } from "./pdf/wireup.js";
+import { wireAktivitaet } from "./aktivitaet/wireup.js";
+import { purgeOldAktivitaeten } from "./aktivitaet/repo.js";
+import { purgeOldWegwischte } from "./benachrichtigung/repo.js";
 import { purgeExpiredSessions, warmTouchCacheFromDb } from "./auth/sessions.js";
 import { purgeOldAuditEntries } from "./auth/audit.js";
 import { purgeOldLockouts } from "./auth/lockout.js";
@@ -118,9 +125,15 @@ async function main(): Promise<void> {
   await app.register(stammdatenRoutes);
   await app.register(belegeRoutes);
   await app.register(belegePdfRoutes);
+  await app.register(aktivitaetRoutes);
+  await app.register(benachrichtigungRoutes);
+  await app.register(auditRoutes);
+  await app.register(eventsRoutes);
 
   // PDF-Cache an Belege-Mutationen koppeln
   wirePdfCacheInvalidation();
+  // Aktivitäts/Benachrichtigungs-Übersetzung der Bus-Events
+  wireAktivitaet();
 
   // Touch-Throttle aus DB warmladen → kein Update-Sturm nach Restart
   const warmed = warmTouchCacheFromDb();
@@ -150,8 +163,10 @@ async function main(): Promise<void> {
       const sess = purgeExpiredSessions();
       const audit = purgeOldAuditEntries();
       const lock = purgeOldLockouts();
-      if (sess + audit + lock > 0) {
-        app.log.info({ sess, audit, lock }, "background sweep");
+      const akt = purgeOldAktivitaeten();
+      const ben = purgeOldWegwischte();
+      if (sess + audit + lock + akt + ben > 0) {
+        app.log.info({ sess, audit, lock, akt, ben }, "background sweep");
       }
     } catch (e) {
       app.log.warn({ err: e }, "sweep failed");
