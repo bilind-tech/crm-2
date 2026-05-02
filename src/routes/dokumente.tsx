@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { Smartphone, Receipt, Image as ImageIcon, FileText, AlertTriangle, X } from "lucide-react";
+import { Smartphone, Receipt, AlertTriangle, X } from "lucide-react";
 import { useDokumente, useKunden, useObjekte } from "@/hooks/useApi";
 import { formatEUR, formatDate } from "@/lib/format";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
