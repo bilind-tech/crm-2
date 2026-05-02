@@ -29,6 +29,7 @@ export function MobileListCard({
   trailing,
   badge,
   actions,
+  footer,
   className,
 }: MobileListCardProps) {
   return (
