@@ -1,79 +1,80 @@
-## Was ich beheben/ergänzen werde
 
-### 1. Crash auf „Backup & Wiederherstellen" beheben (React error #310)
+## Ziel
 
-**Ursache gefunden:** In `src/components/einstellungen/BackupTab.tsx` wird der Hook `useMemo` (Zeile 127) **nach** einem frühen `return` (Zeile 114, `if (isLoading || !form || !data) return …`) aufgerufen. Das verletzt die Rules of Hooks — React wirft den minifizierten Fehler #310 → daher die rote „Something went wrong"-Seite.
+Belegnummern für Kunden mit Kürzel folgen ab sofort dem Schema:
 
-**Fix:** `useMemo` für `letztes` **vor** den frühen Return verschieben (auf Basis der noch evtl. leeren Historie berechnen). Kein Verhaltensunterschied, nur korrekte Hook-Reihenfolge.
-
-### 2. Rollback mit doppelter Bestätigung + Passwort
-
-Aktuell startet `Rollback` direkt per Klick (`SystemUpdateTab.tsx`, Zeile 343 → `onRollback` → `rollback.mutate`). Das ist zu unsicher.
-
-Neuer Flow:
-
-```text
-[Rollback-Knopf]
-      ↓
-[Schritt 1: Warn-Dialog]
-  - Erklärt was passiert (Code zurück auf v1.x.y, Daten bleiben)
-  - Listet was NICHT angefasst wird (alle Kunden/Rechnungen/Angebote)
-  - „Weiter"  /  „Abbrechen"
-      ↓
-[Schritt 2: Passwort-Bestätigung]
-  - Admin-Passwort eingeben (PasswordInput)
-  - Bestätigungswort tippen: ROLLBACK
-  - Beide Felder müssen korrekt → erst dann „Rollback starten"-Button aktiv
-      ↓
-[Backend prüft Passwort serverseitig]
-  - Bei falsch: Fehlermeldung, Dialog bleibt offen
-  - Bei richtig: Sicherheitsbackup → Rollback-Lauf startet
-      ↓
-[Live-Fortschrittsdialog wie beim Update]
+```
+{KÜRZEL}{MM}{YY}/{NN}
 ```
 
-Neue Komponente: `src/components/einstellungen/RollbackConfirmDialog.tsx` — analog zu `RestoreBackupDialog`, aber zusätzlich mit Passwortfeld.
+Beispiel: Kunde mit Kürzel `GFU`, Mai 2026, erstes Dokument → **`GFU0526/01`**
 
-`useRollbackUpdate` bekommt eine erweiterte Signatur: `mutate({ version, passwort })` statt nur `mutate(version)`. Das Mock-Backend akzeptiert vorerst jedes nicht-leere Passwort und gibt bei leerem Passwort einen simulierten 401-Fehler zurück (echte Prüfung kommt mit dem Pi-Backend).
+- `MM` = 2-stelliger Monat
+- `YY` = 2-stellige Jahreszahl
+- `/NN` = laufende Nummer pro Kunde + Monat, 2-stellig, beginnt bei `01`
+- Zähler läuft je Kunde und Monat eigenständig (Mai-Zähler ≠ Juni-Zähler)
+- Gilt für Angebote, Rechnungen, Dauerauftrags-Rechnungen und Angebot→Rechnung-Konvertierung
 
-### 3. Identische Sicherheits-Logik fürs Restore
+Kunden ohne Kürzel behalten weiterhin das globale Schema aus den Nummernkreisen (Fallback).
 
-Im `RestoreBackupDialog` wird zusätzlich zum Bestätigungswort `WIEDERHERSTELLEN` auch das **Admin-Passwort** verlangt — gleiche Begründung: extrem destruktive Aktion, darf niemals versehentlich passieren. (Konsistent mit Rollback.)
+## Änderungen
 
-### 4. Daten-Schutz-Hinweise klar in der UI
+### 1. Zentrale Nummern-Erzeugung (`src/lib/mock/backend.ts`)
 
-In den Dialogen für **Restore**, **Rollback** und im **Update-Vorschau-Block** kommt ein gut sichtbarer Hinweis:
+`nextCustomerNumber()` umstellen:
+- Statt `${KUERZEL}-${YYYY}-${MM}-${NN}` → `${KUERZEL}${MM}${YY}/${NN}`
+- Periode-Key intern bleibt `YYYY-MM` (eindeutig, keine Kollision über Jahresgrenzen)
+- Fallback bei fehlendem Kürzel unverändert
+- Wird bereits an allen 5 Stellen genutzt (Angebot anlegen, Rechnung anlegen, Angebot→Rechnung, Rechnung duplizieren, Dauerauftrag-Lauf) → keine weiteren Aufrufer-Änderungen nötig
 
-> **Deine Daten bleiben unberührt.**
-> Kunden, Angebote, Rechnungen, Zahlungen, Anhänge und Einstellungen werden bei dieser Aktion **nicht** verändert, gelöscht oder überschrieben. Es wird ausschließlich der Programmcode getauscht. Vorher wird zusätzlich automatisch ein Sicherheitsbackup deiner Daten angelegt.
+### 2. Kürzel-Vorschau im KundeForm (`src/components/forms/KundeForm.tsx`)
 
-### 5. Backend-Anker (Code-Kommentare + Memory-Update)
+Vorschau-String (Zeile 108–113) auf das neue Format anpassen:
+- Neu: `${kuerzel}${MM}${YY}/01`
+- Hinweis-Text bleibt: „So beginnen alle Rechnungen & Angebote dieses Kunden."
 
-Die Hinweise im Datei-Kopf von `SystemUpdateTab.tsx` werden um den Rollback-Vertrag erweitert:
+### 3. Live-Vorschau im AngebotForm (`src/components/forms/AngebotForm.tsx`)
 
-- Rollback-Endpunkt erfordert **Admin-Passwort-Verifikation** (bcrypt-Vergleich serverseitig, nie clientseitig).
-- Rollback darf **niemals** das Daten-Verzeichnis (`/var/lib/mycleancenter/`) anfassen — weder lesen-mit-Lock noch schreibend.
-- Vor jedem Rollback wird ein `pre-rollback-{ts}.sqlite.gz` erstellt (analog zu `pre-update`/`pre-restore`).
-- Bei jedem Fehler im Rollback-Pfad: Service mit altem Code weiterlaufen lassen, niemals halb-getauscht aussteigen.
+Sobald ein Kunde gewählt ist, unter dem Titel-Feld eine kleine, dezente Vorschau anzeigen:
 
-Memory-Datei `mem://features/system-update` wird um die Rollback-Sektion ergänzt (gleiche absolute Regel: Daten unantastbar).
+```
+Belegnummer: GFU0526/01
+```
 
-## Nicht im Scope
+- Hat der Kunde ein Kürzel → Vorschau im neuen Format mit `01` als Platzhalter (echte Zähler-Abfrage wäre overkill und nicht race-frei).
+- Hat der Kunde kein Kürzel → Vorschau aus globalem `angebotPraefix` (Nummernkreise), ähnlich der Logik in `NummernkreiseTab.preview()`.
+- Klein, mono, `text-muted-foreground`, kein eigener Block — direkt unter dem Titel.
 
-- Echtes Backend (kommt später auf dem Pi).
-- Echte Passwort-Hashes (Mock akzeptiert vorerst alles ≠ leer; echte Prüfung mit dem Pi).
-- Login-Bildschirm/Auth-Flow generell — hier nur Re-Auth für die destruktive Aktion.
+### 4. Live-Vorschau im RechnungForm (`src/components/forms/RechnungForm.tsx`)
 
-## Technische Details (kurz)
+Analog zu AngebotForm: Vorschau direkt unter Titel, nutzt `rechnungPraefix` als Fallback.
 
-| Datei | Änderung |
-|---|---|
-| `src/components/einstellungen/BackupTab.tsx` | `useMemo`-Aufruf vor frühen Return verschieben → behebt React #310 |
-| `src/components/einstellungen/RollbackConfirmDialog.tsx` | **neu** — 2-Schritt-Dialog mit Passwortfeld + Bestätigungswort `ROLLBACK` |
-| `src/components/einstellungen/SystemUpdateTab.tsx` | „Rollback"-Button öffnet neuen Dialog statt direkt zu mutieren; Daten-Schutz-Hinweis im Update-Vorschau-Block ergänzen |
-| `src/components/einstellungen/RestoreBackupDialog.tsx` | Zusätzliches Passwort-Feld + Daten-Schutz-Hinweis |
-| `src/hooks/useApi.ts` | `useRollbackUpdate` und `useRestoreBackup` akzeptieren `{version/id, passwort}` |
-| `src/lib/mock/backend.ts` | Akzeptiert/leitet Passwort weiter; simulierter 401-Fehler bei leerem Passwort; erzeugt `pre-rollback`-Backup |
-| `mem://features/system-update` | Rollback-Vertrag + Passwort-Pflicht + Daten-Unantastbarkeit ergänzen |
+### 5. Helper auslagern
 
-Nach Freigabe setze ich das in einem Rutsch um.
+Neuer kleiner Helper `src/lib/format.ts` (oder `src/lib/belegNummer.ts`):
+
+```ts
+export function vorschauBelegnummer(
+  kuerzel: string | undefined,
+  fallbackPraefix: string,
+): string
+```
+
+- Wenn `kuerzel` gesetzt: `${KUERZEL}${MM}${YY}/01`
+- Sonst: `fallbackPraefix` mit `{YYYY}/{YY}/{MM}/{####}/{###}` ersetzen, `NN`-Teile mit `0001`/`001`
+- Wird in KundeForm, AngebotForm, RechnungForm wiederverwendet → eine Quelle der Wahrheit
+
+### 6. Bestehende Belege
+
+Bestehende Angebote/Rechnungen behalten ihre alte Nummer (`AN-2025-001` etc.) — nichts wird rückwirkend umnummeriert. Nur **neue** Belege ab dem Update bekommen das neue Format. Das entspricht dem Hinweis im NummernkreiseTab.
+
+## Was sich nicht ändert
+
+- Datenmodell (`Kunde.kuerzel`, `Angebot.nummer`, `Rechnung.nummer`) bleibt gleich — alles bleibt `string`.
+- Nummernkreise-Einstellungen (für Kunden ohne Kürzel) bleiben unverändert.
+- Kunden-Nummern (`K-2025-001`) bleiben am globalen `kundePraefix`.
+- Mock-Persistenz, Cross-Tab-Sync, Zähler pro Kunde + Periode (`zaehlerProKunde`) bleiben strukturell identisch.
+
+## Backend-Hinweis (für später, Pi)
+
+Sobald das Live-Backend gebaut wird, MUSS dort exakt dieselbe Funktion `nextCustomerNumber()` server-seitig in einer DB-Transaktion laufen (SELECT FOR UPDATE auf den Periode-Counter), damit zwei parallele Anfragen niemals dieselbe Nummer ziehen. Format-String wird im Memory-Eintrag zur Belegnummer dokumentiert.

@@ -237,13 +237,15 @@ function nextCustomerNumber(d: DB, kundeId: string | undefined, fallbackPraefix:
   if (!kuerzel) return nextNumber(fallbackPraefix, fallbackZaehler);
   const now = new Date();
   const yyyy = String(now.getFullYear());
+  const yy = yyyy.slice(-2);
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const periode = `${yyyy}-${mm}`;
   if (!d.zaehlerProKunde) d.zaehlerProKunde = {};
   if (!d.zaehlerProKunde[kunde!.id]) d.zaehlerProKunde[kunde!.id] = {};
   const map = d.zaehlerProKunde[kunde!.id];
   map[periode] = (map[periode] ?? 0) + 1;
-  return `${kuerzel}-${yyyy}-${mm}-${String(map[periode]).padStart(2, "0")}`;
+  // Format: {KÜRZEL}{MM}{YY}/{NN}, z. B. "GFU0526/01"
+  return `${kuerzel}${mm}${yy}/${String(map[periode]).padStart(2, "0")}`;
 }
 
 function logAktivitaet(typ: Aktivitaet["typ"], beschreibung: string, entitaet?: Aktivitaet["entitaet"]) {

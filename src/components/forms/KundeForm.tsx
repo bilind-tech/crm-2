@@ -104,12 +104,14 @@ export function KundeForm({ onClose, onCreated }: Props) {
   const [f, setF] = useState<FormState>(initial);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setF((p) => ({ ...p, [k]: v }));
 
-  // Live-Vorschau der zukünftigen Belegnummer
+  // Live-Vorschau der zukünftigen Belegnummer ({KÜRZEL}{MM}{YY}/01)
   const vorschauNummer = useMemo(() => {
-    const k = f.kuerzel.trim();
+    const k = f.kuerzel.trim().toUpperCase();
     if (!k) return "";
     const d = new Date();
-    return `${k}-${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+    const yy = String(d.getFullYear()).slice(-2);
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    return `${k}${mm}${yy}/01`;
   }, [f.kuerzel]);
 
   // Beim Verlassen des Firmennamens automatisch ein Kürzel vorschlagen,
