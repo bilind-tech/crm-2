@@ -430,10 +430,33 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     const id = match(path, "/kunden/:id")!.id;
     const k = d.kunden.find((x) => x.id === id);
     if (!k) throw new ApiError("Kunde nicht gefunden", 404);
-    Object.assign(k, body, { geaendertAm: now() });
+    const patch = body as Partial<Kunde> & { startZaehlerAktuellerMonat?: number };
+    const { startZaehlerAktuellerMonat, ...rest } = patch;
+    // Kürzel normalisieren
+    if (typeof rest.kuerzel === "string") {
+      rest.kuerzel = rest.kuerzel.trim().toUpperCase().slice(0, 4) || undefined;
+    }
+    Object.assign(k, rest, { geaendertAm: now() });
+    if (k.kuerzel && typeof startZaehlerAktuellerMonat === "number" && startZaehlerAktuellerMonat >= 1) {
+      const nowD = new Date();
+      const periode = `${nowD.getFullYear()}-${String(nowD.getMonth() + 1).padStart(2, "0")}`;
+      if (!d.zaehlerProKunde) d.zaehlerProKunde = {};
+      if (!d.zaehlerProKunde[k.id]) d.zaehlerProKunde[k.id] = {};
+      d.zaehlerProKunde[k.id][periode] = Math.max(0, startZaehlerAktuellerMonat - 1);
+    }
     logAktivitaet("kunde_geaendert", `Kunde ${k.firmenname || k.nachname} geändert`, { typ: "kunde", id: k.id });
     persist();
     result = k;
+  } else if (matchRoute(m, path, "GET", "/kunden/:id/zaehler")) {
+    const id = match(path, "/kunden/:id/zaehler")!.id;
+    const k = d.kunden.find((x) => x.id === id);
+    if (!k) throw new ApiError("Kunde nicht gefunden", 404);
+    const nowD = new Date();
+    const yyyy = String(nowD.getFullYear());
+    const mm = String(nowD.getMonth() + 1).padStart(2, "0");
+    const periode = `${yyyy}-${mm}`;
+    const aktuell = d.zaehlerProKunde?.[id]?.[periode] ?? 0;
+    result = { periode, naechsterStart: aktuell + 1 };
   } else if (matchRoute(m, path, "DELETE", "/kunden/:id")) {
     const id = match(path, "/kunden/:id")!.id;
     const verknuepft =
