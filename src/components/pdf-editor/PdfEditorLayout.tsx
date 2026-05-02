@@ -5,11 +5,7 @@ import { useState } from "react";
 import { ArrowLeft, Download, Eye, Pencil, RotateCcw, Save, Loader2 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
+import { Group as ResizablePanelGroup, Panel as ResizablePanel, PanelResizeHandle } from "react-resizable-panels";
 import { LivePdfPreview } from "./LivePdfPreview";
 import { EditorPanel, type EditorTab } from "./EditorPanel";
 import { useBelegEditor } from "@/hooks/useBelegEditor";
@@ -159,11 +155,11 @@ export function PdfEditorLayout(props: Props) {
       <div className="flex-1 overflow-hidden">
         {/* Desktop: Resizable Split */}
         <div className="hidden h-full lg:block">
-          <ResizablePanelGroup direction="horizontal">
+          <ResizablePanelGroup direction="horizontal" className="flex h-full w-full">
             <ResizablePanel defaultSize={55} minSize={30}>
               {preview}
             </ResizablePanel>
-            <ResizableHandle withHandle />
+            <PanelResizeHandle className="relative w-px bg-border transition hover:bg-primary/40 data-[resize-handle-state=drag]:bg-primary" />
             <ResizablePanel defaultSize={45} minSize={30}>
               <div className="h-full bg-background">{editorEl}</div>
             </ResizablePanel>
