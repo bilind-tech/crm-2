@@ -228,13 +228,13 @@ async function runInstall(laufId: string, opts: InstallOptions): Promise<void> {
       }
     });
 
-    // 6. NEUSTART — systemctl reload
+    // 6. NEUSTART — sudo systemctl reload (sudoers erlaubt nur reload/restart/status)
     await stepRun(laufId, "neustart", async () => {
       if (opts.testMode || config.nodeEnv !== "production") return "dev-mode: kein systemctl";
       try {
-        await execFileP("systemctl", ["reload", "mycleancenter"], { timeout: 30_000 });
-        return "systemctl reload mycleancenter";
-      } catch (e) {
+        await execFileP("sudo", ["-n", "/bin/systemctl", "reload", "mycleancenter"], { timeout: 30_000 });
+        return "sudo systemctl reload mycleancenter";
+      } catch {
         // Reload-Fail ist nicht zwingend Update-Fail — Service läuft mit altem Process,
         // aber Code ist gewechselt. User muss restart triggern.
         return "reload nicht möglich — manueller Restart nötig";
@@ -400,9 +400,9 @@ export async function manualRollback(
         await stepRun(laufId, "neustart", async () => {
           if (config.nodeEnv !== "production") return "dev-mode: kein systemctl";
           try {
-            await execFileP("systemctl", ["restart", "mycleancenter"], { timeout: 30_000 });
-            return "systemctl restart mycleancenter";
-          } catch { return "reload nicht möglich — manueller Restart nötig"; }
+            await execFileP("sudo", ["-n", "/bin/systemctl", "restart", "mycleancenter"], { timeout: 30_000 });
+            return "sudo systemctl restart mycleancenter";
+          } catch { return "restart nicht möglich — manueller Eingriff nötig"; }
         });
 
         await stepRun(laufId, "smoketest", async () => {
