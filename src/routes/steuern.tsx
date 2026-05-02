@@ -198,8 +198,12 @@ function Page() {
         <KpiCard
           label="Empfohlene Rücklage"
           value={formatEUR(kennzahlen.empfohleneRuecklage)}
-          sublabel={`${einstellungen.ruecklageSatz}% vom YTD-Gewinn (${formatEUR(kennzahlen.gewinnYtd)})`}
-          tone="primary"
+          sublabel={
+            kennzahlen.gewinnYtd < 0
+              ? `Verlust YTD ${formatEUR(kennzahlen.gewinnYtd)} — keine Rücklage nötig`
+              : `${einstellungen.ruecklageSatz}% vom YTD-Gewinn (${formatEUR(kennzahlen.gewinnYtd)})`
+          }
+          tone={kennzahlen.gewinnYtd < 0 ? "default" : "primary"}
           icon={Building2}
         />
       </div>
