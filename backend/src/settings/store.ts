@@ -1,10 +1,11 @@
 // Generischer Settings-Store. Werte sind IMMER als JSON gespeichert.
 // Sensible Werte werden vor dem Speichern AES-GCM-verschlüsselt.
+//
+// Bewusst OHNE In-Memory-Cache: SQLite-Read mit WAL+PK ist < 0.1ms.
+// Cache hätte bei Multi-Worker (kommt später potentiell) Konsistenz-Probleme.
 
 import { getDatabase } from "../db/index.js";
 import { encryptString, decryptString } from "../crypto/aes.js";
-
-const cache = new Map<string, { value: unknown; encrypted: boolean; updatedAt: string }>();
 
 interface Row {
   key: string;
@@ -29,14 +30,9 @@ function decode(row: Row): unknown {
 }
 
 export function getSetting<T = unknown>(key: string): T | undefined {
-  if (cache.has(key)) {
-    return cache.get(key)!.value as T;
-  }
   const row = readRow(key);
   if (!row) return undefined;
-  const value = decode(row);
-  cache.set(key, { value, encrypted: !!row.encrypted, updatedAt: row.updated_at });
-  return value as T;
+  return decode(row) as T;
 }
 
 export function getSettingMeta(
@@ -61,12 +57,10 @@ export function setSetting(key: string, value: unknown, opts?: { encrypt?: boole
          updated_at = datetime('now')`,
     )
     .run(key, stored, encrypt ? 1 : 0);
-  cache.delete(key);
 }
 
 export function deleteSetting(key: string): void {
   getDatabase().prepare(`DELETE FROM setting WHERE key = ?`).run(key);
-  cache.delete(key);
 }
 
 export function listSettings(prefix: string): Array<{ key: string; value: unknown; encrypted: boolean; updatedAt: string }> {
@@ -79,8 +73,4 @@ export function listSettings(prefix: string): Array<{ key: string; value: unknow
     encrypted: !!r.encrypted,
     updatedAt: r.updated_at,
   }));
-}
-
-export function clearSettingsCache(): void {
-  cache.clear();
 }
