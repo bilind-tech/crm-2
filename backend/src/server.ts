@@ -210,8 +210,10 @@ async function main(): Promise<void> {
   startBelegeScheduler();
   // Dokumente-Frist-Cron (täglich nach 07:00 Pi-Zeit)
   startFristenScheduler();
-  // Mahn-Automatik (Cron gemäß Settings)
-  startMahnScheduler();
+  // Mahn-Automatik (Cron) STILLGELEGT — niemals automatischer Mail-Versand.
+  // Mahnungen werden nur manuell durch den User im Mahnwesen-Tab ausgelöst.
+  // startMahnScheduler();
+  void startMahnScheduler; // typecheck-Anker
 
   await app.listen({ port: config.port, host: config.host });
   app.log.info(

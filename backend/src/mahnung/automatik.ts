@@ -157,7 +157,17 @@ export function runMahnAutomatik(opts: AutomatikOptions = {}): AutomatikResult {
   const modus = opts.modusOverride ?? cfg.modus;
   const quelle: MahnLaufQuelle = opts.quelle ?? "manuell";
   const heute = opts.heute ?? new Date().toISOString().slice(0, 10);
-  const laufId = createLauf(quelle, modus);
+
+  // HARTER GUARD: niemals automatischer Mail-Versand.
+  // Selbst wenn jemand den Cron-Scheduler reaktiviert, läuft der Job nicht.
+  if (quelle === "cron") {
+    return { laufId: "", modus, geprueft: 0, vorschlaege: 0, versendet: 0, uebersprungen: 0, fehler: 0 };
+  }
+  // Auto-Modus ist generell deaktiviert — wird auf "vorschlag" zurückgestuft,
+  // damit niemals automatisch Mails enqueued werden.
+  const sicherererModus: MahnLaufModus = modus === "auto" ? "vorschlag" : modus;
+
+  const laufId = createLauf(quelle, sicherererModus);
 
   let geprueft = 0;
   let vorschlaege = 0;
