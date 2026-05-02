@@ -7,6 +7,7 @@ import { hashPassword, verifyPassword, getDummyHash } from "../auth/password.js"
 import { createSession, deleteSession, resolveSession } from "../auth/sessions.js";
 import { getStatus, recordFailure, recordSuccess } from "../auth/lockout.js";
 import { audit } from "../auth/audit.js";
+import { emit } from "../events/bus.js";
 import {
   checkAndConsumeSetupToken,
   ensureSetupToken,
