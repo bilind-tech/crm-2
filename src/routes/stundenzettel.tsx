@@ -58,17 +58,10 @@ function analysiereUmfeld(url: string): Hindernis {
 }
 
 function Page() {
-  const [url, setUrl] = useState("");
+  const { url } = useStundenzettelUrl();
   const [reloadKey, setReloadKey] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [headerBlocked, setHeaderBlocked] = useState(false);
-
-  useEffect(() => {
-    const sync = () => setUrl(getStundenzettelUrl());
-    sync();
-    window.addEventListener("stundenzettel-url-changed", sync);
-    return () => window.removeEventListener("stundenzettel-url-changed", sync);
-  }, []);
 
   const hindernis = useMemo(() => analysiereUmfeld(url), [url]);
 
