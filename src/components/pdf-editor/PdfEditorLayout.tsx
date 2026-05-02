@@ -76,7 +76,7 @@ export function PdfEditorLayout(props: Props) {
   );
 
   return (
-    <div className="flex h-[calc(100dvh-4rem)] flex-col">
+    <div className="-m-4 flex h-[calc(100dvh-3.5rem)] min-h-[600px] flex-col sm:-m-6 sm:h-[calc(100dvh-4rem)]">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-2 border-b border-border bg-background px-3 py-2 sm:px-5 sm:py-3">
         <Button variant="ghost" size="sm" asChild className="rounded-full">
