@@ -629,8 +629,11 @@ export const useUpdateBackup = () => {
 export const useCreateBackup = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api.post<BackupEintrag>("/backup/erstellen"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.einstellungen.backupHistorie }),
+    mutationFn: () => api.post<{ ok: boolean }>("/backup/erstellen"),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.einstellungen.backupHistorie });
+      qc.invalidateQueries({ queryKey: ["backup", "in-arbeit"] });
+    },
   });
 };
 
@@ -638,31 +641,62 @@ export const useRestoreBackup = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ backupId, passwort }: { backupId: string; passwort: string }) =>
-      api.post<{ erfolg: boolean; restoredFrom: string; restoredAt: string }>(
-        `/backup/${backupId}/restore`,
-        { passwort },
-      ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.einstellungen.backupHistorie }),
+      api.post<{ ok: boolean }>(`/backup/${backupId}/restore`, { passwort }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.einstellungen.backupHistorie });
+      qc.invalidateQueries({ queryKey: ["backup", "restore-status"] });
+    },
   });
 };
 
+// FormData-Upload geht direkt über piApi (multipart),
+// damit das Backend die Datei streamen kann.
+import { piApi, PiApiError } from "@/lib/api/piClient";
+
 export const useUploadBackup = () =>
   useMutation({
-    mutationFn: (file: File) =>
-      api.post<{ uploadId: string; fileName: string; sizeBytes: number; vermutetesDatum?: string; valide: boolean }>(
-        "/backup/upload",
-        { fileName: file.name, sizeBytes: file.size },
-      ),
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append("file", file, file.name);
+      try {
+        const res = await piApi.post<{
+          uploadId: string;
+          fileName: string;
+          sizeBytes: number;
+          version?: string;
+          schemaVersion?: number;
+          vermutetesDatum?: string;
+        }>("/backup/upload", fd);
+        return { ...res, valide: true };
+      } catch (e) {
+        if (e instanceof PiApiError && (e.status === 415 || e.status === 400)) {
+          return { uploadId: "", fileName: file.name, sizeBytes: file.size, valide: false };
+        }
+        throw e;
+      }
+    },
   });
 
 export const useRestoreUploadedBackup = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ uploadId, passwort }: { uploadId: string; passwort: string }) =>
-      api.post<{ erfolg: boolean }>(`/backup/upload/${uploadId}/restore`, { passwort }),
+      api.post<{ ok: boolean }>(`/backup/upload/${uploadId}/restore`, { passwort }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.einstellungen.backupHistorie });
+      qc.invalidateQueries({ queryKey: ["backup", "restore-status"] });
+    },
+  });
+};
+
+export const useDeleteBackup = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<{ ok: boolean }>(`/backup/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.einstellungen.backupHistorie }),
   });
 };
+
 export const usePositionsvorlagen = () =>
   useQuery({ queryKey: qk.einstellungen.positionsvorlagen, queryFn: () => api.get<Positionsvorlage[]>("/einstellungen/positionsvorlagen") });
 export const useCreatePositionsvorlage = () => {
