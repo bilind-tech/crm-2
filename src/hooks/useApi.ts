@@ -608,6 +608,7 @@ export const useRestoreUploadedBackup = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.einstellungen.backupHistorie }),
   });
 };
+export const usePositionsvorlagen = () =>
   useQuery({ queryKey: qk.einstellungen.positionsvorlagen, queryFn: () => api.get<Positionsvorlage[]>("/einstellungen/positionsvorlagen") });
 export const useCreatePositionsvorlage = () => {
   const qc = useQueryClient();
