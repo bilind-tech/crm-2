@@ -88,26 +88,7 @@ export function berechneNaechsteSchritte(
     });
   }
 
-  // 3. Rechnung überfällig → Mahnung
-  for (const r of rechnungen) {
-    if (r.status === "bezahlt" || r.status === "storniert" || r.status === "entwurf") continue;
-    if (!(r.faelligkeitsdatum < heute)) continue;
-    const k = kundeMap.get(r.kundeId);
-    const tage = tageSeit(r.faelligkeitsdatum);
-    out.push({
-      id: `mahnung-${r.id}`,
-      typ: "mahnung_senden",
-      prioritaet: 95 + Math.min(tage, 30), // je länger fällig, desto wichtiger
-      kundeId: r.kundeId,
-      kundeName: kundeName(k),
-      belegNummer: r.nummer,
-      belegId: r.id,
-      ueberschrift: `Mahnung an ${kundeName(k)}`,
-      detail: `${r.nummer} ist seit ${tage} ${tage === 1 ? "Tag" : "Tagen"} überfällig.`,
-      ctaLabel: "Mahnung öffnen",
-      tage,
-    });
-  }
+  // Mahn-Vorschläge: Backend-only — siehe NaechsteSchritteCard.
 
   // 4. Angebot versendet seit > 7 Tagen ohne Antwort → nachfassen
   for (const a of angebote) {
