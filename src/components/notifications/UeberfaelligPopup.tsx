@@ -98,7 +98,6 @@ export function UeberfaelligPopup() {
           )}
           <Link
             to="/rechnungen"
-            search={{ filter: "ueberfaellig" } as never}
             onClick={() => setGeschlossen(true)}
             className="text-xs font-semibold text-primary hover:underline"
           >
