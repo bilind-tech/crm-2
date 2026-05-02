@@ -147,10 +147,6 @@ export interface BelegOptionen {
   wiederkehrend: boolean;
   /** Detail-Konfiguration für „Wiederkehrend": Rhythmus + Wochentage. Optional. */
   wiederkehrendDetails?: WiederkehrendDetails;
-  /** Vom Backend gesetzt: ID des automatisch erzeugten Dauerauftrags (Verknüpfung). */
-  dauerauftragId?: ID;
-  /** Nur in der Server-Antwort (nicht persistiert): Nummer eines neu angelegten Dauerauftrags, für Toast-Feedback. */
-  dauerauftragNeu?: { id: ID; nummer: string };
   /** Per-Beleg Logo-Override (Data-URL). Wenn gesetzt, statt Standard-Logo verwenden. */
   logoOverride?: string;
   /** Per-Beleg Firmendaten-Override. Felder, die hier gesetzt sind, überschreiben die globalen Firmendaten im PDF. */
