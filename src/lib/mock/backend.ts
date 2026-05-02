@@ -367,7 +367,7 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     }
     result = liste;
   } else if (m === "POST" && match(path, "/kunden")) {
-    const k = body as Partial<Kunde>;
+    const k = body as Partial<Kunde> & { startZaehlerAktuellerMonat?: number };
     d.zaehler.kunde += 1;
     const neu: Kunde = {
       id: uuid(),
@@ -399,6 +399,14 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
       geaendertAm: now(),
     };
     d.kunden.push(neu);
+    // Optionaler Start-Zähler für aktuellen Monat (wenn Kürzel vorhanden)
+    if (neu.kuerzel && typeof k.startZaehlerAktuellerMonat === "number" && k.startZaehlerAktuellerMonat > 1) {
+      const nowD = new Date();
+      const periode = `${nowD.getFullYear()}-${String(nowD.getMonth() + 1).padStart(2, "0")}`;
+      if (!d.zaehlerProKunde) d.zaehlerProKunde = {};
+      if (!d.zaehlerProKunde[neu.id]) d.zaehlerProKunde[neu.id] = {};
+      d.zaehlerProKunde[neu.id][periode] = Math.max(0, k.startZaehlerAktuellerMonat - 1);
+    }
     logAktivitaet("kunde_angelegt", `Kunde ${neu.firmenname || `${neu.vorname} ${neu.nachname}`} angelegt`, {
       typ: "kunde",
       id: neu.id,
