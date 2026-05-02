@@ -205,6 +205,7 @@ function Page() {
                 </div>
               }
               badge={statusBadge(r.status)}
+              footer={<FlowBar steps={rechnungFlow(r).steps} size="sm" />}
               actions={
                 <>
                   <PdfViewButton kind="rechnung" beleg={r} />
