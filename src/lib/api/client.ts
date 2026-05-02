@@ -26,12 +26,40 @@ export class ApiError extends Error {
   }
 }
 
-// Pfade, die immer übers Mock laufen (Demo-Lock/Unlock).
-const MOCK_ONLY = new Set(["/auth/unlock", "/auth/lock"]);
+// Step 1: nur diese Auth-/Einstellungs-Pfade laufen schon ans Pi-Backend.
+// Alle anderen /einstellungen/*-Pfade (Vorlagen, Backup-Historie, …)
+// bleiben im Mock, bis ihr jeweiliger Step das Backend liefert.
+const PI_AUTH_PATHS = new Set([
+  "/auth/me",
+  "/auth/setup",
+  "/auth/login",
+  "/auth/logout",
+  "/auth/passwort-aendern",
+]);
+const PI_SETTINGS_PATHS = new Set([
+  "/einstellungen/firma",
+  "/einstellungen/smtp",
+  "/einstellungen/smtp/test",
+  "/einstellungen/smtp/passwort",
+  "/einstellungen/nummernkreise",
+  "/einstellungen/sicherheit",
+  "/einstellungen/erscheinung",
+  "/einstellungen/backup",
+  "/einstellungen/google-drive",
+  "/einstellungen/google-drive/disconnect",
+  "/einstellungen/mahnung",
+  "/einstellungen/dauerauftrag",
+  "/einstellungen/steuer",
+  "/einstellungen/stundenzettel",
+  "/einstellungen/sitzungen",
+  "/einstellungen/sitzungen/alle-beenden",
+]);
 
 function isPiPath(p: string): boolean {
-  if (MOCK_ONLY.has(p)) return false;
-  return p.startsWith("/auth/") || p.startsWith("/einstellungen");
+  if (PI_AUTH_PATHS.has(p) || PI_SETTINGS_PATHS.has(p)) return true;
+  // Sub-Pfade z.B. /einstellungen/sitzungen/<token>
+  if (p.startsWith("/einstellungen/sitzungen/")) return true;
+  return false;
 }
 
 async function viaPi<T>(method: string, path: string, body?: unknown): Promise<T> {
