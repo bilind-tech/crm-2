@@ -35,9 +35,22 @@ export async function requireAuth(req: FastifyRequest, reply: FastifyReply): Pro
     reply.status(401).send({ error: "unauthenticated" });
     return;
   }
-  req.user = { id: sess.userId, username: sess.username };
-  // Cookie erneuern wenn Sliding-Update lief, damit Browser-MaxAge serverseitig folgt
+  const { findeBenutzer } = await import("./users-repo.js");
+  const u = findeBenutzer(sess.userId);
+  if (!u || u.aktiv !== 1) {
+    reply.status(401).send({ error: "unauthenticated" });
+    return;
+  }
+  req.user = { id: sess.userId, username: sess.username, rolle: u.rolle };
   if (sess.refreshed) {
     setSessionCookie(reply, sess.token);
+  }
+}
+
+export async function requireOwner(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await requireAuth(req, reply);
+  if (reply.sent) return;
+  if (req.user?.rolle !== "owner") {
+    reply.status(403).send({ error: "forbidden", message: "Nur Owner darf diese Aktion ausführen." });
   }
 }
