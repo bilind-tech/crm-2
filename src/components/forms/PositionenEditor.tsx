@@ -223,14 +223,8 @@ function PositionCard({ index, position: p, onChange, onRemove }: CardProps) {
               />
             </div>
             <div>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">MwSt %</label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                value={p.steuersatz}
-                onChange={(e) => onChange({ steuersatz: Number(e.target.value) || 0 })}
-                className="h-11"
-              />
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">MwSt</label>
+              <MwStStepper value={p.steuersatz} onChange={(v) => onChange({ steuersatz: v })} />
             </div>
           </div>
 
