@@ -1883,7 +1883,7 @@ function erzeugeLaufIntern(
         titel: "Neuer Rechnungs-Entwurf",
         text: `${da.nummer}: Rechnung ${rechnung.nummer} (${periode}) wartet im Posteingang.`,
         gelesen: false,
-        link: { route: "/dauerauftraege/posteingang", params: {} },
+        link: { route: "/rechnungen", params: {} },
       });
     }
 
