@@ -20,7 +20,21 @@ readonly SUDOERS_FILE="$SCRIPT_DIR/sudoers.d/mycleancenter"
 readonly LOGROTATE_FILE="$SCRIPT_DIR/logrotate.conf"
 
 CHECK_ONLY=0
-[[ "${1:-}" == "--check" ]] && CHECK_ONLY=1
+BOOTSTRAP_ZIP=""
+for arg in "$@"; do
+  case "$arg" in
+    --check) CHECK_ONLY=1 ;;
+    --bootstrap=*) BOOTSTRAP_ZIP="${arg#--bootstrap=}" ;;
+    -h|--help)
+      cat <<EOF
+Usage: sudo $0 [--check] [--bootstrap=<release.zip>]
+  --check                  prüft Setup, ohne etwas zu ändern
+  --bootstrap=<release.zip> entpackt das Release-ZIP nach releases/initial/
+                            und setzt den 'current'-Symlink
+EOF
+      exit 0 ;;
+  esac
+done
 
 log() { printf "\033[1;36m[install]\033[0m %s\n" "$*"; }
 ok()  { printf "\033[1;32m  ✓\033[0m %s\n" "$*"; }
