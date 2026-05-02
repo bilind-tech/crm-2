@@ -20,6 +20,9 @@ export interface SteuerEinstellungen {
   ustRhythmus: UstRhythmus;
   /** Empfohlene Liquiditätsrücklage in % vom Gewinn (Default 35) */
   ruecklageSatz: number;
+  /** Pauschaler Vorsteuer-/Kosten-Puffer in % auf die berechnete USt-Zahllast.
+   *  Standard 10 %. Berücksichtigt Belege, die noch nicht erfasst sind. */
+  ustPufferSatz: number;
 }
 
 export const STEUER_DEFAULTS: SteuerEinstellungen = {
@@ -29,6 +32,7 @@ export const STEUER_DEFAULTS: SteuerEinstellungen = {
   gewstHebesatz: 525,
   ustRhythmus: "monatlich",
   ruecklageSatz: 35,
+  ustPufferSatz: 10,
 };
 
 /** Ein konkreter Steuerposten — geplant, fällig oder bezahlt. */

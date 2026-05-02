@@ -206,19 +206,23 @@ function Page() {
         <div className="mt-6 space-y-2.5 border-t border-border pt-5">
           <RuecklageZeile
             label="Umsatzsteuer-Schuld"
-            sub="exakt — alle offenen Voranmeldungen"
+            sub={
+              einstellungen.ustPufferSatz > 0
+                ? `inkl. ${einstellungen.ustPufferSatz} % Vorsteuer-Puffer für noch nicht erfasste Belege`
+                : "ohne Puffer — alle Vorsteuer-Belege müssen erfasst sein"
+            }
             betrag={ruecklage.ust}
-            ton="exakt"
+            ton="schaetzung"
           />
           <RuecklageZeile
             label="Körperschaftsteuer + Soli"
-            sub={`Hochrechnung Jahr ${jahr} · ${einstellungen.kstSatz}% + ${einstellungen.soliSatz}% Soli`}
+            sub={`${einstellungen.kstSatz} % + ${einstellungen.soliSatz} % auf bisher realisierten Gewinn ${jahr}`}
             betrag={ruecklage.kst + ruecklage.soli}
             ton="schaetzung"
           />
           <RuecklageZeile
             label="Gewerbesteuer"
-            sub={`Hochrechnung Jahr ${jahr} · Hebesatz Sankt Augustin ${einstellungen.gewstHebesatz}%`}
+            sub={`Hebesatz ${einstellungen.gewstHebesatz} % auf bisher realisierten Gewinn ${jahr}`}
             betrag={ruecklage.gewst}
             ton="schaetzung"
           />
@@ -249,7 +253,7 @@ function Page() {
       {offeneErtrag.length > 0 && (
         <div>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Ertragsteuer-Vorauszahlungen · Schätzung aus YTD-Gewinn
+            Ertragsteuer-Rücklage · auf bisher realisierten Gewinn
           </h2>
           <div className="space-y-2">
             {offeneErtrag.map((p) => (
@@ -285,8 +289,10 @@ function Page() {
           <div>
             <p className="font-medium text-foreground">Schätzung — keine Steuerberatung</p>
             <p className="mt-1">
-              USt-Beträge sind exakt aus bezahlten Rechnungen und steuerrelevanten Belegen berechnet.
-              Ertragsteuern (KSt/Soli/GewSt) sind YTD-Hochrechnungen und werden mit jedem neuen Beleg präziser.
+              USt wird aus bezahlten Rechnungen minus erfasster Vorsteuer berechnet, abzüglich eines
+              Puffers für noch nicht erfasste Belege (anpassbar).
+              Ertragsteuern (KSt/Soli/GewSt) sind eine Rücklage auf den bisher tatsächlich
+              realisierten Gewinn — nicht auf den Umsatz.
               Mit Steuerberater abstimmen vor Vorauszahlung oder Jahreserklärung.{" "}
               <Link to="/einstellungen" className="font-medium text-primary hover:underline">
                 Steuersätze in Einstellungen anpassen
