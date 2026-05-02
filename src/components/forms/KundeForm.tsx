@@ -249,6 +249,25 @@ export function KundeForm({ onClose, onCreated }: Props) {
             </div>
           </Field>
 
+          {f.kuerzel.length >= 3 && (
+            <Field label="Nächste Nummer (diesen Monat) startet bei">
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={9999}
+                value={f.startNummer}
+                onChange={(e) => set("startNummer", Math.max(1, Number(e.target.value) || 1))}
+                className="font-mono w-32"
+              />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Standard: 1. Wenn du diesen Kunden vorher schon verwendet hast und z. B. 7
+                Belege außerhalb existieren, setze hier <span className="font-mono">8</span>.
+                Bestehende Belege bleiben unverändert.
+              </p>
+            </Field>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Anrede">
               <Select
