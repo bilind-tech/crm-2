@@ -138,6 +138,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       const sess = createSession(user.id, req.headers["user-agent"], req.ip);
       setSessionCookie(reply, sess.token);
       audit({ userId: user.id, action: "auth.login", ip: req.ip });
+      emit("auth:login", { userId: user.id, username: user.username, ip: req.ip });
       return {
         user: { id: user.id, username: user.username },
         expiresAt: sess.expiresAt,
@@ -149,7 +150,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     const token = getCookieToken(req);
     if (token) {
       const sess = resolveSession(token);
-      if (sess) audit({ userId: sess.userId, action: "auth.logout", ip: req.ip });
+      if (sess) {
+        audit({ userId: sess.userId, action: "auth.logout", ip: req.ip });
+        emit("auth:logout", { userId: sess.userId });
+      }
       deleteSession(token);
     }
     clearSessionCookie(reply);
