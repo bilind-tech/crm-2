@@ -1,126 +1,165 @@
-## Step 6 — Mail (Strato) + Google Drive
+## Step 7 — Aktivitäten + Benachrichtigungen + Audit + SSE (Live-Updates)
 
-Ziel: Rechnungs-/Angebots-PDFs per E-Mail verschicken (manuell + Daueraufträge) **und** automatisch nach Google Drive hochladen. Beides läuft als Queue mit Retry, idempotent, geräteübergreifend, Tokens verschlüsselt.
+Ziel: Eine **einheitliche Ereignis-Pipeline** auf dem Pi. Jede relevante Mutation (Beleg-Status, Zahlung, Mahnung, Mail-Versand, Drive-Upload, Backup, Auth, Settings, Update) erzeugt:
+1. einen **Aktivitäts-Eintrag** (für User sichtbar, Verlauf + „Nächste Schritte"-Karte),
+2. optional eine **Benachrichtigung** (Bell-Icon, ungelesen-Zähler, Toast),
+3. einen **Audit-Eintrag** (forensisch, nicht löschbar in der UI),
+4. ein **SSE-Event** an alle verbundenen Clients (Desktop + Handy zeitgleich).
 
----
-
-### 1. E-Mail-Versand (SMTP, Strato)
-
-**Datenmodell** (Migration `009_email.sql`):
-- `email_vorlagen`: id, name, betreff, body_html, kontext (`rechnung`/`angebot`/`mahnung`/`allgemein`), ist_standard, created_at, updated_at
-- `email_signaturen`: id, name, html, ist_standard, created_at, updated_at
-- `email_versand`: id, an, cc, bcc, betreff, body_html, anhaenge_json, status (`pending`/`sending`/`gesendet`/`fehler`), beleg_id?, beleg_art?, vorlage_id?, idempotenz_key UNIQUE, fehler_text?, versendet_am?, naechster_versuch_at?, versuche, created_at
-- Indexe: `idempotenz_key`, `(status, naechster_versuch_at)`, `beleg_id`
-
-**Backend-Module** (`backend/src/email/`):
-- `transport.ts` — nodemailer-Singleton, baut Transport aus `setting.smtp` + `SENSITIVE_KEYS.smtpPassword` (entschlüsselt). Lazy + Reload bei Settings-Änderung.
-- `templates.ts` — CRUD, Default-Vorlagen seeden (Rechnung, Angebot, Mahnung 1/2/3), Platzhalter-Engine (`{{kunde.name}}`, `{{beleg.nummer}}`, `{{firma.name}}`, …). Render via simpler Token-Replace, HTML-escape pro Wert, Whitelist statt eval.
-- `signaturen.ts` — CRUD, ist_standard-Switch.
-- `versand-repo.ts` — enqueue, list, byId, markRunning, markErfolg, markFehler (Backoff: 1m/5m/15m/1h/4h/24h, danach manuell).
-- `attachments.ts` — holt Beleg-PDF via `renderAngebotPdf`/`renderRechnungPdf` aus Step 5 als Buffer, baut `nodemailer.Attachment`.
-- `worker.ts` — `node-cron` alle 30 s: nimmt fällige Rows (`status=pending` AND `naechster_versuch_at<=now`), `LIMIT 5`, `FOR UPDATE`-Ersatz via SQLite `BEGIN IMMEDIATE` + Statusflip auf `sending`. Sendet, schreibt zurück. Doppel-Worker-Schutz via Prozess-Lock.
-- `events.ts` — emittiert `email-versand-changed` für SSE (Step 8 später).
-
-**Routes** (`backend/src/routes/email.ts`, requireAuth):
-- `GET/POST/PATCH/DELETE /email/vorlagen[/:id]`
-- `GET/POST/PATCH/DELETE /email/signaturen[/:id]`
-- `GET /email/versand` (Filter: status, beleg_id, q, paginiert)
-- `GET /email/versand/:id`
-- `POST /email/versand` — body: `{ an, cc?, bcc?, betreff, bodyHtml, vorlageId?, signaturId?, belegArt?, belegId?, idempotenzKey }`. Bei `belegArt+belegId`: PDF wird beim Senden frisch geholt (immer aktuell).
-- `POST /email/versand/:id/retry` — setzt `naechster_versuch_at=now`, Versuche bleiben.
-- `POST /email/versand/:id/abbrechen`
-- `POST /email/test` — Body `{ an }`, sendet Test-Mail synchron mit aktuellen SMTP-Settings, gibt Fehler 1:1 zurück.
-- `PUT /einstellungen/smtp` (existiert) erweitert um Password-Setter (verschlüsselt) + Reset-Hook für Transport-Singleton.
-
-**Sicherheit / Härtung**:
-- SMTP-Passwort nie im GET zurückgeben (`isSet` reicht).
-- Anti-Loop: gleicher `idempotenzKey` → 409.
-- Rate-Limit auf `/email/test` (5/min).
-- Body-HTML nur sanitized rendern (kein eval, keine externen Skripte).
+Damit verschwindet das Polling aus `useApi.ts` und die UI fühlt sich live an.
 
 ---
 
-### 2. Google Drive — OAuth + Upload-Queue
+### 1. Datenmodell (Migration `010_aktivitaet_benachrichtigung.sql`)
 
-**Migration ergänzt 009**: `drive_upload_queue`: id, beleg_art, beleg_id, datei_name, idempotenz_key UNIQUE (`{belegnummer}-{sha256pdf}`), status, drive_file_id?, drive_web_link?, fehler_text?, versuche, naechster_versuch_at?, abgeschlossen_am?, created_at.
+- `aktivitaet`
+  - `id` TEXT PK
+  - `art` TEXT (`beleg.status_geaendert`, `zahlung.erfasst`, `mahnung.erstellt`, `email.gesendet`, `email.fehler`, `drive.upload_erfolg`, `drive.upload_fehler`, `backup.erfolg`, `backup.fehler`, `update.installiert`, `update.rollback`, `kunde.angelegt`, `einstellung.geaendert`, `auth.login`, `auth.logout`)
+  - `bezug_art` TEXT? (`rechnung`/`angebot`/`kunde`/`backup`/`update`/`system`)
+  - `bezug_id` TEXT?
+  - `titel` TEXT
+  - `beschreibung` TEXT
+  - `kontext_json` TEXT? (z. B. alter/neuer Status, Beträge)
+  - `user_id` TEXT?
+  - `zeitpunkt` DATETIME DEFAULT CURRENT_TIMESTAMP
+  - Indexe: `(zeitpunkt DESC)`, `(bezug_art, bezug_id)`, `(art)`
+  - Retention: 365 Tage Hard-Delete via Scheduler.
 
-**Backend-Module** (`backend/src/drive/`):
-- `oauth.ts` — `googleapis`-Client. `buildAuthUrl()` mit `scope=drive.file`, `access_type=offline`, `prompt=consent`. `exchangeCode(code)` → speichert Refresh-Token verschlüsselt unter `googleDrive.refreshToken`, Klartext-Email als `googleDrive.kontoEmail` in DB.
-- `client.ts` — liefert authentisierten `drive_v3.Drive`-Client; refresht Access-Token automatisch. Bei `invalid_grant` → Status `disconnected` + Notiz im Log.
-- `folders.ts` — `ensureRootFolder()`, `ensureMonthFolder(art, jahr, monat)`. Cached Folder-IDs im Setting `googleDrive.folderCache` (JSON: { rootId, "Rechnungen/2026/05": id, … }).
-- `upload-repo.ts` — enqueue, fällige holen, status-flips, Backoff identisch zu Mail.
-- `upload-worker.ts` — node-cron alle 60 s, parallel max 2. Holt PDF via Step-5-Renderer → `drive.files.create` (multipart, mit `parents`-Folder-ID + `name`). Schreibt `drive_file_id`/`webViewLink` zurück, emittiert `drive-upload-changed`.
-- `events.ts` (für Step 8 SSE).
+- `benachrichtigung`
+  - `id` TEXT PK
+  - `aktivitaet_id` TEXT FK → `aktivitaet.id` (ON DELETE CASCADE)
+  - `prioritaet` TEXT (`info`/`warnung`/`fehler`/`erfolg`)
+  - `gelesen_am` DATETIME?
+  - `weggewischt_am` DATETIME?
+  - `aktion_label` TEXT? / `aktion_route` TEXT? (z. B. `/rechnungen/abc`)
+  - `created_at` DATETIME
+  - Indexe: `(gelesen_am, weggewischt_am, created_at DESC)`
+  - Nicht jede Aktivität wird Benachrichtigung — Mapping siehe Modul 3.
 
-**Routes** (`backend/src/routes/drive.ts`, requireAuth außer Callback):
-- `GET /einstellungen/google-drive` → `{ verbunden, kontoEmail?, rootOrdnerId?, letzteSynchronisation?, letzterFehler? }` (KEIN Refresh-Token).
-- `POST /einstellungen/google-drive/connect` → `{ authorizeUrl }` (state = HMAC-signierter CSRF-Token aus Server-Secret).
-- `GET /einstellungen/google-drive/callback?code&state` (PUBLIC, validiert state, tauscht Code, speichert Token, redirected zu `/einstellungen?tab=drive&status=ok|err`).
-- `POST /einstellungen/google-drive/disconnect` → löscht Tokens + Folder-Cache, setzt Status.
-- `POST /einstellungen/google-drive/test` → erstellt/aktualisiert Test-Datei `verbindungstest.txt` im Root.
-- `GET /drive/uploads` (Filter: status, beleg_id), `POST /drive/uploads/:id/retry`.
-
-**Auto-Enqueue-Hook**:
-- In `belege/events.ts`: bei `mutated` mit `status === "versendet"` (Rechnung) bzw. `status === "akzeptiert"` (Angebot) → `enqueueDriveUpload(art, id)` (idempotent über UNIQUE-Key).
-- Konfigurierbar via `setting.backup.driveUploadEnabled` (existiert bereits) — wenn `false`, Queue nicht befüllen.
-
-**Sicherheit**:
-- `client_id` + `client_secret` kommen aus DB (User trägt sie in Einstellungen ein, Secret verschlüsselt).
-- Refresh-Token niemals loggen, nicht über GET zurückgeben.
-- State-Token CSRF-geschützt + 10 min TTL.
-- Scope minimal: `drive.file` (nur eigene Dateien).
+- `audit_log` existiert bereits — Step 7 erweitert nur die *Aufrufer*, nicht das Schema.
 
 ---
 
-### 3. Frontend-Anpassungen
+### 2. Backend-Module
 
-- `src/lib/api/client.ts`: Pi-Prefixes ergänzen (`/email/`, `/drive/`).
-- `src/components/email/EmailEinstellungen.tsx`: SMTP-Test-Button verdrahten, Passwort-Feld als „•••• gesetzt"/Edit.
-- `src/components/einstellungen/GoogleDriveTab.tsx`: Connect/Disconnect/Test, Status-Pille, letzter Fehler, Upload-Queue-Liste mit Retry.
-- `src/components/dokumente/DriveSyncBadge.tsx` + `src/components/pdf/DriveStatusBadge.tsx`: an `/drive/uploads?beleg_id=...` koppeln, dezenter Status (pending/erfolg/fehler).
-- Neue Hook-Datei `src/hooks/useDrive.ts` (TanStack Query) — refetch alle 5 s wenn pending.
-- Im Beleg-Detail: Button „Per E-Mail senden" öffnet Dialog mit Vorlagen-Auswahl + Empfänger (vorbelegt aus Kunde) + Vorschau; submit → `POST /email/versand` mit `belegArt+belegId+idempotenzKey=email-{belegnummer}-{ts}`.
+**`backend/src/events/bus.ts`** — Prozess-interner EventEmitter (Singleton). Alle Module emittieren typisierte Events: `aktivitaet:neu`, `benachrichtigung:neu`, `benachrichtigung:gelesen`, `beleg:mutated`, `email:versand-changed`, `drive:upload-changed`, `backup:changed`, `update:phase`. Bestehende `belege/events.ts`, `email/events.ts` etc. werden hier registriert — keine doppelten Bus-Implementierungen.
 
----
+**`backend/src/aktivitaet/repo.ts`** — `record({art, bezugArt?, bezugId?, titel, beschreibung, kontext?, userId?})`: schreibt Row, mappt optional auf `benachrichtigung` (Tabelle `aktivitaet_regeln` als Code-Konstante, kein DB-Eintrag). Emittiert `aktivitaet:neu` + ggf. `benachrichtigung:neu`. Liefert `list({limit, vor?, art?, bezugArt?, bezugId?})` paginiert.
 
-### 4. Tests (`backend/test/email.spec.ts` + `drive.spec.ts`)
+**`backend/src/benachrichtigung/repo.ts`** — `list({nurUngelesen?})`, `markGelesen(id)`, `markAlleGelesen()`, `wegwischen(id)`, `ungeleseneZahl()`. Auto-Cleanup: weggewischte > 30 Tage werden gelöscht.
 
-E-Mail:
-- Vorlage-CRUD inkl. Default-Switch (genau eine `ist_standard` pro Kontext).
-- Platzhalter-Render escaped HTML korrekt, unbekannte Token bleiben leer.
-- Worker: pending → sending → erfolg (mit gemocktem Transport via `nodemailer.createTransport({ jsonTransport: true })`).
-- Backoff bei Fehler, max-Versuche → manuell.
-- Idempotenz-Key UNIQUE → 409.
-- PDF-Anhang via Step-5-Renderer enthält `%PDF-`-Header.
+**`backend/src/aktivitaet/wireup.ts`** — abonniert beim Start alle Domain-Events und ruft `aktivitaet.record(...)`. Genau ein Punkt der Wahrheit, was eine Aktivität auslöst:
+- `beleg:mutated` mit `statusVorher!==statusNachher` → `beleg.status_geaendert`.
+- `zahlung:erfasst` → `zahlung.erfasst` (+ Benachrichtigung „Rechnung X bezahlt" bei Status `bezahlt`).
+- `mahnung:erstellt` → Benachrichtigung „warnung".
+- `email:versand-changed` → bei `gesendet` → Aktivität; bei `fehler` (nach max. Versuchen) → Benachrichtigung „fehler".
+- `drive:upload-changed` → bei `fehler` Benachrichtigung, bei `erfolg` nur Aktivität.
+- `backup:changed` → bei `erfolg`/`fehler` Aktivität, Fehler = Benachrichtigung.
+- `auth.login`/`auth.logout` (von Step 1) → nur Audit + Aktivität (keine Benachrichtigung).
+- `einstellung.geaendert` (sensible Keys: SMTP, Drive, Backup-Plan, Sicherheit) → Aktivität + Audit.
 
-Drive:
-- OAuth-State HMAC verify, abgelaufener State → 400.
-- Folder-Cache wird bei zweitem Upload nicht neu erstellt (Mock googleapis).
-- Auto-Enqueue bei `rechnung.status=versendet`, idempotent bei Doppel-Mutation.
-- Upload-Worker: success setzt `drive_file_id`, fehler setzt Backoff, `disconnect` invalidiert Tokens.
+Jede Stelle, die `aktivitaet.record(...)` aufruft, ruft **zusätzlich** `audit({...})` für sicherheitsrelevante Aktionen — Audit bleibt eigene Senke (180-Tage-Retention bleibt).
 
 ---
 
-### 5. Memory-Updates
+### 3. SSE-Endpoint (`backend/src/routes/events.ts`)
 
-- Neue Datei `mem://features/backend-step6-mail-drive` mit Architektur-Zusammenfassung.
-- Index-Eintrag „Step 6 — Mail+Drive".
-- `mem://features/google-drive` aktualisieren: Routenpfade, Folder-Cache-Setting-Key, `drive.file`-Scope, Auto-Enqueue-Trigger.
+- `GET /events/stream` (requireAuth, kein Rate-Limit auf dieser Route, `Connection: keep-alive`, `Content-Type: text/event-stream`, kein gzip — explizit `Content-Encoding: identity`).
+- Beim Connect: `event: hello\ndata: {serverTime, schemaVersion}`.
+- Heartbeat alle 25 s (`: ping`).
+- Subscriptions: forwarded `aktivitaet:neu`, `benachrichtigung:neu`, `benachrichtigung:gelesen`, `beleg:mutated`, `email:versand-changed`, `drive:upload-changed`, `backup:changed`, `update:phase`. Kein roher User-Content — nur IDs + minimal-Felder, Frontend invalidiert die jeweiligen TanStack-Queries.
+- Pro Connection eigener Listener-Set, `req.raw.on("close")` räumt auf. Max 10 parallele Connections pro User (FIFO-Drop ältester).
+- Gracefully durch Wartungsmodus: wenn `maintenance` aktiv → sofort `event: maintenance` + close, Frontend pausiert Reconnect.
+
+**Reconnect-Strategie clientseitig:** EventSource-Bridge in `src/lib/sse.ts` mit Exponential-Backoff (1s → 30s) und Resume durch `Last-Event-ID`-Header (Server merkt sich Ringpuffer der letzten 200 Events im RAM, schickt verpasste seit Last-ID nach).
 
 ---
 
-### 6. Reihenfolge der Umsetzung (1 Prompt, ohne Rückfragen)
+### 4. REST-Routen (`backend/src/routes/aktivitaet.ts` + `benachrichtigung.ts`)
+
+- `GET /aktivitaeten` — Filter `art`, `bezugArt`, `bezugId`, `vor` (Cursor), `limit` (max 100). Antwort: `{items, naechsterCursor?}`.
+- `GET /aktivitaeten/:id` (für Deep-Link).
+- `GET /benachrichtigungen` — `?nurUngelesen=true|false`, default false, immer ohne weggewischte.
+- `POST /benachrichtigungen/:id/lesen`
+- `POST /benachrichtigungen/lesen-alle`
+- `POST /benachrichtigungen/:id/wegwischen`
+- `GET /benachrichtigungen/anzahl` — `{ungelesen, gesamt}` (für Bell-Badge; durch SSE meist überflüssig, aber Initial-Load-fähig).
+- `GET /audit` — admin-only (User-Rolle existiert noch nicht → vorerst nur eingeloggter User darf eigenes Log lesen; volle Admin-Sicht erst mit Rollen-Modul). Filter: `action`, `userId`, `from`, `to`, paginiert.
+
+---
+
+### 5. Frontend
+
+**Infra:**
+- `src/lib/sse.ts` — `createSseClient()` Singleton. Reconnect, Last-Event-ID, Browser-Tab-Visibility-Pause (kein Stream wenn Tab versteckt > 5 min, sofortiger Resync bei Re-Visibility).
+- `src/hooks/useSse.ts` — registriert globale Handler im Root-Layout, mappt Events auf `queryClient.invalidateQueries([...])`. Konkretes Mapping:
+  - `beleg:mutated` → invalidiert `["belege",art]`, `["beleg",art,id]`, `["dashboard"]`.
+  - `email:versand-changed` → `["email","versand"]` + Detail.
+  - `drive:upload-changed` → `["drive","uploads", belegId?]` + `DriveSyncBadge`.
+  - `backup:changed` → `["backups"]` + `["backup","status"]`.
+  - `aktivitaet:neu` → `["aktivitaeten"]`.
+  - `benachrichtigung:neu` → `["benachrichtigungen"]` + Toast (Sonner) mit `aktion_route`-Link, falls vorhanden.
+- Polling-Intervalle in `useApi.ts`, `useDrive.ts`, `useEmailVersand.ts` werden auf `staleTime: 30s, refetchInterval: false` reduziert — SSE ist Wahrheit, Polling nur als Sicherheitsnetz alle 60 s.
+
+**UI-Komponenten:**
+- `src/components/notifications/BenachrichtigungBell.tsx` — Bell-Icon im Header (`AppShell`), Badge mit Anzahl ungelesen, Popover mit Liste (Prio-Färbung, „Alle lesen", „Wegwischen", Klick auf Eintrag → navigiert zu `aktion_route`).
+- `src/components/notifications/BenachrichtigungItem.tsx` — Eintrag mit Icon je Prio (kein Sparkle, schlicht Lucide `Bell`/`AlertTriangle`/`CircleCheck`), Zeit relativ.
+- `src/routes/aktivitaet.tsx` — kompletter Rewrite: Filter-Bar (Art, Bezug, Zeitraum), virtualisierte Liste, Klick → Detail-Drawer mit `kontext_json`-Pretty-Print, Deep-Link zu Beleg/Backup/Update.
+- `src/components/dashboard/NaechsteSchritteCard.tsx` — bekommt SSE-Live-Update statt Refetch-Timer.
+- `src/routes/einstellungen.sicherheit.tsx` (existierender Tab erweitert) — Audit-Log-Viewer (eigene User-Aktionen), CSV-Export-Button.
+
+**Verhalten:**
+- Beim Login wird SSE gestartet, beim Logout sauber geschlossen.
+- Unread-Badge persistiert nicht im LocalStorage — kommt immer vom Server (geräteübergreifend konsistent).
+- Toast-Throttle: max 3 Toasts gleichzeitig, weitere werden in Bell gesammelt (kein Spam beim Massen-Mail-Versand).
+
+---
+
+### 6. Sicherheit & Härtung
+
+- SSE-Auth über vorhandenes HttpOnly-Cookie (Fastify-Cookie ist schon registriert). Kein Token in URL.
+- Pro IP max 5 SSE-Connections (zusätzlich zum 10/User-Limit).
+- Keine sensiblen Felder im Stream (kein Klartext-SMTP-Passwort, keine PDF-Bytes — nur IDs/Statuswechsel).
+- Audit-Einträge: Insert-only, keine UI-Lösch-Route, Retention-Purge nur via Scheduler.
+- Rate-Limit: `/benachrichtigungen/lesen-alle` 10/min.
+
+---
+
+### 7. Tests (`backend/test/aktivitaet.spec.ts`, `sse.spec.ts`, `benachrichtigung.spec.ts`)
+
+- Wireup: simulieren `beleg:mutated` → genau 1 Aktivität, kein Doppel-Eintrag bei identischem Status.
+- Mahnung-Event → Benachrichtigung mit `prioritaet=warnung` + `aktion_route`.
+- Mail-Fehler nach max-Versuchen → genau 1 Benachrichtigung (nicht pro Retry).
+- Repo: `markGelesen` idempotent, `wegwischen` setzt Timestamp, `ungeleseneZahl` korrekt.
+- SSE: Connect → `hello`, Emit eines Events → empfangen, `Last-Event-ID`-Resume liefert verpasste Events, Maintenance schließt Stream.
+- Audit: Sensible Settings-Änderung erzeugt Audit + Aktivität, normale Logo-Änderung nur Aktivität.
+- Retention: 366-Tage-alte Aktivität → vom Purge gelöscht, jüngere bleiben.
+
+---
+
+### 8. Memory-Updates
+
+- Neue Datei `mem://features/backend-step7-aktivitaet-sse` (Architektur, Event-Liste, Mapping-Tabelle Aktivität→Benachrichtigung, SSE-Vertrag).
+- Index-Eintrag „Step 7 — Aktivitäten + Benachrichtigungen + SSE".
+- Roadmap-Tabelle in `mem://features/backend-roadmap` markiert Step 7 als done nach Abschluss.
+
+---
+
+### 9. Reihenfolge (1 Prompt, ohne Rückfragen)
 
 ```
-1. Migration 009 (email_*, drive_upload_queue) + Default-Vorlagen seed
-2. backend/src/email/* (transport, templates, signaturen, versand-repo, attachments, worker, events)
-3. backend/src/routes/email.ts + server.ts wiring + Worker-Start
-4. backend/src/drive/* (oauth, client, folders, upload-repo, upload-worker, events)
-5. backend/src/routes/drive.ts + server.ts wiring + Auto-Enqueue-Hook in belege/events
-6. SmtpSettings-Reload-Hook bei PUT /einstellungen/smtp
-7. Frontend: api/client.ts Prefixe, GoogleDriveTab, EmailEinstellungen-SMTP-Test, DriveSyncBadge, useDrive, „Per E-Mail senden"-Dialog im Beleg-Detail
-8. Tests email.spec.ts + drive.spec.ts (mit nodemailer-jsonTransport + googleapis-mock)
-9. mem-Updates
+1. Migration 010 (aktivitaet, benachrichtigung) + Indexe
+2. backend/src/events/bus.ts + Konsolidierung der bestehenden Module-Emitter
+3. backend/src/aktivitaet/{repo,wireup}.ts + benachrichtigung/repo.ts + Regel-Mapping
+4. backend/src/routes/{aktivitaet,benachrichtigung,audit,events}.ts + server.ts wiring
+5. SSE-Server: Heartbeat, Last-Event-ID-Ringpuffer, Connection-Limits, Maintenance-Hook
+6. Audit-Aufrufe in auth/einstellungen/backup/update ergänzen (wo noch nicht vorhanden)
+7. Retention-Scheduler (aktivitaet 365d, benachrichtigung weggewischt 30d)
+8. Frontend: lib/sse.ts + hooks/useSse.ts + Root-Layout-Integration
+9. UI: BenachrichtigungBell + Popover + Toast-Bridge, Aktivitätsseite-Rewrite, Audit-Viewer
+10. Polling-Reduktion in useApi/useDrive/useEmailVersand auf 60 s Sicherheitsnetz
+11. Tests aktivitaet.spec.ts + sse.spec.ts + benachrichtigung.spec.ts
+12. mem-Updates + Roadmap-Häkchen
 ```
 
-**Sag „weiter", dann lege ich mit Migration 009 + Mail-Modul los.**
+**Sag „weiter", dann lege ich mit Migration 010 + Event-Bus los.**
