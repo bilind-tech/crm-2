@@ -1,61 +1,59 @@
+## Problem
+
+1. „Zahlung erfassen" ist als Button-Beschriftung unklar — klingt nach Buchhaltungs-Jargon.
+2. Der Dialog `ZahlungErfassenDialog` zeigt sofort sehr viele Felder (Offen-Übersicht, 3 Schnell-Buttons, Betrag, Datum, Methode, Notiz). Auf dem Handy wirkt das überladen und „hässlich".
+3. Es gibt keine einfache Ja/Nein-Frage für den häufigsten Fall: „Hat der Kunde voll bezahlt?".
+
 ## Ziel
 
-Beim Anlegen eines Kunden (und nachträglich) soll der **Startzähler pro Kürzel** für den **aktuellen Monat** einstellbar sein, damit alte, schon vergebene Belegnummern (z. B. „GFU0526/01–07") nicht überschrieben werden und die nächste neue Rechnung/Angebot bei z. B. `08` weitergeht. Die Vorschau folgt immer dem heutigen Monat/Jahr.
+- Klarer, aktiver Button-Text statt „Zahlung erfassen".
+- Beim Klick öffnet sich ein **kleines, mittig zentriertes** Dialog-Fenster mit nur einer Frage: „Hat der Kunde bezahlt?" + Buttons **Ja, voll bezahlt** / **Nein, Teilbetrag** / **Abbrechen**.
+- Klick auf **Ja** → bucht sofort den vollen offenen Betrag, Dialog schließt.
+- Klick auf **Nein** → wechselt im selben Dialog zu einem zweiten, ebenfalls minimalen Schritt: nur Betrags-Eingabe (groß, Ziffern-Tastatur) + zwei Buttons (Speichern / Abbrechen).
+- Datum, Methode, Notiz verschwinden aus der UI — werden automatisch gesetzt (Datum = heute, Methode = Überweisung, Notiz leer). Bestehende Datenstruktur bleibt voll erhalten.
 
-## Verhalten (für dich)
+## Änderungen
 
-**KundeForm (Neuanlage)**
-- Unter dem Kürzel-Feld erscheint, sobald ein Kürzel eingegeben ist, ein neues kleines Feld:
-  „Nächste Nummer (diesen Monat) startet bei: **[ 1 ]**".
-- Vorschau zeigt live: `GFU{MM}{YY}/{NN}` mit dem eingestellten Startwert (z. B. `GFU0526/08`).
-- Standard ist `1`. Wenn man `8` einträgt, bekommt der erste neue Beleg die `08`, der zweite `09` usw.
-- Monat/Jahr in der Vorschau immer = heute.
+### 1. Neuer Button-Text
+Überall wo aktuell „Zahlung erfassen" steht (`src/routes/rechnungen.tsx` Zeilen 237/240/345 + Tooltips, `src/routes/rechnungen.$id.tsx` Zeilen 76/147), ersetzen durch:
 
-**Kunden-Detailseite (`/kunden/$id`)**
-- „Bearbeiten"-Button öffnet einen Dialog (neu, schlicht, ohne Gradient/Deko-Icons) mit denselben Stammdaten + dem Block „Belegnummern".
-- Block „Belegnummern":
-  - Kürzel ändern (3–4 Zeichen, A–Z 0–9).
-  - „Nächste Nummer (Monat MM/YY)" – aktueller Stand wird angezeigt, kann überschrieben werden. Z. B. wenn 7 Belege schon manuell außerhalb existieren → Wert auf `8` setzen.
-  - Kleiner Hinweis: „Ändert nur den Zähler für **diesen Monat**. Bestehende Belege bleiben unverändert."
-- Speichern aktualisiert Kürzel + den Monatszähler atomar.
+- **Button-Label:** „Als bezahlt markieren"
+- **Tooltip:** „Bezahlung eintragen — voll oder teilweise"
 
-**Wichtig (Daten-Schutz, gem. Memory)**
-- Kürzel-/Zählerwerte werden nie rückwirkend auf bestehende Belege angewandt — bestehende Nummern bleiben.
-- Beim Pi-Backend später: Update von Kürzel + Zähler in einer SQLite-Transaktion, kein Touch an Daten-Verzeichnis-Inhalten.
+(„Als bezahlt markieren" ist eindeutig eine Aktion, kein Statement, dass es bereits passiert ist — der Kontext macht klar, dass jetzt erst gebucht wird.)
 
-## Technische Umsetzung
+### 2. `ZahlungErfassenDialog.tsx` umbauen — zweistufiger Mini-Dialog
 
-**Typen** (`src/lib/api/types.ts`)
-- `Kunde` bleibt unverändert (Kürzel existiert schon).
-- Neuer optionaler API-Input `startZaehlerAktuellerMonat?: number` für Create und Update — wird nicht persistiert am Kunden, sondern in `db.zaehlerProKunde[kundeId][YYYY-MM]` als `wert - 1` geschrieben (damit `+1` beim nächsten Beleg den gewünschten Startwert ergibt).
+**Stufe 1 — Frage (Default beim Öffnen):**
+- Zentriert, schmal (`sm:max-w-sm`).
+- Titel: „Bezahlt?"
+- Beschreibung: „Rechnung `{nummer}` · offen: **{formatEUR(offen)}**"
+- Drei Buttons untereinander auf Mobile, nebeneinander ab `sm`:
+  - Primary, groß, h-12: „Ja, voll bezahlt ({formatEUR(offen)})" → bucht sofort den vollen Betrag und schließt.
+  - Outline: „Nein, nur ein Teil" → wechselt zu Stufe 2.
+  - Ghost: „Abbrechen" → schließt.
 
-**Backend Mock** (`src/lib/mock/backend.ts`)
-- `createKunde`: nach Anlage, falls `startZaehlerAktuellerMonat` gesetzt und `kuerzel` vorhanden →
-  `d.zaehlerProKunde[k.id][periodeAktuell] = max(0, start - 1)`.
-- `updateKunde`: gleicher Mechanismus; zusätzlich `kuerzel` darf geändert werden (bestehende Belege bleiben).
-- Helper `getAktuellerZaehler(kundeId): number` → liest `(map[periodeAktuell] ?? 0) + 1` für die UI-Anzeige in der Bearbeiten-Maske.
-- Neuer Endpoint im API-Client: `getKundenZaehler(id)` → `{ periode: "YYYY-MM", naechsterStart: number }`.
+**Stufe 2 — Teilbetrag:**
+- Titel: „Wie viel wurde bezahlt?"
+- Großes Input-Feld (h-14, text-2xl, `inputMode="decimal"`), automatisch fokussiert, vorbelegt mit leer.
+- Hinweis darunter: „Offen: {formatEUR(offen)}".
+- Zwei Buttons:
+  - Primary: „Speichern" (disabled wenn betrag ≤ 0 oder > offen).
+  - Outline: „Zurück" → zurück zu Stufe 1.
+- Kein Datum, keine Methode, keine Notiz mehr sichtbar.
 
-**API-Client / Hook** (`src/lib/api/client.ts`, `src/hooks/useApi.ts`)
-- `useKundenZaehler(id)` (Query).
-- `useUpdateKunde(id)` akzeptiert neues Feld `startZaehlerAktuellerMonat`.
+**Backend-seitig:** Beim Submit immer `datum: todayISO()`, `methode: "ueberweisung"`, `notiz: undefined` an `useAddZahlung` übergeben (gleiche API wie heute, kein Backend-Change).
 
-**KundeForm** (`src/components/forms/KundeForm.tsx`)
-- Neues State-Feld `startNummer: number` (Default `1`).
-- Input erscheint nur wenn `kuerzel.length >= 3`.
-- Vorschau-String: `${kuerzel}${MM}${YY}/${String(startNummer).padStart(2, "0")}`.
-- Beim Submit wird `startZaehlerAktuellerMonat` mitgegeben (nur wenn `>1`).
+### 3. State-Reset
+- `useEffect` setzt beim Öffnen Stufe immer auf `"frage"` zurück, Betrag auf `""`.
 
-**Neue Komponente** `src/components/forms/KundeBearbeitenDialog.tsx`
-- Dialog (`bg-background`, kein Gradient, keine Sparkles).
-- Sektion „Stammdaten" (Pflichtfelder analog KundeForm — Wiederverwendung der Felder via kleinem Refactor: Stammdaten-Felder in eine interne `KundeStammdatenFelder`-Komponente extrahieren, von KundeForm und Bearbeiten-Dialog genutzt).
-- Sektion „Belegnummern" mit Kürzel + Startzähler-Override + Live-Vorschau + Hinweistext.
-- Buttons: Abbrechen / Speichern. Toast bei Erfolg.
+## Was NICHT geändert wird
+- Datenmodell, Zahlungs-API, FlowBar-Status-Ableitung — alles unverändert.
+- Andere Dialoge / Routes bleiben gleich.
+- Keine Sparkles, keine Gradient-Hintergründe (`bg-background` bleibt).
 
-**Anbindung** `src/routes/kunden.$id.tsx`
-- „Bearbeiten"-Button öffnet den neuen Dialog mit Initialwerten aus Kunde + `useKundenZaehler`.
+## Ergebnis
 
-## Out of Scope
-- Keine Änderung an Nummernformat selbst (`{KÜRZEL}{MM}{YY}/{NN}` bleibt).
-- Keine Migration alter Belegnummern.
-- Globale Nummernkreise (Kunden ohne Kürzel) bleiben unverändert.
+- Auf dem Handy klein, mittig, klar: ein Button für den Standardfall („voll bezahlt"), ein zweiter für Teilzahlung, ein Abbrechen.
+- Keine überladene Maske mehr für 90 % der Fälle.
+- Wer einen Teilbetrag tippen will, sieht nur ein einziges Eingabefeld.
