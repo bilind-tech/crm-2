@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Lock, RefreshCw, Server, ShieldAlert, UserPlus } from "lucide-react";
 import logo from "@/assets/logo.png";
-import { PiApiError } from "@/lib/api/piClient";
+import { piApi, PiApiError } from "@/lib/api/piClient";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
 
 function Wrapper({ children, sub }: { children: React.ReactNode; sub: React.ReactNode }) {
