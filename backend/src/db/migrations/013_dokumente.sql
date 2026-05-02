@@ -5,8 +5,8 @@
 CREATE TABLE IF NOT EXISTS upload_sessions (
   id            TEXT PRIMARY KEY,
   token         TEXT NOT NULL UNIQUE,
-  kunde_id      TEXT REFERENCES kunden(id) ON DELETE SET NULL,
-  objekt_id     TEXT REFERENCES objekte(id) ON DELETE SET NULL,
+  kunde_id      TEXT REFERENCES kunde(id) ON DELETE SET NULL,
+  objekt_id     TEXT REFERENCES objekt(id) ON DELETE SET NULL,
   erstellt_am   TEXT NOT NULL DEFAULT (datetime('now')),
   ablauf_am     TEXT NOT NULL,
   beendet       INTEGER NOT NULL DEFAULT 0
@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS dokumente (
   titel                    TEXT NOT NULL,
   beschreibung             TEXT,
   typ                      TEXT NOT NULL CHECK (typ IN ('beleg','vertrag','angebot','rechnung','protokoll','bild','sonstiges')),
-  kunde_id                 TEXT REFERENCES kunden(id) ON DELETE SET NULL,
-  objekt_id                TEXT REFERENCES objekte(id) ON DELETE SET NULL,
+  kunde_id                 TEXT REFERENCES kunde(id) ON DELETE SET NULL,
+  objekt_id                TEXT REFERENCES objekt(id) ON DELETE SET NULL,
   upload_session_id        TEXT REFERENCES upload_sessions(id) ON DELETE SET NULL,
   dateiname                TEXT NOT NULL,
   mime_type                TEXT NOT NULL,
