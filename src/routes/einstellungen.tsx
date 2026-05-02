@@ -18,6 +18,7 @@ import {
   Repeat,
   Shield,
   Package,
+  Calculator,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,6 +47,7 @@ import { BackupTab } from "@/components/einstellungen/BackupTab";
 import { SystemUpdateTab } from "@/components/einstellungen/SystemUpdateTab";
 import { SicherheitTab } from "@/components/einstellungen/SicherheitTab";
 import { VerlaufTab } from "@/components/einstellungen/VerlaufTab";
+import { SteuerTab } from "@/components/einstellungen/SteuerTab";
 import type { Firmendaten } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
@@ -61,6 +63,7 @@ type TabId =
   | "mahnwesen"
   | "dauerauftrag"
   | "vorlagen"
+  | "steuern"
   | "drive"
   | "backup"
   | "system-update"
@@ -78,6 +81,7 @@ const tabs: { id: TabId; label: string; icon: typeof Building2; gruppe: string }
 
   { id: "mahnwesen", label: "Mahnwesen", icon: Bell, gruppe: "Belege" },
   { id: "dauerauftrag", label: "Daueraufträge", icon: Repeat, gruppe: "Belege" },
+  { id: "steuern", label: "Steuern", icon: Calculator, gruppe: "Belege" },
 
   { id: "drive", label: "Google Drive", icon: Cloud, gruppe: "System" },
   { id: "backup", label: "Backup & Wiederherstellen", icon: Save, gruppe: "System" },
@@ -193,6 +197,7 @@ function Page() {
           {tab === "mahnwesen" && <MahnwesenTab />}
           {tab === "dauerauftrag" && <DauerauftragTab />}
           {tab === "vorlagen" && <VorlagenTab />}
+          {tab === "steuern" && <SteuerTab />}
           {tab === "drive" && <GoogleDriveTab />}
           {tab === "backup" && <BackupTab />}
           {tab === "system-update" && <SystemUpdateTab />}
