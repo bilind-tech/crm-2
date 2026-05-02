@@ -84,6 +84,21 @@ function formatLockedUntil(iso: string): string {
   return d.toLocaleString("de-DE", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
 }
 
+function useCountdown(targetIso: string | null): string {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!targetIso) return;
+    const i = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(i);
+  }, [targetIso]);
+  if (!targetIso) return "00:00";
+  const ms = Math.max(0, new Date(targetIso).getTime() - now);
+  const total = Math.ceil(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 function LoginForm({ onRecovery }: { onRecovery: () => void }) {
   const { login, loading } = useAuth();
   const [username, setUsername] = useState("");
