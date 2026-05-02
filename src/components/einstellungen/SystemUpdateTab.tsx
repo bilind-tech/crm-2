@@ -299,10 +299,20 @@ function UpdatePackagePreview({
         ))}
       </div>
 
-      <div className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
-        <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
-        Vor dem Update wird automatisch ein Sicherheitsbackup erstellt. Bei Fehler wird automatisch
-        zurückgerollt.
+      <div className="mt-5 space-y-2">
+        <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs text-emerald-700 dark:text-emerald-400">
+          <p className="font-medium">Deine Daten bleiben unberührt.</p>
+          <p className="mt-1 text-emerald-700/80 dark:text-emerald-400/80">
+            Kunden, Angebote, Rechnungen, Zahlungen, Anhänge und Einstellungen
+            werden bei diesem Update nicht verändert, gelöscht oder überschrieben.
+            Es wird ausschließlich der Programmcode getauscht.
+          </p>
+        </div>
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
+          Vor dem Update wird automatisch ein Sicherheitsbackup erstellt. Bei
+          Fehler wird automatisch zurückgerollt.
+        </div>
       </div>
 
       <div className="mt-4 flex flex-wrap justify-end gap-2">
