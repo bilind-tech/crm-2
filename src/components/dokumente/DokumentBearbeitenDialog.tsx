@@ -275,3 +275,18 @@ export function DokumentBearbeitenDialog({ dokument, open, onOpenChange }: Props
     </>
   );
 }
+
+function DokumentVorschau({ dokument }: { dokument: Dokument }) {
+  const { url } = useDokumentBlobUrl(dokument);
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-muted">
+      {url && dokument.mimeType.startsWith("image/") ? (
+        <img src={url} alt={dokument.titel} className="max-h-56 w-full object-contain" />
+      ) : (
+        <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+          {dokument.dateiname}
+        </div>
+      )}
+    </div>
+  );
+}
