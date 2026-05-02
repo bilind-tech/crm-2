@@ -88,6 +88,8 @@ export function DokumentBearbeitenDialog({ dokument, open, onOpenChange }: Props
         faelligAm: faelligAm || undefined,
         betrag: betrag ? Number(betrag) : undefined,
         steuerrelevant,
+        kundeId: kundeId || undefined,
+        objektId: objektId || undefined,
         erledigtAm: erledigt
           ? dokument.erledigtAm ?? new Date().toISOString()
           : undefined,
