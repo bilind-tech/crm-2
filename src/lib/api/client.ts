@@ -45,6 +45,8 @@ const PI_PREFIXES = [
   "/benachrichtigungen",
   "/audit",
   "/events/",
+  // Step 8
+  "/system/",
 ];
 // Ausnahmen: /einstellungen/* die noch nicht im Pi-Backend leben → Mock
 const MOCK_OVERRIDE_PREFIXES = [

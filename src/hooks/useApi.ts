@@ -1044,7 +1044,10 @@ export const useInstallUpdate = () => {
   });
 };
 
-/** Polling-Query für laufendes Update — läuft alle 500 ms während status="laeuft". */
+/** Lauf-Query: SSE treibt Updates (system:update:phase). Polling nur als
+ *  Sicherheitsnetz alle 3 s, solange der Lauf "laeuft" — beim Pi-Backend
+ *  reicht oft das erste Refetch nach Connect. Im Mock-Modus bleibt es als
+ *  Fallback erhalten. */
 export const useUpdateLauf = (id: string | null) =>
   useQuery({
     queryKey: id ? qk.einstellungen.updateLauf(id) : ["system", "update", "lauf", "none"],
@@ -1052,8 +1055,8 @@ export const useUpdateLauf = (id: string | null) =>
     enabled: !!id,
     refetchInterval: (q) => {
       const data = q.state.data as UpdateLauf | undefined;
-      if (!data) return 500;
-      return data.status === "laeuft" || data.status === "rollback" ? 500 : false;
+      if (!data) return 1000;
+      return data.status === "laeuft" || data.status === "rollback" ? 3000 : false;
     },
   });
 

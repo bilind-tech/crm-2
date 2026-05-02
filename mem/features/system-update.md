@@ -1,30 +1,49 @@
 ---
 name: System-Update
-description: ZIP-Upload, Manifest-Check, Zwangs-Backup, atomarer Symlink-Switch, Healthcheck-Auto-Rollback
+description: ZIP-Upload, HMAC-Manifest, Zwangs-Backup, atomarer Symlink-Switch, Healthcheck-Auto-Rollback, Live-Steps via SSE
 type: feature
 ---
 
-# System-Update (Step 9)
+# System-Update (Step 8)
 
-## Pipeline
-1. Frontend lädt ZIP hoch (`POST /system/update/validate` zur Vorab-Prüfung)
-2. Manifest validieren (Signatur, min. Schema-Version, App-Version)
-3. **Zwangs-Sicherheits-Backup** (Step-3-Backup-Lib, Type=`safety`)
-4. ZIP nach `versions/<timestamp>/` entpacken
-5. `npm ci --omit=dev` im neuen Ordner
-6. **Migrations-Probelauf** gegen Kopie der DB — nur bei Erfolg fortfahren
-7. Symlink atomar umlegen: `ln -sfn versions/<ts> current.tmp && mv -T current.tmp current`
-8. systemd reload
-9. Healthcheck alle 5s, max 60s — bei Fail automatischer Rollback (Symlink zurück)
-10. Nur 1 Vorgänger-Version behalten, ältere `versions/` löschen
+## Pipeline (Frontend-Steps 1:1)
+1. **entpacken** — ZIP nach `staging/<uploadId>/extract/`, Bomb-Schutz (200 MB total / 50 MB/Datei / 2k Files / 20× Ratio).
+2. **backup** — `createBackup({category:"pre-update"})` synchron, `safety_backup_id` am Lauf gemerkt.
+3. **quarantaene** — `staging/<id>/extract` → `versions/<stamp>/`, atomarer Symlink-Swap via `current.tmp` + `rename`. `previous`-Symlink für Rollback.
+4. **install** — `npm ci --omit=dev` im neuen Ordner (5 min Timeout, 50 MB Buffer, `execFile` ohne Shell).
+5. **migrations** — DB-Kopie via `db.backup()`, neue Migrations im Probelauf — Fehler bricht ohne Swap ab (Swap ist Step 3, hier wird Code zurückgerollt).
+6. **neustart** — `systemctl reload mycleancenter` (Dev: no-op).
+7. **smoketest** — `GET /health` alle 5 s, max 60 s. Fail → Auto-Rollback.
 
 ## Daten-Garantie
-`/var/lib/mycleancenter/` wird in keinem Schritt angefasst. Update = nur Symlink + Code-Ordner.
+`/var/lib/mycleancenter/` wird in keinem Step geschrieben oder gesperrt — nur das Code-Verzeichnis (`/opt/mycleancenter/`).
+
+## Manifest-Vertrag
+`manifest.json` im ZIP-Root. Felder: `appVersion` (semver), `schemaVersion` (≥ live), `createdAt`, `minBackendVersion`, `signature` (HMAC-SHA256 hex), optional `hinweise`.
+- Signatur = HMAC über kanonisches JSON ohne `signature`-Feld, Key = `master.key`.
+- `signManifest()` baut Manifeste — gleicher Key beim Build-Server.
+- Schema-Downgrade verboten. App-Version muss strikt > installierte sein (außer Rollback).
+
+## Lock-File
+`/opt/mycleancenter/staging/.install.lock` verhindert parallele Updates. `reapStaleLock()` beim Server-Start räumt Lock auf (Backend-Boot bedeutet kein Update läuft).
 
 ## Rollback
-- Manuell aus UI (`POST /system/update/rollback`)
-- Automatisch bei Healthcheck-Fail
-- Symlink zurück + systemd reload + Sicherheits-Backup bleibt erhalten
+- Manuell: `POST /system/update/rollback/:version` mit `{passwort}`. Bcrypt-Vergleich. 3 Fehlversuche → 15 min Sperre pro User.
+- Automatisch: nach erfolgtem Swap, wenn smoketest fehlschlägt. Defekte Version wandert nach `versions/broken-<stamp>/`.
 
-## UI (Frontend existiert)
-Live-Steps mit Progress + aktueller Phase. Bei Rollback klare Meldung.
+## SSE / Bus-Events
+- `system:update:phase` `{laufId, stepId, status, label, detail?}` — pro Step.
+- `system:update:lauf` `{laufId, status: laeuft|erfolg|fehler|rollback}` — Gesamtstatus.
+- Frontend `useLiveEvents`: invalidiert `["system","update","historie"]` + `["system","update","lauf",laufId]`, Toast bei Erfolg/Fehler/Rollback.
+
+## Endpoints
+- `GET /system/info`
+- `GET /system/update/historie`
+- `POST /system/update/validate` (multipart, max 200 MB, 5/min Rate-Limit)
+- `POST /system/update/install/:uploadId` (async, antwortet sofort mit Lauf)
+- `GET /system/update/lauf/aktuell` (für Page-Reload-Reconnect, 204 wenn nichts läuft)
+- `GET /system/update/lauf/:id`
+- `POST /system/update/rollback/:version`
+
+## Dev-Modus
+`appRoot()` zeigt auf `./dev-root/` statt `/opt/mycleancenter/`, `npm ci`/`systemctl` werden übersprungen, smoketest skippt im `testMode`.
