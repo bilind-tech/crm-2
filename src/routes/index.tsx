@@ -179,53 +179,9 @@ function Dashboard() {
         />
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-base font-semibold">{chartTitel}</h2>
-            <p className="text-xs text-muted-foreground">{chartSubtitel}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground">Summe</p>
-            <p className="text-lg font-semibold">{formatEUR(summeZeitraum)}</p>
-          </div>
-        </div>
-        {aktiv && zeitraum.monat !== "alle" ? (
-          // Einzelmonat: kein Diagramm, sondern großer Single-Value-Block
-          <div className="mt-4 flex h-64 flex-col items-center justify-center rounded-xl bg-muted/30">
-            <p className="text-xs text-muted-foreground">{zeitLabel}</p>
-            <p className="mt-1 text-4xl font-semibold text-success">
-              {formatEUR(umsatz[0]?.brutto ?? 0)}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">brutto</p>
-          </div>
-        ) : (
-          <div className="mt-4 h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis
-                  tick={{ fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v) => `${Math.round(Number(v))} €`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--card)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 12,
-                    fontSize: 12,
-                  }}
-                  formatter={(v: number) => formatEUR(v)}
-                />
-                <Bar dataKey="brutto" fill="var(--primary)" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </div>
+      <UmsatzChartCard
+        onMonatKlick={(jahr, monat) => setZeitraum({ jahr, monat })}
+      />
 
       <NaechsteSchritteCard />
 
