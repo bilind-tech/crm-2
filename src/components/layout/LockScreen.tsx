@@ -150,6 +150,13 @@ function LoginForm({ onRecovery }: { onRecovery: () => void }) {
         <Button type="submit" className="w-full" disabled={loading}>
           {loading ? "Anmelden …" : "Anmelden"}
         </Button>
+        <button
+          type="button"
+          onClick={onRecovery}
+          className="block w-full text-center text-xs text-muted-foreground underline-offset-2 hover:underline"
+        >
+          Passwort vergessen — Recovery-Code verwenden
+        </button>
       </form>
     </Wrapper>
   );
