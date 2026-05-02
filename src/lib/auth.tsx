@@ -27,6 +27,11 @@ export type AuthMode =
 interface PiUser {
   id: string;
   username: string;
+  rolle?: "owner" | "mitarbeiter";
+}
+
+interface SetupResult {
+  recoveryCode: string;
 }
 
 interface AuthState {
@@ -34,7 +39,7 @@ interface AuthState {
   user: PiUser | null;
   unlocked: boolean;
   loading: boolean;
-  setup: (input: { username: string; password: string; setupToken: string }) => Promise<void>;
+  setup: (input: { username: string; password: string; setupToken: string }) => Promise<SetupResult>;
   login: (input: { username: string; password: string }) => Promise<void>;
   logout: () => Promise<void>;
   changePassword: (alt: string, neu: string) => Promise<void>;
@@ -43,6 +48,7 @@ interface AuthState {
   lock: () => Promise<void>;
   setAutoLockMinutes: (m: number) => void;
   autoLockMinutes: number;
+  istOwner: boolean;
 }
 
 const Ctx = createContext<AuthState | null>(null);
