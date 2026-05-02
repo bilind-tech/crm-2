@@ -118,6 +118,8 @@ interface DB {
   updateLaeufe?: UpdateLauf[];
   /** Frisch validierte Update-Pakete, die auf Install-Bestätigung warten. */
   updateUploads?: Record<string, UpdatePackageInfo>;
+  /** Stundenzettel-Settings (externe URL der iframe-eingebetteten App). */
+  stundenzettel?: { externeUrl: string };
 }
 
 let db: DB | null = null;
@@ -1308,6 +1310,13 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     result = d.backup;
   } else if (m === "GET" && (match(path, "/einstellungen/backup/historie") || match(path, "/backup/historie"))) {
     result = d.backupHistorie ?? [];
+  } else if (m === "GET" && match(path, "/einstellungen/stundenzettel")) {
+    result = d.stundenzettel ?? { externeUrl: "" };
+  } else if (m === "PATCH" && match(path, "/einstellungen/stundenzettel")) {
+    const next = { externeUrl: String((body as { externeUrl?: unknown })?.externeUrl ?? "").trim() };
+    d.stundenzettel = next;
+    persist();
+    result = next;
   } else if (m === "GET" && match(path, "/einstellungen/google-drive")) {
     result = d.googleDrive;
   } else if (m === "PATCH" && match(path, "/einstellungen/google-drive")) {
