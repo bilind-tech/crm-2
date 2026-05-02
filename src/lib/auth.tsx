@@ -101,13 +101,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshMe, backendStatus]);
 
   const setup = useCallback(
-    async (input: { username: string; password: string; setupToken: string }) => {
+    async (input: { username: string; password: string; setupToken: string }): Promise<SetupResult> => {
       setLoading(true);
       try {
-        const res = await piApi.post<MeResponse>("/auth/setup", input);
+        const res = await piApi.post<MeResponse & { recoveryCode: string }>("/auth/setup", input);
         setUser(res.user);
         setMode("logged-in");
         lastActivity.current = Date.now();
+        return { recoveryCode: res.recoveryCode };
       } finally {
         setLoading(false);
       }
