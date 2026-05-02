@@ -1,6 +1,8 @@
 // Audit-Log (DB).
 import { getDatabase } from "../db/index.js";
 
+const RETENTION_DAYS = 180;
+
 export function audit(opts: {
   userId?: string | null;
   action: string;
@@ -18,5 +20,15 @@ export function audit(opts: {
       );
   } catch {
     // best effort
+  }
+}
+
+export function purgeOldAuditEntries(): number {
+  try {
+    return getDatabase()
+      .prepare(`DELETE FROM audit_log WHERE datetime(at) < datetime('now', ?)`)
+      .run(`-${RETENTION_DAYS} days`).changes;
+  } catch {
+    return 0;
   }
 }
