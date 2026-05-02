@@ -252,19 +252,15 @@ function Page() {
               <ul className="space-y-1.5 text-sm text-muted-foreground">
                 <li>{a.optionen.materialBereitgestellt ? "✓" : "✗"} Material bereitgestellt</li>
                 <li>{a.optionen.standardAnschreiben ? "✓" : "✗"} Standard-Anschreiben</li>
-                {a.optionen.wiederkehrend && (
-                  <li className="flex items-center gap-1.5 text-foreground">
-                    <Repeat className="h-3.5 w-3.5 text-primary" />
-                    Dauerauftrag
-                    {a.optionen.wiederkehrendDetails && (
-                      <span className="text-muted-foreground">
-                        · {formatWiederkehrend(a.optionen.wiederkehrendDetails)}
-                      </span>
-                    )}
-                  </li>
-                )}
               </ul>
             </div>
+          )}
+
+          {a.optionen?.wiederkehrend && (
+            <DauerauftragVerwaltungCard
+              rechnungId={folgeRechnung?.id}
+              details={a.optionen.wiederkehrendDetails}
+            />
           )}
 
           <EmailVersandHistorie belegId={a.id} belegTyp="angebot" />
