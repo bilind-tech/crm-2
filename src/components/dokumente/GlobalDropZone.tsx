@@ -15,7 +15,7 @@
 //    indem wir nur Events mit dataTransfer.types.includes("Files") behandeln.
 
 import { useEffect, useState } from "react";
-import { useRouterState, useParams } from "@tanstack/react-router";
+import { useRouterState } from "@tanstack/react-router";
 import { FileUp } from "lucide-react";
 import { useObjekt } from "@/hooks/useApi";
 import { DokumentUploadDialog } from "@/components/dokumente/DokumentUploadDialog";
