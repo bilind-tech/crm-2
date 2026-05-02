@@ -79,6 +79,7 @@ function Page() {
   const [zeitraum, setZeitraum] = useState<ZeitraumState>(ZEITRAUM_ALLE);
   const [nurDA, setNurDA] = useState(false);
   const [open, setOpen] = useState(false);
+  const [daDialog, setDaDialog] = useState(false);
   const [zahlungFuer, setZahlungFuer] = useState<Rechnung | null>(null);
   const [emailFuer, setEmailFuer] = useState<Rechnung | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirm();
