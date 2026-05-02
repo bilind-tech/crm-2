@@ -57,8 +57,8 @@ export async function steuernRoutes(app: FastifyInstance): Promise<void> {
 
     audit({
       userId: req.user?.id ?? null,
-      aktion: "steuer.einstellungen.update",
-      details: { patch: parsed.data, ustBezahltGeloescht: geloescht },
+      action: "steuer.einstellungen.update",
+      detail: { patch: parsed.data, ustBezahltGeloescht: geloescht },
     });
     emit("einstellung:geaendert", { key: "steuern", userId: req.user?.id ?? null });
     return { ...next, ustBezahltGeloescht: geloescht };
@@ -68,8 +68,8 @@ export async function steuernRoutes(app: FastifyInstance): Promise<void> {
     const next = resetEinstellungen();
     audit({
       userId: req.user?.id ?? null,
-      aktion: "steuer.einstellungen.reset",
-      details: {},
+      action: "steuer.einstellungen.reset",
+      detail: {},
     });
     emit("einstellung:geaendert", { key: "steuern", userId: req.user?.id ?? null });
     return next;
