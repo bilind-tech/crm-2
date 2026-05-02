@@ -8,7 +8,7 @@ import { getSetting, setSetting, deleteSetting } from "../settings/store.js";
 import { decryptString } from "../crypto/aes.js";
 import { getDatabase } from "../db/index.js";
 import { SENSITIVE_KEYS, type GoogleDriveSettings } from "../settings/schemas.js";
-import { ensureMasterKey } from "../crypto/masterkey.js";
+import { readFileSync } from "node:fs";
 import { config } from "../config.js";
 
 const SCOPES = ["https://www.googleapis.com/auth/drive.file"];
@@ -67,7 +67,12 @@ export function buildOAuthClient(redirectUri?: string): OAuth2Client {
 }
 
 // HMAC-State-Token: payload.timestamp ist Unix-Sek; gültig 10 min.
-function stateSecret(): Buffer { return ensureMasterKey(config.keyPath).key; }
+let _stateSecretCache: Buffer | null = null;
+function stateSecret(): Buffer {
+  if (_stateSecretCache) return _stateSecretCache;
+  _stateSecretCache = readFileSync(config.keyPath);
+  return _stateSecretCache;
+}
 export function createState(): string {
   const ts = Math.floor(Date.now() / 1000);
   const nonce = crypto.randomBytes(8).toString("hex");
