@@ -15,6 +15,7 @@ import {
 } from "../settings/store.js";
 import { requireAuth, getCookieToken } from "../auth/middleware.js";
 import { audit } from "../auth/audit.js";
+import { emit } from "../events/bus.js";
 import {
   deleteAllSessionsForUser,
   deleteSessionForUser,
@@ -85,6 +86,7 @@ export async function einstellungenRoutes(app: FastifyInstance): Promise<void> {
         return { error: r.error, issues: r.issues };
       }
       audit({ userId: req.user?.id, action: `settings.${a}.patch`, ip: req.ip });
+      emit("einstellung:geaendert", { key: a, userId: req.user?.id ?? null });
       return r.value;
     });
   }
@@ -120,6 +122,7 @@ export async function einstellungenRoutes(app: FastifyInstance): Promise<void> {
     }
     resetTransport();
     audit({ userId: req.user?.id, action: "settings.smtp.patch", ip: req.ip });
+    emit("einstellung:geaendert", { key: "smtp", userId: req.user?.id ?? null });
     const meta = getSettingMeta(SENSITIVE_KEYS.smtpPassword);
     return { ...(r.value as object), passwordIsSet: meta.exists, passwordUpdatedAt: meta.updatedAt };
   });
