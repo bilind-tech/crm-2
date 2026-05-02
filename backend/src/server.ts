@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
+import multipart from "@fastify/multipart";
 import { existsSync, mkdirSync } from "node:fs";
 import { config } from "./config.js";
 import { openDatabase, closeDatabase, getSchemaVersion } from "./db/index.js";
@@ -10,17 +11,30 @@ import { ensureMasterKey } from "./crypto/masterkey.js";
 import { healthRoutes } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
 import { einstellungenRoutes } from "./routes/einstellungen.js";
+import { backupRoutes } from "./routes/backup.js";
 import { purgeExpiredSessions, warmTouchCacheFromDb } from "./auth/sessions.js";
 import { purgeOldAuditEntries } from "./auth/audit.js";
 import { purgeOldLockouts } from "./auth/lockout.js";
+import { reapZombies } from "./backup/repo.js";
+import { reconcileDiskState } from "./backup/rotation.js";
+import { startScheduler } from "./backup/scheduler.js";
+import {
+  loadMaintenanceFlagFromDisk,
+  maintenanceGuard,
+} from "./backup/maintenance.js";
 
 async function main(): Promise<void> {
   for (const dir of [
     config.dataDir,
-    `${config.dataDir}/db`,
-    `${config.dataDir}/keys`,
+    config.dbDir,
+    config.keysDir,
     config.uploadsDir,
     config.backupsDir,
+    config.backupsDailyDir,
+    config.backupsWeeklyDir,
+    config.backupsMonthlyDir,
+    config.backupsSafetyDir,
+    config.backupsTmpDir,
     config.logsDir,
   ]) {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -28,6 +42,13 @@ async function main(): Promise<void> {
 
   const keyStatus = ensureMasterKey(config.keyPath);
   openDatabase(config.dbPath);
+
+  // Wartungsmodus von der Platte laden (z. B. nach abgebrochenem Restore)
+  loadMaintenanceFlagFromDisk();
+
+  // Backup-Geister beerdigen + Disk/DB synchronisieren
+  const zombies = reapZombies();
+  const orphans = reconcileDiskState();
 
   // CORS-Härtung: in Production darf "*" nicht stehen, sonst Bootabbruch.
   if (config.nodeEnv === "production") {
@@ -49,6 +70,7 @@ async function main(): Promise<void> {
     },
     disableRequestLogging: false,
     trustProxy: true,
+    bodyLimit: 10 * 1024 * 1024, // normale Routes; Backup-Upload nutzt Multipart-Stream
   });
 
   await app.register(helmet, { contentSecurityPolicy: false });
@@ -56,6 +78,7 @@ async function main(): Promise<void> {
   await app.register(cors, {
     origin: config.corsOrigins.includes("*") ? true : config.corsOrigins,
     credentials: true,
+    exposedHeaders: ["X-Maintenance"],
   });
   if (config.nodeEnv !== "production" && config.corsOrigins.includes("*")) {
     app.log.warn("CORS = '*' (DEV-Modus). In Production explizit setzen.");
@@ -64,6 +87,15 @@ async function main(): Promise<void> {
     max: 200,
     timeWindow: "1 minute",
   });
+  await app.register(multipart, {
+    limits: {
+      fileSize: 2 * 1024 * 1024 * 1024, // 2 GB Backup-Upload
+      files: 1,
+    },
+  });
+
+  // Wartungsmodus-Hook: muss VOR allen Routen sitzen
+  app.addHook("preHandler", maintenanceGuard);
 
   app.setErrorHandler((err, req, reply) => {
     req.log.error({ err }, "Request failed");
@@ -77,9 +109,13 @@ async function main(): Promise<void> {
   await app.register(healthRoutes);
   await app.register(authRoutes);
   await app.register(einstellungenRoutes);
+  await app.register(backupRoutes);
 
   // Touch-Throttle aus DB warmladen → kein Update-Sturm nach Restart
   const warmed = warmTouchCacheFromDb();
+
+  // Backup-Scheduler starten
+  startScheduler();
 
   await app.listen({ port: config.port, host: config.host });
   app.log.info(
@@ -89,6 +125,8 @@ async function main(): Promise<void> {
       schemaVersion: getSchemaVersion(),
       masterKeyCreated: keyStatus.created,
       sessionsWarmed: warmed,
+      backupZombiesReaped: zombies,
+      backupOrphansRemoved: orphans,
     },
     "MyCleanCenter backend ready",
   );
