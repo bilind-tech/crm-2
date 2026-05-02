@@ -51,7 +51,7 @@ export function rowToManueller(r: ManuellerRow): ManuellerPosten {
     zeitraum: {
       jahr: r.zeitraum_jahr,
       monat: r.zeitraum_monat,
-      quartal: (r.zeitraum_quartal ?? null) as 1 | 2 | 3 | 4 | null,
+      quartal: r.zeitraum_quartal,
     },
     faelligAm: r.faellig_am,
     geschaetzterBetrag: r.geschaetzter_betrag,
