@@ -1,6 +1,7 @@
 // Drive-Upload Queue Repository.
 import crypto from "node:crypto";
 import { getDatabase } from "../db/index.js";
+import { emit } from "../events/bus.js";
 
 export type DriveUploadStatus = "pending" | "running" | "erfolg" | "fehler" | "manuell";
 export type BelegArt = "angebot" | "rechnung";
@@ -109,6 +110,11 @@ export function markErfolg(id: string, fileId: string, webLink?: string): void {
        fehler_text=NULL, abgeschlossen_am=datetime('now'), versuche=versuche+1, geaendert_am=datetime('now')
      WHERE id=?`,
   ).run(fileId, webLink ?? null, id);
+  const cur = getById(id);
+  emit("drive:upload-changed", {
+    id, status: "erfolg",
+    belegArt: cur?.belegArt ?? null, belegId: cur?.belegId ?? null, fehlerText: null,
+  });
 }
 
 export function markFehler(id: string, error: string): void {
@@ -116,7 +122,8 @@ export function markFehler(id: string, error: string): void {
   const cur = getById(id);
   if (!cur) return;
   const versuche = cur.versuche + 1;
-  if (versuche >= BACKOFF_MIN.length + 1) {
+  const finalFail = versuche >= BACKOFF_MIN.length + 1;
+  if (finalFail) {
     db.prepare(`UPDATE drive_upload_queue SET status='manuell', fehler_text=?, versuche=?, naechster_versuch_at=NULL, geaendert_am=datetime('now') WHERE id=?`)
       .run(error.slice(0, 1000), versuche, id);
   } else {
@@ -124,6 +131,11 @@ export function markFehler(id: string, error: string): void {
     db.prepare(`UPDATE drive_upload_queue SET status='pending', fehler_text=?, versuche=?, naechster_versuch_at=?, geaendert_am=datetime('now') WHERE id=?`)
       .run(error.slice(0, 1000), versuche, plusMin(min), id);
   }
+  emit("drive:upload-changed", {
+    id, status: finalFail ? "manuell" : "pending",
+    belegArt: cur.belegArt, belegId: cur.belegId,
+    fehlerText: error.slice(0, 1000),
+  });
 }
 
 export function retry(id: string): boolean {
