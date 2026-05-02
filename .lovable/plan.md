@@ -1,87 +1,148 @@
-## Step 9 — Frontend-Anbindung System-Update + Polishing
+## Step 10 — Steuer-Modul: Persistenz auf dem Pi
 
-Step 8 hat das Backend (Pipeline, Manifest, Lock, Rollback) fertig. Im Frontend zeigt der Tab „System & Updates" aber noch zwei Lücken:
-
-1. `useValidateUpdate` schickt nur `{ fileName, sizeBytes }` als JSON — das echte Backend erwartet aber `multipart/form-data` mit `field=paket` und der ZIP-Datei. Heute funktioniert das nur gegen Mock.
-2. SSE invalidiert zwar Queries, aber der Lauf-Dialog pollt weiter alle 3 s und der UX-Hinweis „live aktualisiert" fehlt. Außerdem sind Fehlerfälle wie 429-Lockout nach 3 falschen Rollback-Passwörtern und 409 „Update läuft bereits" nicht freundlich behandelt.
-
-Das hier räumt beides auf, ohne den Tab visuell umzuwerfen — ein paar Hooks, der Multipart-Pfad, ein SystemInfo-Adapter und kleinere UI-Korrekturen.
+Das Steuer-Modul ist im Frontend komplett (Übersicht, Berechnung, Dialoge, KPIs). Die Berechnungslogik (`src/lib/steuern/berechnung.ts`) bleibt **bewusst im Frontend** — sie operiert auf Rechnungen + Dokumenten, die ohnehin via React Query geladen werden. Was fehlt: alle drei `localStorage`-Stores wandern auf den Pi, damit Einstellungen, manuelle Posten und Bezahlt-Markierungen geräteübergreifend (Desktop, Handy, jeder Browser im LAN) konsistent sind und Backups sie mitnehmen.
 
 ### Was geändert wird
 
-**1. Multipart-Upload für `useValidateUpdate`**
-- `src/hooks/useApi.ts`: Hook auf `FormData` umstellen (Feldname `paket`, analog zu `useUploadBackup` mit `file`). Direkt über `piApi.post` schicken, damit der Mock nicht mehr getriggert wird, wenn eine Pi-URL konfiguriert ist.
-- Mock-Backend in `src/lib/mock/backend.ts`: `/system/update/validate` akzeptiert jetzt sowohl JSON-Body (alter Pfad) als auch FormData (neuer Pfad) — wir lesen `file.name` + `file.size` raus, damit Mock-Demo weiterläuft.
-- Fehlerfälle aus dem Backend (`ManifestError`, `ZipError`, 413 zu groß, 401, 409) werden in der Mutation in `toast.error` mit klarem Text gemappt, statt rohen Fehler-JSON zu zeigen.
+**1. Datenbank — Migration `012_steuern.sql`**
 
-**2. SystemInfo-Adapter**
-- Backend liefert `{ appName, version, installedAt, node, sqlite, hardware }` — Frontend-Typ erwartet exakt das (passt). Adapter prüft nur, ob `installedAt` ISO ist (Backend liefert evtl. SQLite-Format `YYYY-MM-DD HH:MM:SS`). Falls nicht, in `adapters.ts` mit `toIsoDateTime` (existiert bereits) konvertieren.
-- Hook `useSystemInfo` ruft den Adapter, damit `formatDateTime` nicht „Invalid Date" zeigt.
+Drei Tabellen, additiv:
 
-**3. SSE-getriebener Live-Lauf**
-- `useUpdateLauf`: Polling-Intervall von 3 s auf 10 s erhöhen, weil SSE ohnehin invalidet. Bleibt als Sicherheitsnetz, falls SSE wegbricht.
-- `useLiveEvents.ts`: Bei `system:update:phase` keine Toast-Spam — nur Query-Invalidate. Toast nur bei `system:update:lauf` mit Endstatus (ist heute schon so).
-- `UpdateProgressDialog`: kleiner Live-Indikator („● Live") oben rechts wenn SSE verbunden — wir lesen `useSseConnected()` (siehe Step 7). Falls die Hilfsfunktion nicht existiert, kleiner Helfer in `src/lib/api/sse.ts` ergänzen, der den letzten Heartbeat zurückgibt; fällt dezent in „Aktualisierung in Kürze" um, wenn SSE down.
+```sql
+CREATE TABLE steuer_einstellungen (
+  id                INTEGER PRIMARY KEY CHECK (id = 1),  -- Singleton
+  kst_satz          REAL    NOT NULL DEFAULT 15,
+  soli_satz         REAL    NOT NULL DEFAULT 5.5,
+  gewst_messzahl    REAL    NOT NULL DEFAULT 3.5,
+  gewst_hebesatz    REAL    NOT NULL DEFAULT 525,
+  ust_rhythmus      TEXT    NOT NULL DEFAULT 'monatlich'
+                    CHECK (ust_rhythmus IN ('monatlich','quartalsweise','jaehrlich')),
+  ruecklage_satz    REAL    NOT NULL DEFAULT 35,
+  ust_puffer_satz   REAL    NOT NULL DEFAULT 10,
+  updated_at        TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+INSERT INTO steuer_einstellungen (id) VALUES (1);
 
-**4. Rollback-Lockout-UX**
-- `RollbackConfirmDialog`: bei 401 zählen wir die Versuche im lokalen State (1/3, 2/3, 3/3) und zeigen einen sanften Hinweis. Bei 429 vom Backend zeigen wir die Sperrzeit aus der Fehlermeldung und deaktivieren den Submit-Button für die Restdauer (Countdown).
-- `useRollbackUpdate`: Fehler durchreichen statt schlucken; im Tab den Lockout-Status global vorhalten, damit beim erneuten Öffnen der Dialog noch gesperrt bleibt.
+CREATE TABLE steuer_manueller_posten (
+  id                  TEXT PRIMARY KEY,
+  art                 TEXT NOT NULL CHECK (art IN ('ust','kst','soli','gewst','manuell')),
+  titel               TEXT NOT NULL,
+  zeitraum_jahr       INTEGER NOT NULL,
+  zeitraum_monat      INTEGER,
+  zeitraum_quartal    INTEGER CHECK (zeitraum_quartal BETWEEN 1 AND 4),
+  faellig_am          TEXT NOT NULL,
+  geschaetzter_betrag REAL NOT NULL,
+  notiz               TEXT,
+  erstellt_am         TEXT NOT NULL DEFAULT (datetime('now'))
+);
 
-**5. „Update läuft bereits" beim Tab-Öffnen**
-- Beim Mount des Tabs: einmaliger `GET /system/update/lauf/aktuell`. Bei 200 (statt 204) → `setActiveLaufId(...)` und Dialog automatisch öffnen, damit ein User, der die Seite während eines laufenden Updates neu lädt, den Fortschritt weiter sieht.
-- Hook dafür: `useAktuellerUpdateLauf()` mit `staleTime: 0` und nur einmal beim Mount aktiv.
+CREATE TABLE steuer_bezahlt_markierung (
+  posten_id            TEXT PRIMARY KEY,        -- ID des Auto- oder Manuell-Postens
+  bezahlt_am           TEXT NOT NULL,
+  tatsaechlicher_betrag REAL,
+  notiz                TEXT,
+  erstellt_am          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
 
-**6. Tab-Cleanup**
-- Den großen FRONTEND-STUB-Header-Kommentar oben in `SystemUpdateTab.tsx` entfernen — Backend ist da, Hinweise stimmen nicht mehr. Stattdessen kurzer Header-Kommentar, was der Tab tut.
-- Dead-State `RotateCcw rollbackPending` greift heute nicht mehr, weil der Dialog schließt vor Rückmeldung — auf den globalen `rollback.isPending` umschwenken.
+Auto-Posten-IDs sind im Frontend deterministisch (`ust-2026-Q1`, `kst-2026`, …). Das ist die Brücke zur Bezahlt-Tabelle — sie braucht keine Foreign Key, weil Auto-Posten in keiner Tabelle existieren.
 
-**7. Tests**
-- `backend/test/system-update.spec.ts` ist grün. Frontend-Smoke nicht nötig — UI-Komponenten ohne eigene Logic.
+**2. Backend — neues Modul `backend/src/steuern/`**
+
+- `repo.ts` — typisiertes `better-sqlite3`-Repo: `getEinstellungen()`, `updateEinstellungen(patch)`, `listManuellePosten()`, `addManueller(...)`, `updateManueller(id, patch)`, `removeManueller(id)`, `listBezahlt()`, `setBezahlt(id, eintrag)`, `removeBezahlt(id)`.
+- `mappers.ts` — `snake_case` ↔ `camelCase` zwischen DB und API-Shape. Validierung der `ust_rhythmus`-Enum.
+- `validation.ts` — Zod-Schemas für Patch-Bodies (Min/Max für Sätze: KSt 0–50, Soli 0–20, GewSt-Messzahl 0–20, Hebesatz 200–1000, Rücklage 0–100, USt-Puffer 0–50).
+
+**3. Backend — Routen `backend/src/routes/steuern.ts`**
+
+Acht Endpoints, alle hinter `requireAuth`:
+
+| Methode | Pfad | Zweck |
+|---|---|---|
+| GET    | `/steuern/einstellungen`                | Singleton lesen |
+| PATCH  | `/steuern/einstellungen`                | Sätze/Rhythmus ändern |
+| POST   | `/steuern/einstellungen/reset`          | auf Defaults zurücksetzen |
+| GET    | `/steuern/manuelle-posten`              | Liste |
+| POST   | `/steuern/manuelle-posten`              | Anlegen |
+| PATCH  | `/steuern/manuelle-posten/:id`          | Ändern |
+| DELETE | `/steuern/manuelle-posten/:id`          | Löschen |
+| GET    | `/steuern/bezahlt`                      | Map `{ postenId → eintrag }` |
+| PUT    | `/steuern/bezahlt/:postenId`            | Eintrag setzen/überschreiben |
+| DELETE | `/steuern/bezahlt/:postenId`            | Eintrag löschen |
+
+Jede Mutation sendet einen `aktivitaet:steuer:*`-Event über den bestehenden SSE-Bus, damit andere Tabs live aktualisieren. Audit-Eintrag bei jeder Änderung von `steuer_einstellungen`.
+
+**4. Frontend — React-Query-Hooks**
+
+`src/hooks/useApi.ts` bekommt:
+
+```ts
+useSteuerEinstellungen()           // GET  + cache
+useUpdateSteuerEinstellungen()     // PATCH
+useResetSteuerEinstellungen()      // POST .../reset
+useManuellePosten()                // GET liste
+useAddManuellerPosten()            // POST
+useUpdateManuellerPosten()         // PATCH
+useRemoveManuellerPosten()         // DELETE
+useBezahltMarkierungen()           // GET
+useSetBezahlt()                    // PUT
+useRemoveBezahlt()                 // DELETE
+```
+
+Konvention identisch zu bestehenden Hooks (Backup, System-Update). SSE-Events `steuer:*` invalidieren die jeweiligen QueryKeys via `useLiveEvents.ts`.
+
+**5. Frontend — Stores umbauen**
+
+`src/lib/steuern/store.ts` wird zu einem **dünnen Adapter**, der dieselbe API behält wie heute (`useSteuerEinstellungen`, `useManuellePosten`, `useBezahltMarkierungen`), intern aber die neuen React-Query-Hooks nutzt. So bleibt `src/routes/steuern.tsx`, `SteuerTab.tsx` und `ManuellerPostenDialog.tsx` **unverändert**.
+
+Migrationspfad bei vorhandenem `localStorage`:
+- Beim ersten Laden, wenn Backend-Einstellungen `updated_at` noch der Default ist UND `localStorage` Werte hat → einmaliger PATCH mit lokalen Werten, danach `localStorage.removeItem(...)`. Gilt analog für manuelle Posten und Bezahlt-Map.
+- Migration läuft `idempotent`, mit Marker `mcc_steuern_migrated_v1` in localStorage.
+
+**6. Mock-Backend**
+
+`src/lib/mock/backend.ts` bekommt Handler für die 10 neuen Endpoints, In-Memory-Map. Damit läuft die Demo ohne Pi weiter.
+
+**7. Backup**
+
+Migration `012` taucht in der bestehenden `db.backup()`-Pipeline (Step 2) automatisch auf. Restore-Test im Step bestätigt, dass eine Backup-Datei aus „vor Step 10" sauber via Migration-Runner auf das neue Schema gehoben wird.
+
+**8. Tests**
+
+`backend/test/steuern.spec.ts`:
+- Singleton-Garantie (zweite Insert-Versuch schlägt am CHECK fehl).
+- PATCH validiert Grenzen (negative Hebesatz → 400, Rhythmus-Enum-Verletzung → 400).
+- Reset stellt Defaults her und behält `updated_at` aktuell.
+- Manuelle Posten CRUD inkl. 404 bei unbekannter ID.
+- Bezahlt-PUT idempotent (zweimal mit gleichem Body → identische Zeile, keine Duplicate).
+- Restore eines Pre-Step-10-Backups + Migration-Runner → Defaults werden korrekt eingefügt, kein Datenverlust an anderen Tabellen.
+- SSE-Event wird bei jeder Mutation gefeuert (über bestehenden Test-Hilfs-Listener).
 
 ### Technische Details
 
-**Multipart-Mutation:**
-```ts
-mutationFn: async (file: File) => {
-  const fd = new FormData();
-  fd.append("paket", file, file.name);
-  return piApi.post<UpdatePackageInfo>("/system/update/validate", fd);
-}
-```
+**Singleton-Pattern für Einstellungen:**
+`CHECK (id = 1)` + initialer `INSERT (id) VALUES (1)` in der Migration. Das Repo hat nur `get()` und `update(patch)` — kein `create`, kein `delete`. Frontend muss nie eine ID kennen.
 
-**Mock-Anpassung:**
-Der Mock-Handler bekommt einen Type-Check: `body instanceof FormData` → `file = body.get("paket") as File`, sonst altes JSON-Verhalten.
+**Bezahlt-Markierung ohne FK:**
+Auto-Posten existieren nur als Berechnungs-Output im Frontend. Ihre IDs sind deterministisch (`ust-{jahr}-Q{q}` / `ust-{jahr}-{mm}` / `kst-{jahr}` / `soli-{jahr}` / `gewst-{jahr}`). Wenn der User später die Periodik wechselt (monatlich → quartalsweise), ändert sich die ID-Struktur. Deshalb: beim Wechsel von `ust_rhythmus` werden alle `steuer_bezahlt_markierung`-Einträge mit Präfix `ust-` der laufenden Jahre gelöscht (Backend-Side-Effect im PATCH-Handler) und der User bekommt einen Hinweis-Toast „USt-Bezahlt-Historie zurückgesetzt". Manuelle Posten und Ertragsteuer-Markierungen bleiben.
 
-**SystemInfo-Adapter:**
-```ts
-function adaptSystemInfo(s: SystemInfo): SystemInfo {
-  return { ...s, installedAt: toIsoDateTime(s.installedAt) };
-}
-```
-
-**Aktueller-Lauf-Hook:**
-```ts
-const { data } = useQuery({
-  queryKey: ["system","update","lauf","aktuell"],
-  queryFn: () => api.get<UpdateLauf | null>("/system/update/lauf/aktuell").catch(() => null),
-  staleTime: 0,
-  refetchOnMount: "always",
-});
-useEffect(() => { if (data?.id && !activeLaufId) setActiveLaufId(data.id); }, [data]);
-```
-
-**Lockout-Countdown:**
-Aus 429-Body `until` parsen (Backend liefert ISO im Fehlertext) — wenn nicht parsebar, pauschal 15 min anzeigen.
+**Migration aus localStorage:**
+Frontend führt beim Mount eine Idempotenz-Prüfung durch. Wenn Backend-Einstellungen `updated_at` älter ist als localStorage-Daten und Marker fehlt → Push-Migration in einer Transaktion. Der Marker `mcc_steuern_migrated_v1=true` verhindert wiederholte Pushs, auch nach Logout/Login.
 
 ### Dateien
 
-- edited `src/hooks/useApi.ts` — Multipart, neuer `useAktuellerUpdateLauf`, längeres Polling, SystemInfo-Adapter
-- edited `src/lib/mock/backend.ts` — FormData-Toleranz für `/system/update/validate`
-- edited `src/lib/api/adapters.ts` — `adaptSystemInfo` ergänzen
-- edited `src/components/einstellungen/SystemUpdateTab.tsx` — Stub-Header weg, Auto-Open laufender Lauf, Lockout-State, „Live"-Indikator
-- edited `src/components/einstellungen/RollbackConfirmDialog.tsx` — Fehlversuche-Hinweis, 429-Sperre mit Countdown
-- edited `src/hooks/useLiveEvents.ts` — keine Phase-Toasts (nur Lauf-End-Toasts behalten)
-- edited `src/lib/api/sse.ts` — kleiner `isSseConnected()`-Export, falls noch nicht da
-- edited `mem/features/system-update.md` — Status „Frontend angebunden, Multipart, SSE Live-Indikator"
+- created `backend/src/db/migrations/012_steuern.sql`
+- created `backend/src/steuern/repo.ts`
+- created `backend/src/steuern/mappers.ts`
+- created `backend/src/steuern/validation.ts`
+- created `backend/src/routes/steuern.ts`
+- created `backend/test/steuern.spec.ts`
+- edited  `backend/src/server.ts` — Route registrieren
+- edited  `backend/src/events/bus.ts` — `steuer:*`-Events
+- edited  `src/hooks/useApi.ts` — 10 neue Hooks
+- edited  `src/lib/steuern/store.ts` — Adapter auf React Query, localStorage-Migration
+- edited  `src/lib/mock/backend.ts` — Mock-Handler
+- edited  `src/hooks/useLiveEvents.ts` — `steuer:*`-Invalidations
+- edited  `mem/features/steuern.md` — Status „Backend-persistent, geräteübergreifend"
 
-Sag „weiter", dann setze ich Step 9 um.
+Sag „weiter", dann setze ich Step 10 um.
