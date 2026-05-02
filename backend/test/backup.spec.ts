@@ -77,7 +77,7 @@ async function setupAndLogin(): Promise<string> {
   const r = await app.inject({
     method: "POST",
     url: "/auth/setup",
-    payload: { setupToken, username: "owner", password: "Sicheres-Passwort-1!" },
+    payload: { setupToken, password: "Sicheres-Passwort-1!" },
   });
   expect(r.statusCode).toBe(200);
   const cookieHeader = r.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
