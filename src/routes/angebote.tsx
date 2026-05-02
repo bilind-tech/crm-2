@@ -148,11 +148,8 @@ function Page() {
           { value: "angenommen", label: "Angenommen" },
         ]}
         placeholder="Suche nach Nummer, Titel, Kunde…"
-      />
-
-      <ZeitraumFilter
-        value={zeitraum}
-        onChange={setZeitraum}
+        zeitraum={zeitraum}
+        setZeitraum={setZeitraum}
         verfuegbareDaten={alle.map((a) => a.erstelltAm)}
       />
 
