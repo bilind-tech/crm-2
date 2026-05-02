@@ -582,9 +582,10 @@ export const useCreateBackup = () => {
 export const useRestoreBackup = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (backupId: string) =>
+    mutationFn: ({ backupId, passwort }: { backupId: string; passwort: string }) =>
       api.post<{ erfolg: boolean; restoredFrom: string; restoredAt: string }>(
         `/backup/${backupId}/restore`,
+        { passwort },
       ),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.einstellungen.backupHistorie }),
   });
@@ -602,13 +603,11 @@ export const useUploadBackup = () =>
 export const useRestoreUploadedBackup = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (uploadId: string) =>
-      api.post<{ erfolg: boolean }>(`/backup/upload/${uploadId}/restore`),
+    mutationFn: ({ uploadId, passwort }: { uploadId: string; passwort: string }) =>
+      api.post<{ erfolg: boolean }>(`/backup/upload/${uploadId}/restore`, { passwort }),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.einstellungen.backupHistorie }),
   });
 };
-
-export const usePositionsvorlagen = () =>
   useQuery({ queryKey: qk.einstellungen.positionsvorlagen, queryFn: () => api.get<Positionsvorlage[]>("/einstellungen/positionsvorlagen") });
 export const useCreatePositionsvorlage = () => {
   const qc = useQueryClient();
