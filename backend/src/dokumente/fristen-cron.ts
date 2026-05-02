@@ -44,6 +44,12 @@ export function runFristCheck(now = new Date()): FristCheckResult {
     logFristBenachrichtigung(d.id, tag, status);
     benachrichtigt++;
   }
+  // Zusätzlich: manuelle Steuer-Posten prüfen.
+  try {
+    runSteuerFristCheck(now);
+  } catch {
+    /* swallow */
+  }
   return { geprueft: dokumente.length, benachrichtigt, uebersprungen };
 }
 
