@@ -53,6 +53,12 @@ export function AngebotForm({ onClose, defaultKundeId, defaultObjektId }: Props)
     [objekteAlle, kundeId]
   );
 
+  const vorschauNummer = useMemo(() => {
+    if (!kundeId || !nummernkreise) return "";
+    const kunde = kunden.find((k) => k.id === kundeId);
+    return vorschauBelegnummer(kunde?.kuerzel, nummernkreise.angebotPraefix);
+  }, [kundeId, kunden, nummernkreise]);
+
   async function submit() {
     if (!kundeId) return toast.error("Bitte Kunde wählen");
     if (!titel.trim()) return toast.error("Titel ist erforderlich");
