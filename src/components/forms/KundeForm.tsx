@@ -73,7 +73,23 @@ interface FormState {
   standardRabatt: number;
   notizen: string;
   tags: string;
+  // Dauerauftrag (optional, beim Anlegen mit-erzeugen)
+  daAktiv: boolean;
+  daBezeichnung: string;
+  daFrequenz: DauerauftragFrequenz;
+  daStichtagTyp: "monatstag" | "monatsletzter";
+  daStichtagWert: number;
+  daLaufzeitVon: string; // YYYY-MM-DD
+  daModus: DauerauftragModus;
+  daPosBezeichnung: string;
+  daPosMenge: number;
+  daPosEinzelpreis: number;
 }
+
+const heuteIso = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 
 const initial: FormState = {
   typ: "firma",
@@ -100,6 +116,16 @@ const initial: FormState = {
   standardRabatt: 0,
   notizen: "",
   tags: "",
+  daAktiv: false,
+  daBezeichnung: "",
+  daFrequenz: "monatlich",
+  daStichtagTyp: "monatstag",
+  daStichtagWert: 1,
+  daLaufzeitVon: heuteIso(),
+  daModus: "entwurf",
+  daPosBezeichnung: "",
+  daPosMenge: 1,
+  daPosEinzelpreis: 0,
 };
 
 export function KundeForm({ onClose, onCreated }: Props) {
