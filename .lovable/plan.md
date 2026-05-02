@@ -1,101 +1,104 @@
+# Step 4 — Angebote, Rechnungen & Teilzahlungen
+
 ## Ziel
-Drittes Backend-Modul: alle Stammdaten-Endpoints für Kunden, Ansprechpartner, Objekte und Notizen produktiv ans Pi-Backend hängen — inklusive Volltextsuche (SQLite FTS5) und atomarer Belegnummern-Vergabe pro Kunde+Monat. Mock wird für diese Endpoints abgeschaltet, Mock-Parität für alles andere bleibt.
+Viertes Backend-Modul: das Kerngeschäft (Angebote, Rechnungen inkl. Positionen, Teilzahlungen, Status-Lifecycle, Belegnummer-Vergabe nach Kundenkürzel) auf SQLite + Fastify im Pi-Backend. Die in Step 3 vorbereiteten atomaren Zähler und FTS-Trigger werden hier scharf geschaltet. Mock bleibt als Demo-Fallback erhalten.
 
 ## Backend
 
-### 1. Migration `005_kunden_objekte.sql`
-- `kunde` — alle Felder aus `Kunde`-Typ (siehe `src/lib/api/types.ts`), inklusive `kuerzel` UNIQUE (case-insensitive via `COLLATE NOCASE`), `tags TEXT` (JSON-Array), `archiviert INTEGER DEFAULT 0`, `erstellt_am`/`geaendert_am`. Trigger `kunde_touch` aktualisiert `geaendert_am` bei jedem UPDATE.
-- `ansprechpartner` — FK auf `kunde(id) ON DELETE CASCADE`, `primaer INTEGER`. Partial-Unique-Index, der pro Kunde nur einen primären Kontakt zulässt: `CREATE UNIQUE INDEX … WHERE primaer=1`.
-- `objekt` — FK auf `kunde(id) ON DELETE CASCADE`. `reinigungstage TEXT` (JSON-Array). `ansprechpartner_vor_ort_id` als FK auf `ansprechpartner(id) ON DELETE SET NULL`.
-- `notiz` — kann an Kunde, Objekt, Angebot oder Rechnung hängen. Spalten: `kunde_id`, `objekt_id`, `angebot_id`, `rechnung_id` (alle nullable, exakt eins muss gesetzt sein → CHECK-Constraint).
-- `belegnummer_zaehler` — `(kunde_id TEXT, periode TEXT, naechster_start INTEGER, PRIMARY KEY(kunde_id, periode))`. `periode` = `MMYY`. Wird beim Vergabe-Flow atomar inkrementiert.
-- `kunde_nummer_zaehler` — `(jahr INTEGER PRIMARY KEY, naechster INTEGER)` für Kundennummern `K-YYYY-NNN`.
-- Indizes: `kunde(kuerzel COLLATE NOCASE)`, `kunde(archiviert)`, `kunde(status)`, `objekt(kunde_id)`, `ansprechpartner(kunde_id)`, `notiz(kunde_id)`, `notiz(objekt_id)`.
+### 1. Migration `007_angebote_rechnungen.sql`
+- `angebot` — Felder gemäß `Angebot`-Type. `kunde_id` FK `ON DELETE RESTRICT`, `objekt_id` / `ansprechpartner_id` `ON DELETE SET NULL`. `status` (enum als TEXT + CHECK). `archiviert INTEGER DEFAULT 0`. `optionen TEXT` (JSON). `drive TEXT` (JSON). `versendet_am`, `gueltig_bis`. Trigger `angebot_touch`.
+- `angebot_position` — FK `ON DELETE CASCADE`, `sort INTEGER NOT NULL`. Spalten: `beschreibung`, `menge`, `einheit`, `einzelpreis_netto`, `steuersatz`, `rabatt`, `modus`, `pauschalpreis_netto`, `ausfuehrung`. Index `(angebot_id, sort)`.
+- `rechnung` — analog Angebot + `quell_angebot_id` FK `ON DELETE SET NULL`, `rechnungsdatum`, `faelligkeitsdatum`, `mahn_pausiert_bis`, `inkasso_markiert`. Status-CHECK inkl. `teilbezahlt`/`bezahlt`/`ueberfaellig`/`storniert`.
+- `rechnung_position` — wie `angebot_position`.
+- `zahlung` — FK auf `rechnung(id) ON DELETE CASCADE`, `betrag INTEGER` (Cent), `datum`, `methode`, `referenz`, `notiz`, `erstellt_am`. Index `(rechnung_id)`.
+- Belegnummer-Eindeutigkeit: `UNIQUE(nummer)` auf `angebot` und `rechnung`.
+- FK `ON DELETE RESTRICT` von `kunde` ist jetzt scharf — die Step-3-Soft-Delete-Logik prüft `EXISTS angebot/rechnung` und wird gegen die echten Tabellen wirksam.
 
-### 2. Migration `006_fts.sql` (FTS5)
-- Virtuelle Tabelle `suche_idx` (FTS5, contentless, tokenize=`unicode61 remove_diacritics 2`).
-- Spalten: `entity_typ` (kunde/objekt/notiz/angebot/rechnung), `entity_id`, `titel`, `untertitel`, `body`.
-- Trigger `kunde_ai`/`au`/`ad`, gleich für `objekt`, `notiz` — synchronisieren in `suche_idx`. Angebote/Rechnungen folgen in Step 4/7, Trigger werden dort additiv ergänzt.
-- Re-Index-Befehl `INSERT INTO suche_idx(suche_idx) VALUES('rebuild')` als Admin-Wartungspfad (für späteren System-Tab; in Step 3 nicht UI-exponiert).
+### 2. Migration `008_fts_belege.sql`
+- Additive FTS5-Trigger für `angebot` und `rechnung`: `ai/au/ad` schreiben `(entity_typ, entity_id, titel='Nummer + Titel', untertitel='Kundenname', body='Positionen-Beschreibungen joined)` in `suche_idx`.
+- Re-Index-Pfad für Belege wird in den bestehenden `rebuild`-Befehl integriert.
 
-### 3. Module unter `backend/src/kunden/`
-- `repo.ts` — Prepared Statements für Kunde/Ansprechpartner/Objekt/Notiz (CRUD), Filter (suche, status, archiviert), Pagination (`limit`, `offset`).
-- `belegnummer.ts` — `nextNummer(kundeId, periodeMMYY)` in `db.transaction(...)`: SELECT FOR UPDATE-Ersatz via `INSERT … ON CONFLICT … DO UPDATE SET naechster_start = naechster_start + 1 RETURNING naechster_start`. Garantiert lückenlos und atomar auch bei Parallelaufrufen. Format-String aus Firmendaten (Kürzel-Logik aus `mem://features/belegnummern`).
-- `kuerzel.ts` — Validierung (3–4 Zeichen, A–Z, 0–9), Eindeutigkeitsprüfung; Liefert `{ frei: boolean, kunde?: { id, nummer, name } }` für `/kunden/kuerzel-frei`.
-- `kunde-nummer.ts` — `nextKundeNummer(jahr)` analog atomar, Format `K-YYYY-NNN`.
-- `notizen.ts` — Validierung der Exklusiv-Bindung (genau eines von kundeId/objektId/angebotId/rechnungId).
-- `search.ts` — Wrapper um FTS5 mit Prefix-Match (`kunde* OR kunde`), Result-Mapping in `SuchTreffer`-Form, Limit 25.
+### 3. Module unter `backend/src/belege/`
+- `mappers.ts` — `snake_case`↔`camelCase`, Geld als Cent ↔ Euro-Decimal, JSON-Parsing für `optionen`/`drive`/`positionen`.
+- `belegnummer.ts` — nutzt `nextNummer(kundeId, "MMYY")` aus Step 3. Format aus `mem://features/belegnummern`: `{KÜRZEL}{MM}{YY}/{NN}` (z. B. `GFU0526/01`). Fallback wenn Kürzel fehlt: globaler Präfix aus `firmendaten.angebotPraefix` / `rechnungsPraefix`. Vergabe immer in derselben Transaktion wie der INSERT.
+- `angebote-repo.ts` / `rechnungen-repo.ts` — CRUD inkl. Positionen, Filter (`kundeId`, `status`, `archiviert`, `q`), Pagination, Sortierung. Positionen in einer Transaktion zusammen mit Beleg neu schreiben (bestehende löschen → neu einfügen, sort-Reihenfolge).
+- `status.ts` — Lifecycle-Engine. Tabelle erlaubter Übergänge (z. B. `entwurf→versendet`, `versendet→teilbezahlt|bezahlt|ueberfaellig|storniert`). Auto-Ableitungen:
+  - Rechnung-Status aus Summe Zahlungen: `0 → unverändert`, `<brutto → teilbezahlt`, `>=brutto → bezahlt`. „ueberfaellig" wird per Tageslauf gesetzt (siehe Scheduler).
+  - Endzustände (`bezahlt`, `storniert`, `abgelehnt`, `angenommen` bei Angebot) verhindern Statuswechsel zurück.
+- `umwandeln.ts` — `angebot → rechnung`: kopiert Positionen, setzt `quellAngebotId`, vergibt neue Rechnungsnummer, Angebot-Status auf `angenommen`. Alles in einer Transaktion. Idempotenz: zweiter Aufruf liefert die existierende Rechnung statt Doppel.
+- `duplizieren.ts` — Angebot-Klon ohne Versand-/Drive-Daten, neuer Status `entwurf`, neue Nummer.
+- `zahlungen.ts` — Anlegen/Löschen einer Zahlung, dann `status.recompute(rechnungId)`. Validierung: `betrag>0`, `datum<=heute+1`. Methode-Default `ueberweisung` (passt zur Memory-Regel zum Mini-Dialog).
+- `scheduler.ts` — täglicher Cron (intern, an bestehenden Backup-Scheduler andocken): markiert offene Rechnungen mit `faelligkeitsdatum<heute` und Status `versendet|teilbezahlt` als `ueberfaellig`, sofern nicht `mahnPausiertBis>=heute`.
 
 ### 4. Routes unter `backend/src/routes/`
-- `kunden.ts`
-  - `GET /kunden?suche&status&archiviert&limit&offset` — Liste mit serverseitigem Filter.
-  - `GET /kunden/:id` — gibt zusätzlich `ansprechpartner[]`, `objekte[]`, `notizen[]` (kompatibel mit `useKunde`).
-  - `POST /kunden` — vergibt `nummer` über `nextKundeNummer(currentYear)`. Bei `kuerzel`-Konflikt → 409.
-  - `PATCH /kunden/:id` — Partial-Update; bei `kuerzel`-Wechsel Eindeutigkeit erneut prüfen.
-  - `DELETE /kunden/:id` — soft via `archiviert=1` wenn Beziehungen existieren, sonst hart. Antwort enthält angewandten Modus.
-  - `GET /kunden/:id/zaehler` — `{ periode: "MMYY", naechsterStart }`.
-  - `GET /kunden/kuerzel-frei?kuerzel=&exceptId=` — wie Frontend erwartet.
-- `ansprechpartner.ts`
-  - `POST /ansprechpartner` — wenn `primaer=true`, alle anderen desselben Kunden in Transaktion auf `primaer=0` setzen.
-  - `PATCH /ansprechpartner/:id` — analog.
-  - `DELETE /ansprechpartner/:id` — wenn das einzige primäre weg ist und noch andere existieren, das chronologisch erste auf primär setzen.
-- `objekte.ts`
-  - `GET /objekte?kundeId` — Liste, Filter optional.
-  - `GET /objekte/:id` — Detail.
-  - `POST /objekte` — vergibt `nummer` (`O-YYYY-NNN`, Zähler analog).
-  - `PATCH /objekte/:id`, `DELETE /objekte/:id` (soft via `archiviert`/`status='beendet'` bei Beziehungen, hart sonst).
-- `notizen.ts`
-  - `POST /notizen` — Body validiert via Zod (`kundeId | objektId | angebotId | rechnungId`).
-  - `DELETE /notizen/:id`.
-- `suche.ts`
-  - `GET /search?q=` — Output `SuchTreffer[]` mit Linkstruktur, die zu existierenden Frontend-Routen passt (`/kunden/:id`, `/objekte/:id`, später `/angebote/:id`, `/rechnungen/:id`).
+- `angebote.ts`
+  - `GET /angebote?kundeId&status&archiviert&q&limit&offset` — Liste; `q` nutzt FTS5.
+  - `GET /angebote/:id` — Detail inkl. Positionen.
+  - `POST /angebote` — Vergabe Nummer, Status `entwurf`.
+  - `PATCH /angebote/:id` — Partial inkl. Positionen-Replace.
+  - `DELETE /angebote/:id` — soft (`archiviert=1`) wenn `versendet_am` gesetzt, sonst hart.
+  - `POST /angebote/:id/senden` — Status → `versendet`, `versendet_am=now`. Triggert in Step 6 Mailversand; in Step 4 nur Status + Audit.
+  - `POST /angebote/:id/in-rechnung-umwandeln` — siehe `umwandeln.ts`.
+  - `POST /angebote/:id/duplizieren`.
+- `rechnungen.ts`
+  - Analoge CRUD-/Senden-Routen.
+  - `POST /rechnungen/:id/zahlungen` und `DELETE /rechnungen/:rechnungId/zahlungen/:zahlungId`.
+  - `POST /rechnungen/:id/mahnung-pausieren` (Body `{ bis: ISODate }`).
+  - `POST /rechnungen/:id/inkasso-markieren`.
+  - Mahnstufen-Logik selbst kommt erst in Step 6 (E-Mail) — hier nur Felder + Status persistieren.
+- Alle Mutationen schreiben Audit (`angebot.create`, `rechnung.zahlung.add`, `rechnung.status.auto`, …).
 
-### 5. Auth + Audit
-- Alle Routen (außer `/search` für eingeloggte User auch) hängen am bestehenden `requireAuth`-Hook. Mutationen schreiben einen Audit-Eintrag (`kunde.create`, `kunde.update`, `kunde.delete`, …) inklusive `userId` und `ip`.
+### 5. Belegnummer-Edge-Cases
+- Monatsrollover: Nummer wird beim INSERT bestimmt, basierend auf `rechnungsdatum` (Rechnung) bzw. `erstelltAm` (Angebot). Bei späterem Editieren des Datums bleibt die Nummer.
+- Stornierte Rechnungen behalten ihre Nummer; Lücken sind erlaubt, da Periode = `MMYY` × Kunde.
+- Race: 100 parallele POST `/rechnungen` für denselben Kunden+Monat → Test in Vitest.
 
-### 6. Tests `backend/test/kunden.spec.ts`
-- Kunde anlegen → Nummer = `K-{YYYY}-001`, zweiter Kunde 002.
-- Kürzel `GFU` anlegen, zweites Anlegen mit gleichem Kürzel → 409.
-- Belegnummer: 100 parallele `nextNummer("kundeId","0526")` → liefert `1..100` lückenlos und einzigartig.
-- Ansprechpartner: zwei mit `primaer=true` → der zweite überschreibt den ersten, Index-Constraint hält.
-- Objekt + Notiz an Kunde hängen, Kunde löschen → CASCADE entfernt beides.
-- Notiz mit zwei gesetzten FKs → 422.
-- FTS5: Kunde „Gärtner Süd GmbH" + Notiz „Schließanlage Süd" → `q=schliess` findet die Notiz, `q=gartner` (ohne Diakritik) den Kunden.
+### 6. Tests `backend/test/belege.spec.ts`
+- Angebot anlegen → Nummer `GFU0526/01`; zweites Angebot desselben Kunden im selben Monat → `/02`.
+- Rechnung erstellen + zwei Teilzahlungen `< brutto` → Status `teilbezahlt`; dritte Zahlung füllt → `bezahlt`. Zahlung löschen → Status fällt zurück.
+- 100 parallele POST `/rechnungen` für denselben Kunden in `0526` → 100 verschiedene Nummern, alle in `1..100`.
+- `angebot_in_rechnung_umwandeln` zweimal hintereinander → liefert dieselbe Rechnung-ID, kein Duplikat, Angebot-Status bleibt `angenommen`.
+- Kunde mit Rechnung löschen → 409 + Soft-Delete-Pfad (Step 3 Logik feuert via `EXISTS`).
+- FTS: Suche nach Position-Beschreibung „Treppenhaus" findet Angebot.
+- Scheduler: Rechnung mit `faelligkeitsdatum=gestern` Status `versendet` → nach Cron-Tick `ueberfaellig`. Mit `mahnPausiertBis=morgen` → bleibt.
 
 ## Frontend
 
 ### `src/lib/api/client.ts`
-- `PI_PREFIXES` um `/kunden`, `/ansprechpartner`, `/objekte`, `/notizen`, `/search` erweitern.
-- Mock-Override-Liste anpassen: alles oben Genannte aus `MOCK_OVERRIDE_PREFIXES` rausnehmen (war eh nicht drin), aber Mock-Code für diese Pfade lassen — Demo-Modus ohne Backend nutzt weiterhin Mock.
+- `PI_PREFIXES` ergänzen: `/angebote`, `/rechnungen`.
+- Mock-Override-Liste unverändert; Mock-Code für diese Pfade bleibt als Demo-Fallback.
 
 ### `src/hooks/useApi.ts`
-- Keine API-Form-Änderungen — die existierenden Hooks (`useKunden`, `useKunde`, `useCreateKunde`, `useKuerzelFrei`, `useObjekte`, `useCreateObjekt`, `useNotizen`, `useGlobaleSuche` …) zeigen schon auf die richtigen Pfade.
-- 409 bei Kürzel-Konflikt: bestehender `useCreateKunde`-Onerror-Pfad bleibt; nur `ApiError.body` durchreichen für Toast-Detail.
+- Keine Signatur-Änderung — alle Hooks (`useAngebote`, `useAngebot`, `useCreateAngebot`, `useUpdateAngebot`, `useSendeAngebot`, `useAngebotInRechnung`, `useDuplicateAngebot`, `useRechnungen`, `useRechnung`, `useCreate/Update/Delete/SendeRechnung`, `useAddZahlung`, `useDeleteZahlung`, Mahnpause/Inkasso) zeigen schon auf die produktiven Pfade.
+- 409-Fehler bei Belegnummer-Konflikt (extrem selten dank Atomzähler) wird via bestehender `ApiError`-Pfad als Toast gezeigt.
+
+### Keine UI-Änderung nötig
+- Listen, Detailseiten, FlowBar, ZahlungErfassenDialog, PDF-Editor-Vorschau (Step 5 wird PDF-Daten ergänzen) — alles spricht schon gegen diese Endpoints.
+- Kürzel-basierte Belegnummern werden automatisch sichtbar, sobald der Kunde ein Kürzel hat (Step 3 erzwingt Eindeutigkeit).
 
 ### `src/lib/mock/backend.ts`
-- Marker-Kommentar `// STEP 3 ÜBERNOMMEN` über die Kunden-/Objekte-/Notizen-/Suche-Handler. Mock bleibt funktional als Demo-Fallback wenn keine Backend-URL gesetzt ist (Verhalten konsistent mit Step 1 + 2).
+- Marker `// STEP 4 ÜBERNOMMEN` über Angebot/Rechnung/Zahlung-Handler. Verhalten unverändert.
 
-### Keine UI-Änderungen
-- Keine Komponente muss umgebaut werden — alle Listen, Detailseiten und Dialoge sprechen schon gegen diese URLs. Lediglich `KuerzelFrei`-Live-Check arbeitet jetzt gegen echte DB statt Mock.
-
-## Sicherheits- und Datenintegritäts-Garantien
-- Kürzel ist case-insensitive eindeutig; das Frontend normalisiert bereits zu uppercase, das Backend zusätzlich beim INSERT.
-- Belegnummern-Zähler ist die einzige autoritative Quelle. `INSERT … ON CONFLICT DO UPDATE … RETURNING` läuft in einer einzigen SQLite-Anweisung — keine Race-Condition.
-- `ON DELETE CASCADE` von Kunde → Ansprechpartner/Objekte/Notizen ist gewollt; Angebote/Rechnungen folgen in Step 4/7 mit `ON DELETE RESTRICT`, damit keine Belege verschwinden.
-- Soft-Delete: ein Kunde mit Angeboten oder Rechnungen kann nie hart gelöscht werden — Backend antwortet stattdessen mit `archiviert=true`. (Step 4 setzt die RESTRICT-FKs, Step 3 prüft das vorab schon über `EXISTS`-Subqueries gegen `angebot`/`rechnung`, falls deren Tabellen schon existieren — sonst nur gegen interne Beziehungen.)
+## Sicherheits- & Datenintegritäts-Garantien
+- Belegnummern: Vergabe + INSERT in **einer** SQLite-Transaktion → nie Lücken durch fehlgeschlagene Inserts, nie Duplikate durch Races. UNIQUE-Constraint als Sicherheitsnetz.
+- Rechnungs-Status leitet sich serverseitig aus Zahlungssumme ab — Client kann nicht „bezahlt" forcen (PATCH ignoriert `status` wenn aus Zahlungen ableitbar, außer für `storniert`).
+- `ON DELETE RESTRICT` von Kunde → Rechnung verhindert Datenverlust; Soft-Delete-Pfad aus Step 3 greift.
+- Geld wird intern als Integer-Cent gespeichert, an der API-Grenze nach Euro-Number gemappt → keine Float-Drift bei Teilzahlungs-Summen.
+- Audit-Log enthält bei Status-Änderungen Vorher/Nachher.
 
 ## Reihenfolge der Umsetzung
-1. Migrationen 005 + 006 + Module unter `backend/src/kunden/`.
-2. Routen registrieren in `backend/src/server.ts`.
-3. Vitest-Suite (7 Tests) grün.
-4. Frontend-Routing in `client.ts`.
-5. Manuell im Preview testen: neuen Kunden anlegen, Kürzel-Live-Check, Notiz an Kunde + Objekt, Globale Suche.
-6. Memory-Eintrag `mem://features/backend-step3-stammdaten` + Eintrag in `mem/index.md`.
+1. Migrationen 007 + 008.
+2. Module unter `backend/src/belege/` (mappers, belegnummer, repos, status, umwandeln, duplizieren, zahlungen, scheduler).
+3. Routes + Registrierung in `backend/src/server.ts`.
+4. Vitest-Suite (8 Tests) grün.
+5. Frontend-Routing in `client.ts`.
+6. Manuell im Preview: Angebot anlegen → senden → in Rechnung umwandeln → zwei Teilzahlungen → bezahlt.
+7. Memory `mem://features/backend-step4-belege` + Eintrag in `mem/index.md`.
 
-## Nicht-Ziele für Step 3
-- Keine Angebote/Rechnungen — kommen in Step 4 / 7.
-- Kein PDF-Generator — Step 5.
-- Kein Drive/Mail-Versand — Step 6.
-- Keine Aktivitäten/SSE — Step 8 (Audit-Logs werden aber bereits geschrieben).
+## Nicht-Ziele für Step 4
+- Kein PDF-Rendering (Step 5).
+- Kein Drive-Upload, kein E-Mail-Versand (Step 6 — `/senden` setzt vorerst nur Status).
+- Keine Mahn-Eskalations-Mails (Step 6); Felder `mahnungen[]`, `mahnPausiertBis`, `inkassoMarkiert` werden aber persistiert.
+- Keine SSE/Live-Aktivitäten (Step 8).
 
-Sag „approved" wenn der Plan passt — dann starte ich Step 3.
+Sag „approved" wenn der Plan passt — dann starte ich Step 4.
