@@ -204,6 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       lock,
       autoLockMinutes,
       setAutoLockMinutes,
+      istOwner: user?.rolle === "owner",
     }),
     [mode, user, loading, setup, login, logout, changePassword, refreshMe, unlock, lock, autoLockMinutes],
   );
