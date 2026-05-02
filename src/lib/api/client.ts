@@ -47,6 +47,8 @@ const PI_PREFIXES = [
   "/events/",
   // Step 8
   "/system/",
+  // Step 10
+  "/steuern/",
 ];
 // Ausnahmen: /einstellungen/* die noch nicht im Pi-Backend leben → Mock
 const MOCK_OVERRIDE_PREFIXES = [
@@ -73,7 +75,7 @@ async function viaPi<T>(method: string, path: string, body?: unknown): Promise<T
       case "PATCH":
         return await piApi.patch<T>(path, body);
       case "PUT":
-        return await piApi.patch<T>(path, body);
+        return await piApi.put<T>(path, body);
       case "DELETE":
         return await piApi.delete<T>(path);
       default:

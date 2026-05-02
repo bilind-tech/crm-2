@@ -65,5 +65,6 @@ export const piApi = {
   get: <T>(p: string, init?: FetchInit) => request<T>("GET", p, init),
   post: <T>(p: string, body?: unknown) => request<T>("POST", p, { body }),
   patch: <T>(p: string, body?: unknown) => request<T>("PATCH", p, { body }),
+  put: <T>(p: string, body?: unknown) => request<T>("PUT", p, { body }),
   delete: <T>(p: string) => request<T>("DELETE", p),
 };

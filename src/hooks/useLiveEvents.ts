@@ -68,9 +68,19 @@ export function useLiveEvents(enabled: boolean): void {
           qc.invalidateQueries({ queryKey: ["backups"] });
           break;
 
-        case "einstellung:geaendert":
+        case "einstellung:geaendert": {
           qc.invalidateQueries({ queryKey: ["einstellungen"] });
+          const d = data as { key?: string };
+          if (d?.key === "steuern") {
+            qc.invalidateQueries({ queryKey: ["steuern", "einstellungen"] });
+            qc.invalidateQueries({ queryKey: ["steuern", "bezahlt"] });
+          } else if (d?.key === "steuern.manuell") {
+            qc.invalidateQueries({ queryKey: ["steuern", "manuelle-posten"] });
+          } else if (d?.key === "steuern.bezahlt") {
+            qc.invalidateQueries({ queryKey: ["steuern", "bezahlt"] });
+          }
           break;
+        }
 
         case "system:update:phase":
         case "system:update:lauf": {
