@@ -438,6 +438,8 @@ function Page() {
         />
       )}
 
+      <RechnungAusDauerauftragDialog open={daDialog} onOpenChange={setDaDialog} />
+
       {confirmDialog}
     </div>
   );
