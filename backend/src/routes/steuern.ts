@@ -11,7 +11,7 @@
 //   PUT    /steuern/bezahlt/:postenId
 //   DELETE /steuern/bezahlt/:postenId
 import type { FastifyInstance } from "fastify";
-import { requireAuth } from "../auth/middleware.js";
+import { requireOwner } from "../auth/middleware.js";
 import { audit } from "../auth/audit.js";
 import { emit } from "../events/bus.js";
 import {
@@ -36,11 +36,11 @@ import {
 
 export async function steuernRoutes(app: FastifyInstance): Promise<void> {
   // -------- Einstellungen --------
-  app.get("/steuern/einstellungen", { preHandler: requireAuth }, async () => {
+  app.get("/steuern/einstellungen", { preHandler: requireOwner }, async () => {
     return getEinstellungen();
   });
 
-  app.patch("/steuern/einstellungen", { preHandler: requireAuth }, async (req, reply) => {
+  app.patch("/steuern/einstellungen", { preHandler: requireOwner }, async (req, reply) => {
     const parsed = EinstellungenPatchSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
       return reply.code(400).send({ error: "validation", issues: parsed.error.issues });
@@ -64,7 +64,7 @@ export async function steuernRoutes(app: FastifyInstance): Promise<void> {
     return { ...next, ustBezahltGeloescht: geloescht };
   });
 
-  app.post("/steuern/einstellungen/reset", { preHandler: requireAuth }, async (req) => {
+  app.post("/steuern/einstellungen/reset", { preHandler: requireOwner }, async (req) => {
     const next = resetEinstellungen();
     audit({
       userId: req.user?.id ?? null,
@@ -76,11 +76,11 @@ export async function steuernRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // -------- Manuelle Posten --------
-  app.get("/steuern/manuelle-posten", { preHandler: requireAuth }, async () => {
+  app.get("/steuern/manuelle-posten", { preHandler: requireOwner }, async () => {
     return listManuellePosten();
   });
 
-  app.post("/steuern/manuelle-posten", { preHandler: requireAuth }, async (req, reply) => {
+  app.post("/steuern/manuelle-posten", { preHandler: requireOwner }, async (req, reply) => {
     const parsed = ManuellerInputSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
       return reply.code(400).send({ error: "validation", issues: parsed.error.issues });
@@ -92,7 +92,7 @@ export async function steuernRoutes(app: FastifyInstance): Promise<void> {
 
   app.patch<{ Params: { id: string } }>(
     "/steuern/manuelle-posten/:id",
-    { preHandler: requireAuth },
+    { preHandler: requireOwner },
     async (req, reply) => {
       const parsed = ManuellerPatchSchema.safeParse(req.body ?? {});
       if (!parsed.success) {
@@ -107,7 +107,7 @@ export async function steuernRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete<{ Params: { id: string } }>(
     "/steuern/manuelle-posten/:id",
-    { preHandler: requireAuth },
+    { preHandler: requireOwner },
     async (req, reply) => {
       const ok = removeManuellerPosten(req.params.id);
       if (!ok) return reply.code(404).send({ error: "not-found" });
@@ -117,13 +117,13 @@ export async function steuernRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // -------- Bezahlt-Markierungen --------
-  app.get("/steuern/bezahlt", { preHandler: requireAuth }, async () => {
+  app.get("/steuern/bezahlt", { preHandler: requireOwner }, async () => {
     return listBezahlt();
   });
 
   app.put<{ Params: { postenId: string } }>(
     "/steuern/bezahlt/:postenId",
-    { preHandler: requireAuth },
+    { preHandler: requireOwner },
     async (req, reply) => {
       const parsed = BezahltInputSchema.safeParse(req.body ?? {});
       if (!parsed.success) {
@@ -137,7 +137,7 @@ export async function steuernRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete<{ Params: { postenId: string } }>(
     "/steuern/bezahlt/:postenId",
-    { preHandler: requireAuth },
+    { preHandler: requireOwner },
     async (req, reply) => {
       const ok = removeBezahlt(req.params.postenId);
       if (!ok) return reply.code(404).send({ error: "not-found" });

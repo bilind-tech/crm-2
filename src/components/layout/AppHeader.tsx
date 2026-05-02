@@ -19,6 +19,7 @@ import {
 import { formatDateTime } from "@/lib/format";
 import { GlobalSearch } from "@/components/layout/GlobalSearch";
 import { QuickCreate } from "@/components/layout/QuickCreate";
+import { UserMenu } from "@/components/layout/UserMenu";
 
 export function AppHeader() {
   const navigate = useNavigate();
@@ -130,6 +131,7 @@ export function AppHeader() {
             </ScrollArea>
           </PopoverContent>
         </Popover>
+        <UserMenu />
       </div>
 
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />

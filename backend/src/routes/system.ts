@@ -13,7 +13,7 @@ import { pipeline } from "node:stream/promises";
 import crypto from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { requireAuth } from "../auth/middleware.js";
+import { requireOwner } from "../auth/middleware.js";
 import { audit } from "../auth/audit.js";
 import { verifyPassword } from "../auth/password.js";
 import { getDatabase } from "../db/index.js";
@@ -62,10 +62,10 @@ function adaptLauf(l: UpdateLauf): unknown {
 
 export async function systemRoutes(app: FastifyInstance): Promise<void> {
   // --- GET /system/info ---
-  app.get("/system/info", { preHandler: requireAuth }, async () => getSystemInfo());
+  app.get("/system/info", { preHandler: requireOwner }, async () => getSystemInfo());
 
   // --- GET /system/update/historie ---
-  app.get("/system/update/historie", { preHandler: requireAuth }, async () => {
+  app.get("/system/update/historie", { preHandler: requireOwner }, async () => {
     const db = listInstalledVersions();
     if (db.length > 0) return db;
     // Fallback: aktuelle Version als einziger Eintrag
@@ -79,7 +79,7 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
 
   // --- POST /system/update/validate ---
   app.post("/system/update/validate", {
-    preHandler: requireAuth,
+    preHandler: requireOwner,
     config: { rateLimit: { max: 5, timeWindow: "1 minute" } },
   }, async (req, reply) => {
     const file = await req.file({ limits: { fileSize: 200 * 1024 * 1024 } });
@@ -173,7 +173,7 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
 
   // --- POST /system/update/install/:uploadId ---
   app.post<{ Params: { uploadId: string } }>("/system/update/install/:uploadId", {
-    preHandler: requireAuth,
+    preHandler: requireOwner,
   }, async (req, reply) => {
     if (!isPaketValide(req.params.uploadId)) {
       return reply.status(404).send({ error: "Upload-ID unbekannt oder abgelaufen" });
@@ -190,14 +190,14 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // --- GET /system/update/lauf/aktuell ---
-  app.get("/system/update/lauf/aktuell", { preHandler: requireAuth }, async (_req, reply) => {
+  app.get("/system/update/lauf/aktuell", { preHandler: requireOwner }, async (_req, reply) => {
     const l = getAktuellerLauf();
     if (!l) return reply.status(204).send();
     return adaptLauf(l);
   });
 
   // --- GET /system/update/lauf/:id ---
-  app.get<{ Params: { id: string } }>("/system/update/lauf/:id", { preHandler: requireAuth }, async (req, reply) => {
+  app.get<{ Params: { id: string } }>("/system/update/lauf/:id", { preHandler: requireOwner }, async (req, reply) => {
     const l = getLauf(req.params.id);
     if (!l) return reply.status(404).send({ error: "Lauf nicht gefunden" });
     return adaptLauf(l);
@@ -206,7 +206,7 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
   // --- POST /system/update/rollback/:version ---
   const rollbackBodySchema = z.object({ passwort: z.string().min(1).max(200) });
   app.post<{ Params: { version: string } }>("/system/update/rollback/:version", {
-    preHandler: requireAuth,
+    preHandler: requireOwner,
   }, async (req, reply) => {
     const userId = req.user!.id;
     const fail = rollbackFails.get(userId);

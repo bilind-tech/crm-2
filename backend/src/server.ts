@@ -25,6 +25,7 @@ import { steuernRoutes } from "./routes/steuern.js";
 import { dokumenteRoutes } from "./routes/dokumente.js";
 import { startFristenScheduler } from "./dokumente/fristen-cron.js";
 import { mahnungRoutes } from "./routes/mahnung.js";
+import { benutzerRoutes } from "./routes/benutzer.js";
 import { startMahnScheduler } from "./mahnung/cron.js";
 import { purgeExpiredSessions as purgeExpiredUploadSessions } from "./dokumente/repo.js";
 import { reapStaleLock } from "./system/runner.js";
@@ -143,6 +144,7 @@ async function main(): Promise<void> {
   await app.register(steuernRoutes);
   await app.register(dokumenteRoutes);
   await app.register(mahnungRoutes);
+  await app.register(benutzerRoutes);
 
   // Frontend-Statics — nur wenn FRONTEND_DIR existiert (Prod / Pi-Bundle).
   // Im Dev läuft das Frontend separat über Vite, daher hier kein Fehler.

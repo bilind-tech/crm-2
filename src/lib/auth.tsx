@@ -27,6 +27,11 @@ export type AuthMode =
 interface PiUser {
   id: string;
   username: string;
+  rolle?: "owner" | "mitarbeiter";
+}
+
+interface SetupResult {
+  recoveryCode: string;
 }
 
 interface AuthState {
@@ -34,7 +39,7 @@ interface AuthState {
   user: PiUser | null;
   unlocked: boolean;
   loading: boolean;
-  setup: (input: { username: string; password: string; setupToken: string }) => Promise<void>;
+  setup: (input: { username: string; password: string; setupToken: string }) => Promise<SetupResult>;
   login: (input: { username: string; password: string }) => Promise<void>;
   logout: () => Promise<void>;
   changePassword: (alt: string, neu: string) => Promise<void>;
@@ -43,6 +48,7 @@ interface AuthState {
   lock: () => Promise<void>;
   setAutoLockMinutes: (m: number) => void;
   autoLockMinutes: number;
+  istOwner: boolean;
 }
 
 const Ctx = createContext<AuthState | null>(null);
@@ -95,13 +101,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshMe, backendStatus]);
 
   const setup = useCallback(
-    async (input: { username: string; password: string; setupToken: string }) => {
+    async (input: { username: string; password: string; setupToken: string }): Promise<SetupResult> => {
       setLoading(true);
       try {
-        const res = await piApi.post<MeResponse>("/auth/setup", input);
+        const res = await piApi.post<MeResponse & { recoveryCode: string }>("/auth/setup", input);
         setUser(res.user);
         setMode("logged-in");
         lastActivity.current = Date.now();
+        return { recoveryCode: res.recoveryCode };
       } finally {
         setLoading(false);
       }
@@ -197,6 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       lock,
       autoLockMinutes,
       setAutoLockMinutes,
+      istOwner: user?.rolle === "owner",
     }),
     [mode, user, loading, setup, login, logout, changePassword, refreshMe, unlock, lock, autoLockMinutes],
   );

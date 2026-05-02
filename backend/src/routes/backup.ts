@@ -6,7 +6,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import * as tar from "tar";
 import { config } from "../config.js";
-import { requireAuth } from "../auth/middleware.js";
+import { requireOwner } from "../auth/middleware.js";
 import { audit } from "../auth/audit.js";
 import { getDatabase } from "../db/index.js";
 import { verifyPassword } from "../auth/password.js";
@@ -63,7 +63,7 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
 
   // Alle anderen Routen: auth pflicht.
   app.register(async (scoped) => {
-    scoped.addHook("preHandler", requireAuth);
+    scoped.addHook("preHandler", requireOwner);
 
     scoped.get("/backup/historie", async () => {
       return listVisible().map((r) => ({
