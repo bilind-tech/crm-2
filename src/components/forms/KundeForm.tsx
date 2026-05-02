@@ -225,6 +225,26 @@ export function KundeForm({ onClose, onCreated }: Props) {
       return;
     }
 
+    // Personendaten automatisch als primären Ansprechpartner speichern
+    const hatPerson = !!(f.vorname.trim() || f.nachname.trim() || f.email.trim() || f.telefon.trim() || f.mobil.trim());
+    if (hatPerson) {
+      try {
+        await api.post<Ansprechpartner>("/ansprechpartner", {
+          kundeId: k.id,
+          anrede: f.anrede || undefined,
+          vorname: f.vorname || undefined,
+          nachname: f.nachname || undefined,
+          telefon: smartValue(f.telefon, PHONE_PREFIX),
+          mobil: smartValue(f.mobil, PHONE_PREFIX),
+          email: f.email || undefined,
+          primaer: true,
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Ansprechpartner konnte nicht angelegt werden";
+        toast.warning("Kunde angelegt, Ansprechpartner fehlgeschlagen", { description: msg });
+      }
+    }
+
     // Optional: Dauerauftrag direkt mit-anlegen
     if (f.daAktiv) {
       const positionen: Position[] = [];
