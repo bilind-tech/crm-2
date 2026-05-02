@@ -7,19 +7,10 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useAddZahlung } from "@/hooks/useApi";
 import { formatEUR, todayISO } from "@/lib/format";
-import type { Rechnung, Zahlungsmethode } from "@/lib/api/types";
+import type { Rechnung } from "@/lib/api/types";
 import { summenRechnung } from "@/lib/mock/backend";
 import { toast } from "sonner";
 
@@ -29,194 +20,146 @@ interface Props {
   rechnung: Rechnung;
 }
 
-const METHODEN: { value: Zahlungsmethode; label: string }[] = [
-  { value: "ueberweisung", label: "Überweisung" },
-  { value: "bar", label: "Bar" },
-  { value: "karte", label: "Karte" },
-  { value: "paypal", label: "PayPal" },
-  { value: "sepa", label: "SEPA-Lastschrift" },
-  { value: "sonstiges", label: "Sonstiges" },
-];
-
 function parseEUInput(s: string): number {
-  // akzeptiert "150,50" oder "150.50"
   const cleaned = s.replace(/\s/g, "").replace(",", ".");
   const n = parseFloat(cleaned);
   return isNaN(n) ? 0 : n;
 }
 
+type Stufe = "frage" | "teil";
+
 export function ZahlungErfassenDialog({ open, onOpenChange, rechnung }: Props) {
   const summe = useMemo(
     () => summenRechnung(rechnung.positionen, rechnung.rabattGesamt),
-    [rechnung]
+    [rechnung],
   );
   const bezahlt = rechnung.zahlungen.reduce((a, z) => a + z.betrag, 0);
   const offen = Math.max(0, summe.brutto - bezahlt);
 
-  const [betragStr, setBetragStr] = useState(offen.toFixed(2).replace(".", ","));
-  const [datum, setDatum] = useState(todayISO());
-  const [methode, setMethode] = useState<Zahlungsmethode>("ueberweisung");
-  const [notiz, setNotiz] = useState("");
+  const [stufe, setStufe] = useState<Stufe>("frage");
+  const [betragStr, setBetragStr] = useState("");
 
-  // Reset bei (Wieder-)Öffnen
   useEffect(() => {
     if (open) {
-      setBetragStr(offen.toFixed(2).replace(".", ","));
-      setDatum(todayISO());
-      setMethode("ueberweisung");
-      setNotiz("");
+      setStufe("frage");
+      setBetragStr("");
     }
-  }, [open, offen]);
+  }, [open]);
 
   const add = useAddZahlung(rechnung.id);
   const betrag = parseEUInput(betragStr);
-  const restNach = Math.max(0, offen - betrag);
+  const teilUngueltig = betrag <= 0 || betrag > offen + 0.001;
 
-  function setQuick(value: number) {
-    setBetragStr(value.toFixed(2).replace(".", ","));
-  }
-
-  async function submit() {
-    if (betrag <= 0) {
-      toast.error("Bitte einen Betrag größer 0 eingeben");
-      return;
-    }
-    if (betrag > offen + 0.001) {
-      toast.error(`Betrag darf höchstens ${formatEUR(offen)} sein`);
-      return;
-    }
+  async function buchen(value: number) {
+    if (value <= 0) return;
+    const clamped = Math.min(value, offen);
     await add.mutateAsync({
-      datum,
-      betrag,
-      methode,
-      notiz: notiz.trim() || undefined,
+      datum: todayISO(),
+      betrag: clamped,
+      methode: "ueberweisung",
+      notiz: undefined,
     });
-    toast.success(`${formatEUR(betrag)} als Zahlung erfasst`);
+    toast.success(`${formatEUR(clamped)} als bezahlt eingetragen`);
     onOpenChange(false);
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-background">
-        <DialogHeader>
-          <DialogTitle>Zahlung erfassen</DialogTitle>
-          <DialogDescription>
-            Rechnung <span className="font-mono">{rechnung.nummer}</span>
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-sm bg-background">
+        {stufe === "frage" ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Bezahlt?</DialogTitle>
+              <DialogDescription>
+                Rechnung <span className="font-mono">{rechnung.nummer}</span> · offen{" "}
+                <span className="font-semibold text-foreground">{formatEUR(offen)}</span>
+              </DialogDescription>
+            </DialogHeader>
 
-        {/* Offen-Übersicht */}
-        <div className="rounded-xl border border-border bg-muted/40 p-4">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Offener Betrag</p>
-          <p className="mt-1 text-2xl font-bold text-primary">{formatEUR(offen)}</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            von {formatEUR(summe.brutto)} gesamt
-            {bezahlt > 0 && ` · bereits ${formatEUR(bezahlt)} bezahlt`}
-          </p>
-        </div>
+            <div className="mt-2 flex flex-col gap-2">
+              <Button
+                className="h-12 text-base"
+                disabled={add.isPending || offen <= 0}
+                onClick={() => buchen(offen)}
+              >
+                Ja, voll bezahlt ({formatEUR(offen)})
+              </Button>
+              <Button
+                variant="outline"
+                className="h-11"
+                disabled={add.isPending}
+                onClick={() => setStufe("teil")}
+              >
+                Nein, nur ein Teil
+              </Button>
+              <Button
+                variant="ghost"
+                className="h-10"
+                disabled={add.isPending}
+                onClick={() => onOpenChange(false)}
+              >
+                Abbrechen
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Wie viel wurde bezahlt?</DialogTitle>
+              <DialogDescription>
+                Offen: <span className="font-semibold text-foreground">{formatEUR(offen)}</span>
+              </DialogDescription>
+            </DialogHeader>
 
-        {/* Schnell-Buttons */}
-        <div className="grid grid-cols-3 gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11"
-            onClick={() => setQuick(offen)}
-          >
-            Voll
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11"
-            onClick={() => setQuick(offen / 2)}
-          >
-            Hälfte
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11"
-            onClick={() => setQuick(offen / 4)}
-          >
-            Viertel
-          </Button>
-        </div>
+            <div className="mt-2">
+              <div className="relative">
+                <Input
+                  autoFocus
+                  type="text"
+                  inputMode="decimal"
+                  value={betragStr}
+                  onChange={(e) => setBetragStr(e.target.value)}
+                  placeholder="0,00"
+                  className="h-14 pr-10 text-2xl font-semibold"
+                />
+                <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-base text-muted-foreground">
+                  €
+                </span>
+              </div>
+              {betrag > 0 && betrag <= offen && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Danach noch offen:{" "}
+                  <span className="font-semibold text-foreground">
+                    {formatEUR(Math.max(0, offen - betrag))}
+                  </span>
+                </p>
+              )}
+              {betrag > offen + 0.001 && (
+                <p className="mt-2 text-xs text-destructive">
+                  Betrag darf höchstens {formatEUR(offen)} sein.
+                </p>
+              )}
+            </div>
 
-        {/* Betrag */}
-        <div>
-          <Label htmlFor="betrag" className="text-xs font-medium text-muted-foreground">
-            Betrag (€)
-          </Label>
-          <Input
-            id="betrag"
-            type="text"
-            inputMode="decimal"
-            value={betragStr}
-            onChange={(e) => setBetragStr(e.target.value)}
-            className="mt-1.5 h-12 text-lg font-semibold"
-            autoFocus
-          />
-          {betrag > 0 && betrag <= offen && (
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              Nach dieser Zahlung noch offen:{" "}
-              <span className="font-semibold text-foreground">{formatEUR(restNach)}</span>
-              {restNach <= 0.001 && " · Rechnung wird vollständig bezahlt"}
-            </p>
-          )}
-        </div>
-
-        {/* Datum + Methode */}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="datum" className="text-xs font-medium text-muted-foreground">
-              Datum
-            </Label>
-            <Input
-              id="datum"
-              type="date"
-              value={datum}
-              onChange={(e) => setDatum(e.target.value)}
-              className="mt-1.5 h-10"
-            />
-          </div>
-          <div>
-            <Label htmlFor="methode" className="text-xs font-medium text-muted-foreground">
-              Methode
-            </Label>
-            <Select value={methode} onValueChange={(v) => setMethode(v as Zahlungsmethode)}>
-              <SelectTrigger id="methode" className="mt-1.5 h-10"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {METHODEN.map((m) => (
-                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Notiz */}
-        <div>
-          <Label htmlFor="notiz" className="text-xs font-medium text-muted-foreground">
-            Notiz (optional)
-          </Label>
-          <Textarea
-            id="notiz"
-            value={notiz}
-            onChange={(e) => setNotiz(e.target.value)}
-            placeholder="z. B. Verwendungszweck, Buchungsreferenz …"
-            className="mt-1.5 min-h-[60px]"
-          />
-        </div>
-
-        <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Abbrechen
-          </Button>
-          <Button onClick={submit} disabled={add.isPending || betrag <= 0}>
-            {add.isPending ? "Speichere…" : "Zahlung speichern"}
-          </Button>
-        </div>
+            <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                variant="outline"
+                className="h-11"
+                disabled={add.isPending}
+                onClick={() => setStufe("frage")}
+              >
+                Zurück
+              </Button>
+              <Button
+                className="h-11"
+                disabled={add.isPending || teilUngueltig}
+                onClick={() => buchen(betrag)}
+              >
+                {add.isPending ? "Speichere…" : "Speichern"}
+              </Button>
+            </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
