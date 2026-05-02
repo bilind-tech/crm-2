@@ -1,163 +1,194 @@
-## Step 11 — Stundenzettel-Persistenz + Pi-Deployment-Feinschliff
+# Step 12 — Dokumente & Handy-Scan ans Backend
 
-Letzter Frontend-Store, der noch in `localStorage` lebt (Stundenzettel-URL), wandert ans Backend — analog zu Step 10. Danach: Alles, was nötig ist, damit das CRM **als systemd-Dienst auf dem Pi** sauber startet, sich selbst aktualisiert, Logs schreibt und nach einem Stromausfall garantiert wieder hochkommt.
+Dokumente, Belege und Handy-Scans leben aktuell **nur im Mock** (`url` = base64-DataURL). Auf dem Pi würde das die SQLite aufblähen und nach 100 Belegen unbenutzbar machen. Step 12 baut den letzten großen fehlenden Backend-Bereich: echte Datei-Persistenz auf der USB-SSD, Upload-Sessions für Handy-Scans, und ein Cron für Fristen-Benachrichtigungen.
 
----
-
-### Teil A — Stundenzettel-URL aufs Backend (klein, abgeschlossen)
-
-Backend-Schema `stundenzettel.externeUrl` existiert bereits in `backend/src/settings/schemas.ts` und ist via `/einstellungen/bereich/stundenzettel` les-/schreibbar. Frontend nutzt aktuell aber `localStorage` (`src/lib/stundenzettel/config.ts`).
-
-**Änderungen:**
-
-1. **`src/lib/stundenzettel/config.ts`** wird zum dünnen Adapter:
-   - `useStundenzettelUrl()` Hook → React Query auf `/einstellungen/bereich/stundenzettel`.
-   - `useSetStundenzettelUrl()` Mutation → PATCH gleicher Endpoint, invalidiert Query.
-   - Idempotente Migration: wenn `localStorage["mcc.stundenzettel.url"]` gesetzt UND Backend-Wert leer → einmalig pushen, dann `localStorage.removeItem` + Marker `mcc_stundenzettel_migrated_v1`.
-   - Alte synchronen Funktionen `getStundenzettelUrl/setStundenzettelUrl` bleiben als Deprecated-Wrapper für SSR/Lazy-Reads — geben Cache-Wert zurück.
-2. **`src/routes/stundenzettel.tsx`** + **`src/components/einstellungen/StundenzettelTab.tsx`** auf neue Hooks umstellen. Custom-Event `"stundenzettel-url-changed"` entfällt — React Query macht das automatisch via SSE-Invalidation (`einstellungen:geaendert` triggert bereits `["einstellungen"]`).
-3. **Mock-Backend** (`src/lib/mock/backend.ts`): Stundenzettel-Bereich in Settings-Mock-Map ergänzen (falls noch nicht drin).
-
-Damit ist **kein** projektrelevanter Wert mehr in `localStorage` — alle Geräte im LAN sehen denselben Stand.
+Danach ist **kein** Frontend-Bereich mehr ohne Backend-Gegenstück.
 
 ---
 
-### Teil B — Pi-Deployment-Härtung
+## Teil A — Datenmodell & Storage
 
-Damit das Backend produktiv auf dem Pi läuft, kommen jetzt Deployment-Artefakte ins Repo. Sie liegen unter `backend/deploy/` und werden per System-Update-ZIP (Step 8) mit ausgerollt.
+**Migration `013_dokumente.sql`**
 
-**1. systemd-Unit `backend/deploy/systemd/mycleancenter.service`**
+```sql
+CREATE TABLE dokumente (
+  id TEXT PRIMARY KEY,
+  titel TEXT NOT NULL,
+  beschreibung TEXT,
+  typ TEXT NOT NULL CHECK (typ IN ('beleg','vertrag','angebot','rechnung','protokoll','bild','sonstiges')),
+  kunde_id TEXT REFERENCES kunden(id) ON DELETE SET NULL,
+  objekt_id TEXT REFERENCES objekte(id) ON DELETE SET NULL,
+  dateiname TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  groesse_bytes INTEGER NOT NULL,
+  sha256 TEXT NOT NULL,            -- für Dedup + Integritätscheck
+  storage_path TEXT NOT NULL,      -- relativ zu DATA_DIR/uploads/dokumente/
+  dokumentdatum TEXT,
+  betrag REAL,
+  steuerrelevant INTEGER NOT NULL DEFAULT 0,
+  ust_satz REAL,
+  faellig_am TEXT,
+  erledigt_am TEXT,
+  quelle TEXT NOT NULL DEFAULT 'upload',
+  drive_status TEXT,               -- 'pending'|'uploaded'|'fehler'|null
+  drive_file_id TEXT,
+  drive_url TEXT,
+  drive_letzter_versuch TEXT,
+  drive_fehler TEXT,
+  hochgeladen_am TEXT NOT NULL DEFAULT (datetime('now')),
+  geloescht_am TEXT                -- soft delete (für Audit)
+);
+CREATE INDEX idx_dok_kunde ON dokumente(kunde_id) WHERE geloescht_am IS NULL;
+CREATE INDEX idx_dok_objekt ON dokumente(objekt_id) WHERE geloescht_am IS NULL;
+CREATE INDEX idx_dok_faellig ON dokumente(faellig_am) WHERE erledigt_am IS NULL AND geloescht_am IS NULL;
+CREATE INDEX idx_dok_sha ON dokumente(sha256);
 
-```ini
-[Unit]
-Description=MyCleanCenter CRM Backend
-After=network-online.target
-Wants=network-online.target
+CREATE TABLE upload_sessions (
+  id TEXT PRIMARY KEY,
+  token TEXT NOT NULL UNIQUE,
+  kunde_id TEXT REFERENCES kunden(id) ON DELETE SET NULL,
+  objekt_id TEXT REFERENCES objekte(id) ON DELETE SET NULL,
+  erstellt_am TEXT NOT NULL DEFAULT (datetime('now')),
+  ablauf_am TEXT NOT NULL,
+  beendet INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX idx_upsess_token ON upload_sessions(token);
 
-[Service]
-Type=simple
-User=mycleancenter
-Group=mycleancenter
-WorkingDirectory=/opt/mycleancenter/current/backend
-Environment=NODE_ENV=production
-Environment=DATA_DIR=/var/lib/mycleancenter
-Environment=PORT=8787
-Environment=HOST=0.0.0.0
-ExecStart=/usr/bin/node dist/server.js
-Restart=on-failure
-RestartSec=3
-# Hardening
-ProtectSystem=strict
-ReadWritePaths=/var/lib/mycleancenter
-PrivateTmp=true
-NoNewPrivileges=true
-ProtectHome=true
-
-[Install]
-WantedBy=multi-user.target
+-- Verknüpfung Session ↔ Dokumente (n:1)
+ALTER TABLE dokumente ADD COLUMN upload_session_id TEXT REFERENCES upload_sessions(id) ON DELETE SET NULL;
 ```
 
-Wichtig: `/opt/mycleancenter/current` ist **Symlink** auf den aktiven Release-Ordner — System-Update (Step 8) tauscht atomar.
+**Storage-Layout auf der SSD** (`/var/lib/mycleancenter/uploads/dokumente/`):
 
-**2. Install-Skript `backend/deploy/install.sh`** (idempotent, einmalig auf einem nackten Pi-OS-Lite ausgeführt):
+```
+uploads/dokumente/
+  2026/05/{sha256[0:2]}/{sha256}.{ext}
+```
 
-- Legt User `mycleancenter` an (Systemuser, kein Login-Shell).
-- Erstellt `/opt/mycleancenter/`, `/var/lib/mycleancenter/{db,keys,uploads,backups/{daily,weekly,monthly,safety,tmp},logs}` mit korrekten Rechten (`mycleancenter:mycleancenter`, `keys/` als `0700`).
-- Installiert Node 20 LTS via NodeSource falls fehlt.
-- Kopiert systemd-Unit nach `/etc/systemd/system/`, `daemon-reload`, `enable --now`.
-- Setzt logrotate-Config nach `/etc/logrotate.d/mycleancenter` (rotiert `/var/lib/mycleancenter/logs/*.log` daily, keep 14, compress).
-- Erkennt erneuten Aufruf (Idempotenz) und überspringt vorhandene Schritte.
-
-**3. Update-Skript `backend/deploy/update-symlink.sh`** wird vom System-Update-Runner (Step 8) aufgerufen statt direkter `fs.rename`-Logik:
-
-- Argumente: `<release-dir>` (frisch entpackter Ordner unter `/opt/mycleancenter/releases/<timestamp>`).
-- Validiert Release: `dist/server.js` vorhanden, `package.json` vorhanden, smoke-test `node -e "require('./dist/server.js')"` mit Timeout.
-- Speichert vorherigen Symlink-Ziel in `/opt/mycleancenter/previous` (Rollback-Pfad).
-- Atomar `ln -sfn <release-dir> /opt/mycleancenter/current` + `systemctl restart mycleancenter`.
-- Healthcheck: pollt `http://127.0.0.1:8787/system/health` (siehe Punkt 5) bis 200 oder 30s Timeout. Bei Fehler → Symlink zurück auf `previous`, Restart, Exit-Code ≠ 0.
-
-`backend/src/system/runner.ts` (Step 8) wird so angepasst, dass es im `production`-Modus dieses Skript aufruft (via `child_process.spawn` mit `sudo -n`), im Dev/Test weiterhin in-process bleibt.
-
-**4. Dev-Mode bleibt unverändert.** Im Dev startet `bun run dev` aus dem Repo direkt — keine Symlink-Logik, keine systemd-Calls. Erkennung via `process.env.NODE_ENV === "production"` bzw. `config.nodeEnv`.
-
-**5. Health-Endpoint `GET /system/health`** (neu, ohne Auth):
-
-- Antwortet 200 mit `{ status: "ok", version, uptimeSec, dbReachable: true, maintenanceMode: false }` wenn alles läuft.
-- Antwortet 503 wenn `maintenance.flag` existiert (Step 2 — Restore läuft) oder DB-Ping (`SELECT 1`) fehlschlägt.
-- Genutzt von: Update-Skript-Healthcheck (Punkt 3), externes Monitoring, Frontend-Statusbalken (siehe Punkt 7).
-
-**6. Strukturiertes Logging**
-
-- `backend/src/logging.ts` neu: dünner Wrapper um `console`, schreibt JSON-Lines parallel nach `${DATA_DIR}/logs/app-YYYY-MM-DD.log` (rolling per Tag, älter als 14 Tage löscht der Logrotate aus Punkt 2).
-- Schreibt: `ts`, `level`, `msg`, optionale Felder (`requestId`, `userId`, `route`, `durationMs`).
-- Fastify-Hook (`onRequest`/`onResponse`) loggt jeden Request strukturiert. Bestehende `console.log`-Aufrufe in Backend-Modulen werden auf den Wrapper umgestellt (in größerem Sweep, aber inkrementell — keine Verhaltensänderung).
-- **Geheimnisse niemals loggen** — Auth-Header, Cookies und Bodies von `/auth/*`, `/einstellungen/*` werden im Hook explizit redacted.
-
-**7. Frontend „Pi-Status"-Indikator**
-
-Kleine, dezente Komponente im AppSidebar-Footer (oder in Einstellungen → System):
-
-- `useSystemHealth()` pollt alle 30s `/system/health`.
-- Zeigt grüner Punkt + „Online · v0.2.0" / oranger Punkt + „Wartung läuft" / roter Punkt + „Pi nicht erreichbar".
-- Click öffnet Tooltip mit `uptimeSec` (formatiert) und Pi-IP/Hostname.
-
-**8. Doku `backend/deploy/README.md`**
-
-Schritt-für-Schritt für den User (nicht-technisch wo möglich):
-
-1. Pi-OS-Lite flashen (Verweis auf `mem://reference/hardware`).
-2. SSH rein, `curl -fsSL <projekt-url>/install.sh | sudo bash` (oder ZIP runterladen + entpacken + `sudo ./install.sh`).
-3. Browser auf `http://mycleancenter.local:8787` → Setup-Wizard (existiert seit Step 1) → fertig.
-4. Updates: ZIP in der CRM-UI hochladen → Rest läuft automatisch.
-5. Backup-Strategie kurz erklärt + Verweis auf Backup-Tab.
-6. Troubleshooting: `journalctl -u mycleancenter -f`, `systemctl status mycleancenter`, Logs unter `/var/lib/mycleancenter/logs/`.
+Sharding nach Jahr/Monat + 2-Zeichen-Hash-Prefix → max ~256 Dateien pro Ordner, schnelles `ls`. Dedup über `sha256` UNIQUE-Check vor dem Schreiben (gleiche Datei → nur DB-Eintrag, kein zweites Speichern).
 
 ---
 
-### Tests
+## Teil B — Backend-Routen `backend/src/routes/dokumente.ts`
 
-- **`backend/test/health.spec.ts`** — `/system/health` ohne Auth erreichbar, antwortet im Maintenance-Modus 503, im Normalbetrieb 200 mit korrekten Feldern.
-- **`backend/test/logging.spec.ts`** — Logger schreibt JSON-Lines, Sensitive-Header werden redacted, Datei-Rotation per Tag.
-- **`backend/test/deploy-scripts.spec.ts`** — Shell-Skripte werden mit `bash -n` syntax-geprüft + Smoke-Test gegen Mock-Pfade in `/tmp` (Idempotenz: zweimal install → kein Fehler, keine Doppel-User).
-- Bestehende Tests bleiben grün; insbesondere System-Update-Tests (Step 8) brauchen einen Mock für das neue Update-Skript.
+| Method | Pfad | Auth | Zweck |
+|---|---|---|---|
+| GET | `/dokumente` | ja | Liste mit Filter `?kundeId&objektId&typ&jahr` |
+| GET | `/dokumente/:id` | ja | Einzeldokument (Metadaten) |
+| GET | `/dokumente/:id/datei` | ja | Binary-Stream (Content-Type, Content-Disposition) |
+| POST | `/dokumente` | ja | Multipart-Upload (eine Datei + Metadaten als JSON-Field `meta`) |
+| PATCH | `/dokumente/:id` | ja | Metadaten ändern (Titel, faelligAm, steuerrelevant…) |
+| POST | `/dokumente/:id/erledigt` | ja | Erledigt-Marker setzen/entfernen |
+| DELETE | `/dokumente/:id` | ja | Soft-Delete (`geloescht_am`), Datei bleibt für 30 Tage |
+| POST | `/dokumente/check-fristen` | ja (Cron) | Anstehende/überfällige Fristen → Benachrichtigungen |
+
+**Upload-Sessions** (`backend/src/routes/upload-sessions.ts`):
+
+| Method | Pfad | Auth | Zweck |
+|---|---|---|---|
+| POST | `/upload-sessions` | ja | Session anlegen (60 min Gültigkeit), liefert Token + QR-URL |
+| GET | `/upload-sessions/:token` | nein (Token = Auth) | Session validieren (Frontend `/m/upload/:session`) |
+| POST | `/upload-sessions/:token/dokumente` | nein (Token) | Multipart-Upload via Handy |
+| POST | `/upload-sessions/:id/beenden` | ja | Session schließen |
+
+Token = 32 Byte base64url, hat im Hash ausreichend Entropie. Rate-Limit auf Token-Endpoints (10 Uploads/min) gegen Missbrauch.
+
+**Multipart-Handling**: `@fastify/multipart` (bereits via `belege-pdf.ts` möglich, sonst neu installieren). Limit 20 MB pro Datei (entspricht aktuellem Frontend-`MAX_BYTES`). Server prüft MIME-Whitelist (`image/*`, `application/pdf`).
+
+**Validation** (`backend/src/dokumente/validation.ts`): Zod-Schemas für Patch/Filter/Sessions; Multipart-Body separat (Stream → Disk-Temp → SHA256 → finale Zielpfad-Move).
 
 ---
 
-### Akzeptanzkriterien
+## Teil C — Drive-Sync-Anbindung
 
-1. Stundenzettel-URL ist nach Login aus jedem Browser im LAN identisch sichtbar.
-2. Frisch geflashter Pi → `install.sh` einmal → Backend läuft unter `http://mycleancenter.local:8787`, überlebt `sudo reboot`.
-3. ZIP-Update via CRM-UI → Symlink wechselt atomar, bei Healthcheck-Fail automatischer Rollback ohne User-Eingriff, vorhandene Daten unangetastet.
-4. `/system/health` antwortet ohne Auth, eignet sich für externes Uptime-Monitoring.
-5. Logs liegen rotierend unter `/var/lib/mycleancenter/logs/`, enthalten **keine** Passwörter/Tokens.
-6. Sidebar zeigt grünen Status-Indikator wenn alles läuft, ändert sich live bei Wartungsmodus.
+`backend/src/drive/uploader.ts` (existiert seit Step 5) wird vom Dokumenten-Modul genutzt:
+
+- Nach erfolgreichem `POST /dokumente` (synchron geschrieben) → asynchroner Job-Push in bestehende Drive-Queue mit `kind: "dokument"`, `dokumentId`.
+- Drive-Ordnerstruktur: existierender Root `mycleancenter.cm` → Unterordner `Dokumente/{YYYY}/{MM}/`.
+- Dateiname: `{kundenname}_{titel}_{MM}_{YYYY}.{ext}` (Slug-normalisiert).
+- Status zurück in `dokumente.drive_*` Felder; SSE-Event `dokument:drive-aktualisiert`.
+
+Bestehende `DriveSyncBadge`-Komponente bleibt unverändert — sie liest `drive` aus dem Dokument.
 
 ---
 
-### Dateien
+## Teil D — Fristen-Cron
+
+**`backend/src/dokumente/fristen-cron.ts`** läuft via `setInterval` täglich um 07:00 Uhr Pi-Zeit:
+
+1. Selektiert Dokumente mit `faellig_am IS NOT NULL AND erledigt_am IS NULL`.
+2. Berechnet Status (heute, in 7 Tagen, überfällig) — Logik aus `src/lib/dokument/frist.ts` 1:1 ins Backend portiert (`backend/src/dokumente/frist.ts`).
+3. Erzeugt Benachrichtigungen via existierendem `benachrichtigung`-Modul, dedupliziert per Tag (kein Spam bei wiederholten Läufen).
+4. Triggert SSE `benachrichtigung:neu`.
+
+Endpoint `POST /dokumente/check-fristen` ruft denselben Job manuell auf (für Tests + Frontend-Button „Jetzt prüfen").
+
+---
+
+## Teil E — Frontend-Anpassungen
+
+**`src/lib/dokument/upload.ts`** — Refactor:
+
+- `fileToDokumentPayload` entfällt; neuer Helper `uploadDokument(file, meta)` baut `FormData` und postet an `/dokumente` (multipart).
+- Bildkompression bleibt **client-seitig** (Pi-CPU schonen, schneller Mobile-Upload), aber Resultat ist ein `Blob`, nicht mehr base64.
+
+**`src/hooks/useApi.ts`** — `useCreateDokument` Mutation auf multipart umstellen (eigener `apiUpload`-Helper in `src/lib/api/client.ts`, der `Authorization` setzt aber `Content-Type` der Browser bestimmen lässt).
+
+**`src/components/dokumente/*`**:
+- `DokumentUploader.tsx` + `HandyScanDialog.tsx` nutzen neuen Upload-Pfad.
+- `DokumentViewer.tsx`: `<img src=…>` und PDF-`<iframe src=…>` zeigen jetzt auf `/dokumente/:id/datei` (mit Auth-Header — für `<img>` Workaround: Blob-URL via `fetch + URL.createObjectURL`).
+
+**`src/routes/m.upload.$session.tsx`** (Handy-Upload-Seite):
+- Lädt Session via `GET /upload-sessions/:token` (kein Auth, Token reicht).
+- Upload an `POST /upload-sessions/:token/dokumente`.
+
+**`src/lib/mock/backend.ts`**: Mock-Implementierung für alle neuen Endpoints (in-memory `Map<id, Blob>` für Dateien), damit der Dev-Modus weiter ohne Pi läuft.
+
+---
+
+## Teil F — Migration bestehender Mock-Daten
+
+Erstmal **nicht** nötig — das Mock ist Demo-Content, der beim ersten Pi-Start verschwindet. Falls der User produktiv schon Dokumente angelegt hat: kleiner Migrations-Hook, der beim ersten Mount alle `data:`-URLs in `localStorage` in einer Schleife per `POST /dokumente` hochlädt und dann den Eintrag entfernt. Marker `mcc_dokumente_migrated_v1`. Skip wenn keine vorhandenen Mock-Daten gefunden.
+
+---
+
+## Tests
+
+- `backend/test/dokumente.spec.ts` — CRUD, Filter, Multipart-Upload (echtes PNG-Fixture), Dedup via SHA256, Auth-Pflicht, MIME-Whitelist, 20-MB-Limit, Soft-Delete.
+- `backend/test/upload-sessions.spec.ts` — Token-Validität, Ablaufzeit, Token-only-Upload, Rate-Limit, Session-Beenden setzt `beendet=1`.
+- `backend/test/dokumente-fristen.spec.ts` — Cron erzeugt korrekte Benachrichtigungen, dedupliziert pro Tag.
+- `backend/test/dokumente-drive.spec.ts` — Mock-Drive-Uploader wird angetriggert, `drive_status` aktualisiert.
+
+---
+
+## Was bewusst NICHT in diesem Step ist
+
+- Volltext-Suche in PDFs (OCR) — separater Step, braucht Tesseract-WASM.
+- Versionierung von Dokumenten — aktuell unique per SHA256, neue Version = neues Dokument.
+- Verschlüsselung-at-rest der Dateien — SSD ist im Pi-Gehäuse, LAN-only; Step 13-Kandidat falls gewünscht.
+
+---
+
+## Geänderte / neue Dateien (Übersicht)
 
 **Neu:**
-- `backend/deploy/systemd/mycleancenter.service`
-- `backend/deploy/install.sh`
-- `backend/deploy/update-symlink.sh`
-- `backend/deploy/logrotate.conf`
-- `backend/deploy/README.md`
-- `backend/src/logging.ts`
-- `backend/src/routes/health.ts`
-- `backend/test/health.spec.ts`
-- `backend/test/logging.spec.ts`
-- `backend/test/deploy-scripts.spec.ts`
-- `mem/features/pi-deployment.md`
+- `backend/src/db/migrations/013_dokumente.sql`
+- `backend/src/dokumente/{repo,mappers,validation,types,storage,frist,fristen-cron}.ts`
+- `backend/src/routes/dokumente.ts`
+- `backend/src/routes/upload-sessions.ts`
+- `backend/test/dokumente.spec.ts`, `upload-sessions.spec.ts`, `dokumente-fristen.spec.ts`, `dokumente-drive.spec.ts`
+- `mem/features/dokumente.md`
 
-**Geändert:**
-- `src/lib/stundenzettel/config.ts` — Adapter auf React Query + localStorage-Migration
-- `src/routes/stundenzettel.tsx` — Hooks statt Custom-Event
-- `src/components/einstellungen/StundenzettelTab.tsx` — Hooks statt direkter Calls
-- `src/lib/mock/backend.ts` — stundenzettel-Bereich falls fehlt + `/system/health`-Mock
-- `src/components/layout/AppSidebar.tsx` — kleiner Status-Indikator im Footer
-- `src/hooks/useApi.ts` — `useSystemHealth()`, `useStundenzettelUrl()`, `useSetStundenzettelUrl()`
-- `backend/src/server.ts` — Health-Route registrieren, Logging-Hook
-- `backend/src/system/runner.ts` — Production-Branch ruft `update-symlink.sh` statt In-Process-Switch
-- `mem/index.md` — neuer Eintrag „Pi-Deployment"
+**Editiert:**
+- `backend/src/server.ts` (Routen + Cron registrieren, Multipart-Plugin)
+- `backend/src/drive/uploader.ts` (kind=`dokument` ergänzen)
+- `src/lib/api/client.ts` (`apiUpload` für multipart)
+- `src/hooks/useApi.ts` (Dokument-Hooks)
+- `src/lib/dokument/upload.ts` (Blob statt DataURL)
+- `src/components/dokumente/{DokumentUploader,HandyScanDialog,DokumentViewer,DriveSyncBadge}.tsx`
+- `src/routes/{dokumente,m.upload.$session}.tsx`
+- `src/lib/mock/backend.ts` (Multipart-Mock + Sessions)
+- `src/hooks/useLiveEvents.ts` (`dokument:*` Invalidations)
+- `mem/index.md`
 
-Sag „weiter", dann setze ich Step 11 um.
+**Sag „weiter", dann setze ich Step 12 um.**
