@@ -62,10 +62,15 @@ function summe(a: Angebot) {
 
 function Page() {
   const { data: alle = [] } = useAngebote();
+  const { data: alleRechnungen = [] } = useRechnungen();
   const navigate = useNavigate();
   const del = useDeleteAngebot();
   const { confirm, dialog: confirmDialog } = useConfirm();
-  
+
+  const angebotMitRechnung = useMemo(
+    () => new Set(alleRechnungen.map((r) => r.quellAngebotId).filter(Boolean) as string[]),
+    [alleRechnungen],
+  );
   const [filter, setFilter] = useState<string>("alle");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
