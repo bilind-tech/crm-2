@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { Smartphone, Receipt, Image as ImageIcon, FileText, AlertTriangle } from "lucide-react";
-import { useDokumente } from "@/hooks/useApi";
+import { Smartphone, Receipt, Image as ImageIcon, FileText, AlertTriangle, X } from "lucide-react";
+import { useDokumente, useKunden, useObjekte } from "@/hooks/useApi";
 import { formatEUR, formatDate } from "@/lib/format";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
 import { PrimaryAction } from "@/components/layout/PrimaryAction";
@@ -9,18 +9,43 @@ import { FilterBar } from "@/routes/angebote";
 import { DokumentUploader } from "@/components/dokumente/DokumentUploader";
 import { HandyScanDialog } from "@/components/dokumente/HandyScanDialog";
 import { DokumentBearbeitenDialog } from "@/components/dokumente/DokumentBearbeitenDialog";
+import { DokumentViewer } from "@/components/dokumente/DokumentViewer";
+import { DriveSyncBadge } from "@/components/dokumente/DriveSyncBadge";
 import { fristStatus, FRIST_LABEL, fristBadgeClass } from "@/lib/dokument/frist";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import type { Dokument } from "@/lib/api/types";
 
 export const Route = createFileRoute("/dokumente")({ component: Page });
 
 function Page() {
   const { data: alle = [] } = useDokumente();
+  const { data: kunden = [] } = useKunden();
   const [filter, setFilter] = useState("alle");
   const [q, setQ] = useState("");
   const [scanOpen, setScanOpen] = useState(false);
   const [editing, setEditing] = useState<Dokument | null>(null);
+  const [viewing, setViewing] = useState<Dokument | null>(null);
+  const [kundeFilter, setKundeFilter] = useState<string>("alle");
+  const [objektFilter, setObjektFilter] = useState<string>("alle");
+  const { data: objekteFuerFilter = [] } = useObjekte(
+    kundeFilter !== "alle" ? kundeFilter : undefined,
+  );
   const jahr = new Date().getFullYear();
+
+  const kundeMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const k of kunden) {
+      m.set(k.id, k.firmenname || `${k.vorname ?? ""} ${k.nachname ?? ""}`.trim() || k.nummer);
+    }
+    return m;
+  }, [kunden]);
 
   const counts = useMemo(() => {
     const ueberfaellig = alle.filter((d) => fristStatus(d) === "ueberfaellig").length;
