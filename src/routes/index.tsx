@@ -21,17 +21,9 @@ import {
   Repeat,
   Inbox,
 } from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
 import { NaechsteSchritteCard } from "@/components/dashboard/NaechsteSchritteCard";
+import { UmsatzChartCard } from "@/components/dashboard/UmsatzChartCard";
 import {
   ZEITRAUM_ALLE,
   passtInZeitraum,
