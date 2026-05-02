@@ -1,48 +1,37 @@
-// Steuer-Übersicht für GmbH (Sankt Augustin).
-// Berechnet 3 Hauptsteuern automatisch aus Rechnungen + Dokumenten,
-// ergänzt um manuelle Termine. Disclaimer dezent unten.
+// Steuer-Übersicht für GmbH (Sankt Augustin) — vollautomatisch, read-only.
+// USt: präzise aus bezahlten Rechnungen + Belegen.
+// KSt/Soli/GewSt: YTD-Hochrechnung mit Hinweis.
 
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
   Calculator,
   AlertCircle,
-  Plus,
   CheckCircle2,
   Receipt,
   FileSpreadsheet,
   Building2,
-  Trash2,
   Info,
+  PiggyBank,
+  TrendingUp,
 } from "lucide-react";
 import { useRechnungen, useDokumente } from "@/hooks/useApi";
-import {
-  useSteuerEinstellungen,
-  useManuellePosten,
-  useBezahltMarkierungen,
-} from "@/lib/steuern/store";
+import { useSteuerEinstellungen } from "@/lib/steuern/store";
 import {
   generiereAutomatischePosten,
   berechneKennzahlen,
-  STEUER_ART_LABEL,
-  periodeLabel,
 } from "@/lib/steuern/berechnung";
 import type { SteuerPosten, SteuerArt } from "@/lib/steuern/types";
 import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
-import { PrimaryAction } from "@/components/layout/PrimaryAction";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { formatEUR, formatDate, daysBetween, todayISO } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { ManuellerPostenDialog } from "@/components/steuern/ManuellerPostenDialog";
-import { SteuerBezahltDialog } from "@/components/steuern/SteuerBezahltDialog";
 import { SteuerDetailDialog } from "@/components/steuern/SteuerDetailDialog";
 
 export const Route = createFileRoute("/steuern")({
   head: () => ({
     meta: [
       { title: "Steuern — My Clean Center" },
-      { name: "description", content: "Übersicht über fällige Steuern, Schätzungen und Liquiditätsrücklage." },
+      { name: "description", content: "Automatische Übersicht über Umsatzsteuer-Schuld und empfohlene Rücklage." },
     ],
   }),
   component: Page,
@@ -56,116 +45,72 @@ const ART_ICON: Record<SteuerArt, typeof Receipt> = {
   manuell: Calculator,
 };
 
-const ART_TONE: Record<SteuerArt, "primary" | "warning" | "danger" | "success" | "default"> = {
-  ust: "primary",
-  kst: "warning",
-  soli: "default",
-  gewst: "warning",
-  manuell: "default",
-};
-
 function Page() {
   const { data: rechnungen = [] } = useRechnungen();
   const { data: dokumente = [] } = useDokumente();
   const { data: einstellungen } = useSteuerEinstellungen();
-  const { posten: manuellePosten, update: updateManuell, remove: removeManuell } = useManuellePosten();
-  const { map: bezahltMap, setBezahlt, removeBezahlt } = useBezahltMarkierungen();
 
-  const [neuOpen, setNeuOpen] = useState(false);
-  const [bezahltDialog, setBezahltDialog] = useState<SteuerPosten | null>(null);
   const [detailDialog, setDetailDialog] = useState<SteuerPosten | null>(null);
 
   const jahr = new Date().getFullYear();
 
-  const allePosten = useMemo(() => {
-    const auto = generiereAutomatischePosten(rechnungen, dokumente, einstellungen, jahr);
-    // Bezahlt-Markierungen aus localStorage anwenden
-    const autoMitStatus = auto.map((p) => {
-      const b = bezahltMap[p.id];
-      if (!b) return p;
-      return {
-        ...p,
-        status: "bezahlt" as const,
-        bezahltAm: b.bezahltAm,
-        tatsaechlicherBetrag: b.tatsaechlicherBetrag,
-      };
-    });
-    return [...autoMitStatus, ...manuellePosten];
-  }, [rechnungen, dokumente, einstellungen, jahr, manuellePosten, bezahltMap]);
+  const allePosten = useMemo(
+    () => generiereAutomatischePosten(rechnungen, dokumente, einstellungen, jahr),
+    [rechnungen, dokumente, einstellungen, jahr],
+  );
 
   const kennzahlen = useMemo(
     () => berechneKennzahlen(allePosten, rechnungen, dokumente, einstellungen, jahr),
     [allePosten, rechnungen, dokumente, einstellungen, jahr],
   );
 
+  // Aufschlüsselung der Rücklage
+  const ruecklage = useMemo(() => {
+    let ust = 0;
+    let kst = 0;
+    let soli = 0;
+    let gewst = 0;
+    for (const p of allePosten) {
+      if (p.art === "ust") ust += p.geschaetzterBetrag;
+      else if (p.art === "kst") kst += p.geschaetzterBetrag;
+      else if (p.art === "soli") soli += p.geschaetzterBetrag;
+      else if (p.art === "gewst") gewst += p.geschaetzterBetrag;
+    }
+    return {
+      ust,
+      kst,
+      soli,
+      gewst,
+      ertragsteuer: kst + soli + gewst,
+      gesamt: ust + kst + soli + gewst,
+    };
+  }, [allePosten]);
+
   const offene = useMemo(
     () =>
-      [...allePosten]
-        .filter((p) => p.status !== "bezahlt")
-        .sort((a, b) => a.faelligAm.localeCompare(b.faelligAm)),
+      [...allePosten].sort((a, b) => a.faelligAm.localeCompare(b.faelligAm)),
     [allePosten],
   );
 
-  const bezahlte = useMemo(
-    () =>
-      [...allePosten]
-        .filter((p) => p.status === "bezahlt")
-        .sort((a, b) => (b.bezahltAm ?? "").localeCompare(a.bezahltAm ?? "")),
-    [allePosten],
-  );
-
-  // Aufschlüsselung pro Steuerart (offene Summen)
-  const proArt = useMemo(() => {
-    const map = new Map<SteuerArt, { summe: number; anzahl: number }>();
-    for (const p of offene) {
-      const e = map.get(p.art) ?? { summe: 0, anzahl: 0 };
-      e.summe += p.geschaetzterBetrag;
-      e.anzahl += 1;
-      map.set(p.art, e);
-    }
-    return map;
-  }, [offene]);
-
-  const handleBezahlt = (postenId: string, betrag?: number) => {
-    if (postenId.startsWith("auto-")) {
-      setBezahlt(postenId, { bezahltAm: todayISO(), tatsaechlicherBetrag: betrag });
-    } else if (postenId.startsWith("man-")) {
-      updateManuell(postenId, {
-        status: "bezahlt",
-        bezahltAm: todayISO(),
-        tatsaechlicherBetrag: betrag,
-      });
-    }
-  };
-
-  const handleWiderrufen = (postenId: string) => {
-    if (postenId.startsWith("auto-")) {
-      removeBezahlt(postenId);
-    } else if (postenId.startsWith("man-")) {
-      updateManuell(postenId, {
-        status: "offen",
-        bezahltAm: undefined,
-        tatsaechlicherBetrag: undefined,
-      });
-    }
-  };
+  const offeneUst = offene.filter((p) => p.art === "ust");
+  const offeneErtrag = offene.filter((p) => p.art !== "ust");
 
   return (
     <div className="space-y-6 pb-12">
       <PageHeader
         title="Steuern"
-        subtitle="GmbH-Steuerübersicht — automatisch aus Rechnungen und Belegen berechnet."
-        actions={
-          <PrimaryAction
-            icon={Plus}
-            label="Steuer-Termin anlegen"
-            onClick={() => setNeuOpen(true)}
-          />
-        }
+        subtitle="Vollautomatisch aus deinen Rechnungen und Belegen berechnet."
       />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <KpiCard
+          label="Umsatzsteuer-Schuld"
+          value={formatEUR(ruecklage.ust)}
+          sublabel="exakt aus bezahlten Rechnungen"
+          tone={ruecklage.ust > 0 ? "warning" : "success"}
+          icon={Receipt}
+        />
         <KpiCard
           label="Nächste Fälligkeit"
           value={
@@ -182,111 +127,95 @@ function Page() {
           icon={AlertCircle}
         />
         <KpiCard
-          label="Offen gesamt"
-          value={formatEUR(kennzahlen.offenSumme)}
-          sublabel={`${offene.length} ${offene.length === 1 ? "Posten" : "Posten"}`}
-          tone={kennzahlen.offenSumme > 0 ? "warning" : "default"}
-          icon={Calculator}
-        />
-        <KpiCard
-          label={`Bezahlt ${jahr}`}
-          value={formatEUR(kennzahlen.bezahltJahrSumme)}
-          sublabel={`${bezahlte.length} Posten`}
-          tone="success"
-          icon={CheckCircle2}
-        />
-        <KpiCard
           label="Empfohlene Rücklage"
-          value={formatEUR(kennzahlen.empfohleneRuecklage)}
+          value={formatEUR(ruecklage.gesamt)}
+          sublabel="USt + Ertragsteuer-Schätzung"
+          tone="primary"
+          icon={PiggyBank}
+        />
+        <KpiCard
+          label={`Gewinn ${jahr}`}
+          value={formatEUR(kennzahlen.gewinnYtd)}
           sublabel={
             kennzahlen.gewinnYtd < 0
-              ? `Verlust YTD ${formatEUR(kennzahlen.gewinnYtd)} — keine Rücklage nötig`
-              : `${einstellungen.ruecklageSatz}% vom YTD-Gewinn (${formatEUR(kennzahlen.gewinnYtd)})`
+              ? "Verlust YTD"
+              : "Netto-Einnahmen − Netto-Ausgaben"
           }
-          tone={kennzahlen.gewinnYtd < 0 ? "default" : "primary"}
-          icon={Building2}
+          tone={kennzahlen.gewinnYtd >= 0 ? "success" : "default"}
+          icon={TrendingUp}
         />
       </div>
 
-      {/* Aufschlüsselung pro Steuerart */}
-      <div>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Aufschlüsselung
-        </h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {(["ust", "kst", "soli", "gewst"] as SteuerArt[]).map((art) => {
-            const e = proArt.get(art);
-            const Icon = ART_ICON[art];
-            return (
-              <div
-                key={art}
-                className="rounded-2xl border border-border bg-card p-4 shadow-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-                    art === "ust" ? "bg-primary/10 text-primary"
-                      : art === "kst" ? "bg-warning/10 text-warning"
-                      : art === "gewst" ? "bg-warning/10 text-warning"
-                      : "bg-muted text-muted-foreground"
-                  )}>
-                    <Icon className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-medium text-muted-foreground">
-                      {STEUER_ART_LABEL[art]}
-                    </p>
-                    <p className="text-base font-semibold">
-                      {e ? formatEUR(e.summe) : formatEUR(0)}
-                    </p>
-                  </div>
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {e ? `${e.anzahl} ${e.anzahl === 1 ? "offener Posten" : "offene Posten"}` : "Keine offenen Posten"}
-                </p>
-              </div>
-            );
-          })}
+      {/* Rücklagen-Karte: prominent */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <PiggyBank className="h-6 w-6" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
+              Was du zurücklegen solltest
+            </h2>
+            <p className="mt-1 text-4xl font-bold tracking-tight tabular-nums">
+              {formatEUR(ruecklage.gesamt)}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Damit das Finanzamt jederzeit bedient werden kann.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 space-y-2.5 border-t border-border pt-5">
+          <RuecklageZeile
+            label="Umsatzsteuer-Schuld"
+            sub="exakt — alle offenen Voranmeldungen"
+            betrag={ruecklage.ust}
+            ton="exakt"
+          />
+          <RuecklageZeile
+            label="Körperschaftsteuer + Soli"
+            sub={`Hochrechnung Jahr ${jahr} · ${einstellungen.kstSatz}% + ${einstellungen.soliSatz}% Soli`}
+            betrag={ruecklage.kst + ruecklage.soli}
+            ton="schaetzung"
+          />
+          <RuecklageZeile
+            label="Gewerbesteuer"
+            sub={`Hochrechnung Jahr ${jahr} · Hebesatz Sankt Augustin ${einstellungen.gewstHebesatz}%`}
+            betrag={ruecklage.gewst}
+            ton="schaetzung"
+          />
+          <div className="mt-4 flex items-baseline justify-between border-t border-border pt-3">
+            <span className="font-semibold">Gesamt</span>
+            <span className="text-2xl font-bold tabular-nums">{formatEUR(ruecklage.gesamt)}</span>
+          </div>
         </div>
       </div>
 
-      {/* Offene Posten */}
+      {/* Offene USt-Voranmeldungen */}
       <div>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Offene Steuern · sortiert nach Fälligkeit
+          Umsatzsteuer · {einstellungen.ustRhythmus === "monatlich" ? "monatliche Voranmeldungen" : einstellungen.ustRhythmus === "quartalsweise" ? "Quartals-Voranmeldungen" : "jährlich"}
         </h2>
-        {offene.length === 0 ? (
-          <EmptyState />
+        {offeneUst.length === 0 ? (
+          <EmptyHinweis text="Sobald bezahlte Rechnungen oder Belege im aktuellen Voranmeldungs-Zeitraum liegen, erscheint hier die nächste USt-Voranmeldung." />
         ) : (
           <div className="space-y-2">
-            {offene.map((p) => (
-              <PostenZeile
-                key={p.id}
-                posten={p}
-                onClick={() => setDetailDialog(p)}
-                onBezahlt={() => setBezahltDialog(p)}
-                onLoeschen={p.id.startsWith("man-") ? () => removeManuell(p.id) : undefined}
-              />
+            {offeneUst.map((p) => (
+              <PostenZeile key={p.id} posten={p} onClick={() => setDetailDialog(p)} />
             ))}
           </div>
         )}
       </div>
 
-      {/* Bezahlte Posten */}
-      {bezahlte.length > 0 && (
+      {/* Offene Ertragsteuern */}
+      {offeneErtrag.length > 0 && (
         <div>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Bezahlt · {jahr}
+            Ertragsteuer-Vorauszahlungen · Schätzung aus YTD-Gewinn
           </h2>
           <div className="space-y-2">
-            {bezahlte.map((p) => (
-              <PostenZeile
-                key={p.id}
-                posten={p}
-                onClick={() => setDetailDialog(p)}
-                onWiderrufen={() => handleWiderrufen(p.id)}
-                onLoeschen={p.id.startsWith("man-") ? () => removeManuell(p.id) : undefined}
-              />
+            {offeneErtrag.map((p) => (
+              <PostenZeile key={p.id} posten={p} onClick={() => setDetailDialog(p)} />
             ))}
           </div>
         </div>
@@ -299,7 +228,8 @@ function Page() {
           <div>
             <p className="font-medium text-foreground">Schätzung — keine Steuerberatung</p>
             <p className="mt-1">
-              Alle Beträge sind Hochrechnungen aus deinen bezahlten Rechnungen und steuerrelevanten Belegen.
+              USt-Beträge sind exakt aus deinen bezahlten Rechnungen und steuerrelevanten Belegen berechnet.
+              Ertragsteuern (KSt/Soli/GewSt) sind YTD-Hochrechnungen und werden mit jedem neuen Beleg präziser.
               Mit Steuerberater abstimmen vor Vorauszahlung oder Jahreserklärung.{" "}
               <Link to="/einstellungen" className="font-medium text-primary hover:underline">
                 Steuersätze in Einstellungen anpassen
@@ -310,14 +240,6 @@ function Page() {
         </div>
       </div>
 
-      <ManuellerPostenDialog open={neuOpen} onOpenChange={setNeuOpen} />
-      <SteuerBezahltDialog
-        posten={bezahltDialog}
-        onOpenChange={(v: boolean) => !v && setBezahltDialog(null)}
-        onConfirm={(betrag: number | undefined) => {
-          if (bezahltDialog) handleBezahlt(bezahltDialog.id, betrag);
-        }}
-      />
       <SteuerDetailDialog
         posten={detailDialog}
         onOpenChange={(v: boolean) => !v && setDetailDialog(null)}
@@ -326,16 +248,48 @@ function Page() {
   );
 }
 
-function EmptyState() {
+function EmptyHinweis({ text }: { text: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
+    <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
       <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-success/10 text-success">
         <CheckCircle2 className="h-6 w-6" />
       </div>
-      <p className="font-semibold">Keine offenen Steuern</p>
-      <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-        Sobald bezahlte Rechnungen oder Belege im aktuellen Voranmeldungs-Zeitraum liegen, erscheint hier die nächste USt-Voranmeldung.
-      </p>
+      <p className="font-semibold">Keine offenen Posten</p>
+      <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{text}</p>
+    </div>
+  );
+}
+
+function RuecklageZeile({
+  label,
+  sub,
+  betrag,
+  ton,
+}: {
+  label: string;
+  sub: string;
+  betrag: number;
+  ton: "exakt" | "schaetzung";
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="font-medium">{label}</p>
+          <span
+            className={cn(
+              "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+              ton === "exakt"
+                ? "bg-success/10 text-success"
+                : "bg-warning/10 text-warning",
+            )}
+          >
+            {ton === "exakt" ? "exakt" : "Schätzung"}
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground">{sub}</p>
+      </div>
+      <p className="shrink-0 text-lg font-semibold tabular-nums">{formatEUR(betrag)}</p>
     </div>
   );
 }
@@ -343,108 +297,53 @@ function EmptyState() {
 interface ZeileProps {
   posten: SteuerPosten;
   onClick: () => void;
-  onBezahlt?: () => void;
-  onWiderrufen?: () => void;
-  onLoeschen?: () => void;
 }
 
-function PostenZeile({ posten, onClick, onBezahlt, onWiderrufen, onLoeschen }: ZeileProps) {
+function PostenZeile({ posten, onClick }: ZeileProps) {
   const Icon = ART_ICON[posten.art];
-  const tone = ART_TONE[posten.art];
   const tageBis = daysBetween(todayISO(), posten.faelligAm);
-  const isUeberfaellig = posten.status === "ueberfaellig" || (posten.status === "offen" && tageBis < 0);
-  const isBezahlt = posten.status === "bezahlt";
+  const isUeberfaellig = posten.status === "ueberfaellig" || tageBis < 0;
 
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-sm transition hover:shadow-md sm:p-4">
-      <button
-        type="button"
-        onClick={onClick}
-        className="flex min-w-0 flex-1 items-center gap-3 text-left"
-      >
-        <div className={cn(
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-3 text-left shadow-sm transition hover:shadow-md sm:p-4"
+    >
+      <div
+        className={cn(
           "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
-          isBezahlt ? "bg-success/10 text-success"
-            : isUeberfaellig ? "bg-destructive/10 text-destructive"
-            : tone === "primary" ? "bg-primary/10 text-primary"
-            : tone === "warning" ? "bg-warning/10 text-warning"
-            : "bg-muted text-muted-foreground"
-        )}>
-          <Icon className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="truncate font-medium">{posten.titel}</p>
-            {!posten.automatisch && (
-              <Badge variant="outline" className="h-5 shrink-0 text-[10px]">
-                Manuell
-              </Badge>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-            <span>Fällig {formatDate(posten.faelligAm)}</span>
-            {!isBezahlt && (
-              <>
-                <span>·</span>
-                <span className={cn(isUeberfaellig && "font-medium text-destructive")}>
-                  {tageBis < 0
-                    ? `${Math.abs(tageBis)} Tage überfällig`
-                    : tageBis === 0
-                    ? "heute fällig"
-                    : `in ${tageBis} ${tageBis === 1 ? "Tag" : "Tagen"}`}
-                </span>
-              </>
-            )}
-            {isBezahlt && posten.bezahltAm && (
-              <>
-                <span>·</span>
-                <span className="text-success">bezahlt {formatDate(posten.bezahltAm)}</span>
-              </>
-            )}
-          </div>
-        </div>
-        <div className="text-right">
-          <p className={cn(
-            "text-base font-semibold sm:text-lg",
-            isBezahlt && "text-success line-through opacity-60",
-            isUeberfaellig && !isBezahlt && "text-destructive"
-          )}>
-            {formatEUR(posten.tatsaechlicherBetrag ?? posten.geschaetzterBetrag)}
-          </p>
-        </div>
-      </button>
-      <div className="flex shrink-0 items-center gap-1">
-        {onBezahlt && !isBezahlt && (
-          <Button
-            size="sm"
-            onClick={onBezahlt}
-            className="rounded-lg"
-          >
-            <CheckCircle2 className="mr-1 h-4 w-4" /> Bezahlt
-          </Button>
+          isUeberfaellig
+            ? "bg-destructive/10 text-destructive"
+            : posten.art === "ust"
+            ? "bg-primary/10 text-primary"
+            : "bg-warning/10 text-warning",
         )}
-        {onWiderrufen && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onWiderrufen}
-            className="rounded-lg text-xs"
-          >
-            Widerrufen
-          </Button>
-        )}
-        {onLoeschen && (
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={onLoeschen}
-            className="rounded-lg text-muted-foreground hover:text-destructive"
-            aria-label="Löschen"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        )}
+      >
+        <Icon className="h-5 w-5" />
       </div>
-    </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium">{posten.titel}</p>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+          <span>Fällig {formatDate(posten.faelligAm)}</span>
+          <span>·</span>
+          <span className={cn(isUeberfaellig && "font-medium text-destructive")}>
+            {tageBis < 0
+              ? `${Math.abs(tageBis)} Tage überfällig`
+              : tageBis === 0
+              ? "heute fällig"
+              : `in ${tageBis} ${tageBis === 1 ? "Tag" : "Tagen"}`}
+          </span>
+        </div>
+      </div>
+      <p
+        className={cn(
+          "shrink-0 text-base font-semibold tabular-nums sm:text-lg",
+          isUeberfaellig && "text-destructive",
+        )}
+      >
+        {formatEUR(posten.geschaetzterBetrag)}
+      </p>
+    </button>
   );
 }
