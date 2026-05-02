@@ -29,6 +29,7 @@ import type {
   MahnStufe,
   MahnStufeConfig,
 } from "@/lib/api/types";
+import { MahnLaeufeListe } from "./MahnLaeufeListe";
 
 export function MahnwesenTab() {
   const { data, isLoading } = useMahnEinstellungen();
@@ -97,6 +98,8 @@ export function MahnwesenTab() {
       </div>
 
       <AutomatikKarte form={form} setForm={setForm} />
+
+      <MahnLaeufeListe />
 
 
       {form.stufen
