@@ -218,7 +218,6 @@ function PositionCard({ index, position: p, onChange, onRemove }: CardProps) {
                 step="0.01"
                 value={p.pauschalpreisNetto || ""}
                 onChange={(e) => onChange({ pauschalpreisNetto: Number(e.target.value) || 0 })}
-                placeholder="z. B. 3750.00"
                 className="h-11 text-base font-semibold"
               />
             </div>
@@ -226,12 +225,6 @@ function PositionCard({ index, position: p, onChange, onRemove }: CardProps) {
               <label className="mb-1 block text-[11px] font-medium text-muted-foreground">MwSt</label>
               <MwStStepper value={p.steuersatz} onChange={(v) => onChange({ steuersatz: v })} />
             </div>
-          </div>
-
-          <div className="flex justify-end border-t border-border pt-2 text-sm">
-            <span className="text-muted-foreground">
-              Pauschal <span className="ml-1 font-semibold text-foreground">{formatEUR(summe(p))}</span>
-            </span>
           </div>
         </div>
       ) : (
@@ -247,6 +240,7 @@ function PositionCard({ index, position: p, onChange, onRemove }: CardProps) {
               placeholder="z. B. Treppenhaus-Reinigung"
               minRows={2}
               maxRows={10}
+              withToolbar
             />
           </div>
 
@@ -262,7 +256,6 @@ function PositionCard({ index, position: p, onChange, onRemove }: CardProps) {
                 step="0.01"
                 value={p.einzelpreisNetto || ""}
                 onChange={(e) => onChange({ einzelpreisNetto: Number(e.target.value) || 0 })}
-                placeholder="z. B. 250.00"
                 className="h-11 text-base font-semibold"
               />
             </div>
@@ -270,12 +263,6 @@ function PositionCard({ index, position: p, onChange, onRemove }: CardProps) {
               <label className="mb-1 block text-[11px] font-medium text-muted-foreground">MwSt</label>
               <MwStStepper value={p.steuersatz} onChange={(v) => onChange({ steuersatz: v })} />
             </div>
-          </div>
-
-          <div className="flex justify-end border-t border-border pt-2 text-sm">
-            <span className="text-muted-foreground">
-              Summe <span className="ml-1 font-semibold text-foreground">{formatEUR(summe(p))}</span>
-            </span>
           </div>
         </div>
       )}
