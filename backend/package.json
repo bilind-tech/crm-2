@@ -25,6 +25,7 @@
     "better-sqlite3": "^11.3.0",
     "fastify": "^4.28.1",
     "node-cron": "^4.2.1",
+    "pdfmake": "^0.2.10",
     "pino": "^9.4.0",
     "tar": "^7.5.13",
     "zod": "^3.23.8"
@@ -33,6 +34,7 @@
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^20.14.10",
     "@types/node-cron": "^3.0.11",
+    "@types/pdfmake": "^0.3.2",
     "@types/tar": "^7.0.87",
     "tsx": "^4.19.0",
     "typescript": "^5.5.4",
