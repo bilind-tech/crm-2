@@ -6,6 +6,7 @@ import {
   Receipt,
   FolderClosed,
   Calculator,
+  Clock,
   Settings,
   Lock,
 } from "lucide-react";
@@ -55,6 +56,7 @@ export function AppSidebar() {
     { title: "Rechnungen", url: "/rechnungen", icon: Receipt },
     { title: "Dokumente", url: "/dokumente", icon: FolderClosed },
     { title: "Steuern", url: "/steuern", icon: Calculator },
+    { title: "Stundenzettel", url: "/stundenzettel", icon: Clock },
   ];
   const system: NavItem[] = [
     { title: "Einstellungen", url: "/einstellungen", icon: Settings },

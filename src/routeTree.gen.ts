@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as StundenzettelRouteImport } from './routes/stundenzettel'
 import { Route as SteuernRouteImport } from './routes/steuern'
 import { Route as RechnungenRouteImport } from './routes/rechnungen'
 import { Route as ObjekteRouteImport } from './routes/objekte'
@@ -30,6 +31,11 @@ import { Route as RechnungenIdBearbeitenRouteImport } from './routes/rechnungen.
 import { Route as MUploadSessionRouteImport } from './routes/m.upload.$session'
 import { Route as AngeboteIdBearbeitenRouteImport } from './routes/angebote.$id.bearbeiten'
 
+const StundenzettelRoute = StundenzettelRouteImport.update({
+  id: '/stundenzettel',
+  path: '/stundenzettel',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SteuernRoute = SteuernRouteImport.update({
   id: '/steuern',
   path: '/steuern',
@@ -141,6 +147,7 @@ export interface FileRoutesByFullPath {
   '/objekte': typeof ObjekteRouteWithChildren
   '/rechnungen': typeof RechnungenRouteWithChildren
   '/steuern': typeof SteuernRoute
+  '/stundenzettel': typeof StundenzettelRoute
   '/angebote/$id': typeof AngeboteIdRouteWithChildren
   '/angebote/neu': typeof AngeboteNeuRoute
   '/kunden/$id': typeof KundenIdRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByTo {
   '/objekte': typeof ObjekteRouteWithChildren
   '/rechnungen': typeof RechnungenRouteWithChildren
   '/steuern': typeof SteuernRoute
+  '/stundenzettel': typeof StundenzettelRoute
   '/angebote/$id': typeof AngeboteIdRouteWithChildren
   '/angebote/neu': typeof AngeboteNeuRoute
   '/kunden/$id': typeof KundenIdRoute
@@ -186,6 +194,7 @@ export interface FileRoutesById {
   '/objekte': typeof ObjekteRouteWithChildren
   '/rechnungen': typeof RechnungenRouteWithChildren
   '/steuern': typeof SteuernRoute
+  '/stundenzettel': typeof StundenzettelRoute
   '/angebote/$id': typeof AngeboteIdRouteWithChildren
   '/angebote/neu': typeof AngeboteNeuRoute
   '/kunden/$id': typeof KundenIdRoute
@@ -210,6 +219,7 @@ export interface FileRouteTypes {
     | '/objekte'
     | '/rechnungen'
     | '/steuern'
+    | '/stundenzettel'
     | '/angebote/$id'
     | '/angebote/neu'
     | '/kunden/$id'
@@ -232,6 +242,7 @@ export interface FileRouteTypes {
     | '/objekte'
     | '/rechnungen'
     | '/steuern'
+    | '/stundenzettel'
     | '/angebote/$id'
     | '/angebote/neu'
     | '/kunden/$id'
@@ -254,6 +265,7 @@ export interface FileRouteTypes {
     | '/objekte'
     | '/rechnungen'
     | '/steuern'
+    | '/stundenzettel'
     | '/angebote/$id'
     | '/angebote/neu'
     | '/kunden/$id'
@@ -277,11 +289,19 @@ export interface RootRouteChildren {
   ObjekteRoute: typeof ObjekteRouteWithChildren
   RechnungenRoute: typeof RechnungenRouteWithChildren
   SteuernRoute: typeof SteuernRoute
+  StundenzettelRoute: typeof StundenzettelRoute
   MUploadSessionRoute: typeof MUploadSessionRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/stundenzettel': {
+      id: '/stundenzettel'
+      path: '/stundenzettel'
+      fullPath: '/stundenzettel'
+      preLoaderRoute: typeof StundenzettelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/steuern': {
       id: '/steuern'
       path: '/steuern'
@@ -513,6 +533,7 @@ const rootRouteChildren: RootRouteChildren = {
   ObjekteRoute: ObjekteRouteWithChildren,
   RechnungenRoute: RechnungenRouteWithChildren,
   SteuernRoute: SteuernRoute,
+  StundenzettelRoute: StundenzettelRoute,
   MUploadSessionRoute: MUploadSessionRoute,
 }
 export const routeTree = rootRouteImport
