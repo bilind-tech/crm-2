@@ -375,14 +375,19 @@ function Page() {
                       >
                         <Mail className="h-4 w-4" />
                       </button>
-                      {r.status !== "bezahlt" && r.status !== "storniert" && (
+                      {r.status === "bezahlt" ? (
+                        <span className="inline-flex h-8 items-center gap-1 rounded-md border border-success/30 bg-success/10 px-2.5 text-xs font-medium text-success">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <span>Bezahlt</span>
+                        </span>
+                      ) : r.status !== "storniert" && (
                         <button
                           onClick={(e) => { e.stopPropagation(); e.preventDefault(); setZahlungFuer(r); }}
                           className="inline-flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2.5 text-xs font-medium text-primary hover:bg-primary/10"
-                          title="Zahlung erfassen — voll oder teilweise"
+                          title="Zahlung bestätigen — voll oder teilweise"
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
-                          <span>Zahlung erfassen</span>
+                          <span>Zahlung bestätigen</span>
                         </button>
                       )}
                       <button
