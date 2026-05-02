@@ -91,8 +91,13 @@ export function SystemUpdateTab() {
 
   const { data: lauf } = useUpdateLauf(activeLaufId);
 
-  // Beim Erfolg: nach 2s Modal nicht automatisch schließen — User muss bestätigen
-  // Beim Fehler: Modal bleibt offen mit Fehler-State
+  // Beim Mount: gibt es einen aktuell laufenden Update-Lauf? Dann Dialog öffnen,
+  // damit ein User, der die Seite während eines Updates neu lädt, weiter den
+  // Fortschritt sieht.
+  const { data: aktuellerLauf } = useAktuellerUpdateLauf(!activeLaufId);
+  useEffect(() => {
+    if (aktuellerLauf?.id && !activeLaufId) setActiveLaufId(aktuellerLauf.id);
+  }, [aktuellerLauf, activeLaufId]);
 
   if (sysLoading || !system) return <LoadingPlaceholder />;
 
@@ -105,7 +110,19 @@ export function SystemUpdateTab() {
         }
         setPendingPackage(info);
       },
-      onError: (e) => toast.error(`Validierung fehlgeschlagen: ${(e as Error).message}`),
+      onError: (e) => {
+        const err = e as { status?: number; message?: string };
+        const msg = err.message ?? "Unbekannter Fehler";
+        if (err.status === 413) {
+          toast.error("Paket zu groß (max. 200 MB).");
+        } else if (err.status === 400) {
+          toast.error(`Update-Paket ungültig: ${msg}`);
+        } else if (err.status === 401) {
+          toast.error("Bitte erneut anmelden.");
+        } else {
+          toast.error(`Validierung fehlgeschlagen: ${msg}`);
+        }
+      },
     });
   };
 
@@ -116,7 +133,17 @@ export function SystemUpdateTab() {
         setActiveLaufId(newLauf.id);
         setPendingPackage(null);
       },
-      onError: (e) => toast.error(`Installation konnte nicht starten: ${(e as Error).message}`),
+      onError: (e) => {
+        const err = e as { status?: number; message?: string };
+        if (err.status === 409) {
+          toast.error("Es läuft bereits ein Update.");
+        } else if (err.status === 404) {
+          toast.error("Upload abgelaufen — bitte Paket erneut hochladen.");
+          setPendingPackage(null);
+        } else {
+          toast.error(`Installation konnte nicht starten: ${err.message ?? "Fehler"}`);
+        }
+      },
     });
   };
 
