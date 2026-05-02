@@ -536,13 +536,36 @@ export const useSearch = (q: string) =>
   });
 
 // ---------- Aktivitäten / Benachrichtigungen ----------
+import {
+  adaptAktivitaet,
+  adaptBenachrichtigung,
+  unwrapList,
+  type BackendAktivitaet,
+  type BackendBenachrichtigung,
+} from "@/lib/api/adapters";
+
 export const useAktivitaeten = () =>
-  useQuery({ queryKey: qk.aktivitaeten, queryFn: () => api.get<Aktivitaet[]>("/aktivitaeten") });
+  useQuery({
+    queryKey: qk.aktivitaeten,
+    queryFn: async (): Promise<Aktivitaet[]> => {
+      const raw = await api.get<unknown>("/aktivitaeten");
+      const items = unwrapList<BackendAktivitaet | Aktivitaet>(raw);
+      return items.map((it) =>
+        "art" in it ? adaptAktivitaet(it as BackendAktivitaet) : (it as Aktivitaet),
+      );
+    },
+  });
 
 export const useBenachrichtigungen = () =>
   useQuery({
     queryKey: qk.benachrichtigungen,
-    queryFn: () => api.get<Benachrichtigung[]>("/benachrichtigungen"),
+    queryFn: async (): Promise<Benachrichtigung[]> => {
+      const raw = await api.get<unknown>("/benachrichtigungen");
+      const items = unwrapList<BackendBenachrichtigung | Benachrichtigung>(raw);
+      return items.map((it) =>
+        "prioritaet" in it ? adaptBenachrichtigung(it as BackendBenachrichtigung) : (it as Benachrichtigung),
+      );
+    },
     refetchInterval: 60_000,
   });
 

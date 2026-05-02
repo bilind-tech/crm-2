@@ -13,6 +13,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { startScheduler } from "@/lib/mock/scheduler";
 import { UeberfaelligPopup } from "@/components/notifications/UeberfaelligPopup";
 import { BackendStatusIndicator } from "@/components/layout/BackendStatusIndicator";
+import { useLiveEvents } from "@/hooks/useLiveEvents";
+import { isBackendUrlExplicit } from "@/lib/api/backendUrl";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -77,6 +79,9 @@ function Shell() {
 
   // Standalone-Routen ohne Sidebar/Header/Lock (z.B. Handy-Upload-Brücke)
   const isStandalone = pathname.startsWith("/m/");
+
+  // SSE nur, wenn ein echtes Backend hinterlegt ist und der User entsperrt hat.
+  useLiveEvents(unlocked && !isStandalone && isBackendUrlExplicit());
 
   useEffect(() => {
     if (!unlocked) return;

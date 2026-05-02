@@ -21,17 +21,24 @@ export async function benachrichtigungRoutes(app: FastifyInstance): Promise<void
     gesamt: gesamtZahl(),
   }));
 
-  app.post("/benachrichtigungen/:id/lesen", { preHandler: requireAuth }, async (req, reply) => {
+  const markOne = async (req: any, reply: any) => {
     const { id } = req.params as { id: string };
     const ok = markGelesen(id);
     if (!ok) { reply.status(404).send({ error: "not_found" }); return; }
     return getById(id);
-  });
+  };
+  app.post("/benachrichtigungen/:id/lesen", { preHandler: requireAuth }, markOne);
+  app.patch("/benachrichtigungen/:id/gelesen", { preHandler: requireAuth }, markOne);
 
+  const markAll = async () => ({ geaendert: markAlleGelesen() });
   app.post("/benachrichtigungen/lesen-alle", {
     preHandler: requireAuth,
     config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
-  }, async () => ({ geaendert: markAlleGelesen() }));
+  }, markAll);
+  app.post("/benachrichtigungen/alle-gelesen", {
+    preHandler: requireAuth,
+    config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+  }, markAll);
 
   app.post("/benachrichtigungen/:id/wegwischen", { preHandler: requireAuth }, async (req, reply) => {
     const { id } = req.params as { id: string };
