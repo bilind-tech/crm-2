@@ -10,7 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useKunden, useObjekte, useCreateAngebot } from "@/hooks/useApi";
+import { useKunden, useObjekte, useCreateAngebot, useNummernkreise } from "@/hooks/useApi";
+import { vorschauBelegnummer } from "@/lib/belegNummer";
 import { toast } from "sonner";
 import { addDays, todayISO } from "@/lib/format";
 import {
