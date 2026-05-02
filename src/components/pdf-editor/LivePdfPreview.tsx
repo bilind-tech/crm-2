@@ -33,6 +33,7 @@ export function LivePdfPreview(props: Props) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [numPages, setNumPages] = useState(0);
   const [rendering, setRendering] = useState(false);
+  const [buildError, setBuildError] = useState<string | null>(null);
 
   // Container-Breite messen
   useEffect(() => {
@@ -42,7 +43,14 @@ export function LivePdfPreview(props: Props) {
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
-    return () => ro.disconnect();
+    // Fallback: wenn nach 1 s noch keine Breite, setze Default — verhindert hängende Vorschau
+    const fallback = setTimeout(() => {
+      setContainerWidth((w) => (w === 0 ? 600 : w));
+    }, 1000);
+    return () => {
+      ro.disconnect();
+      clearTimeout(fallback);
+    };
   }, []);
 
   // Debounced PDF-Build
@@ -50,6 +58,7 @@ export function LivePdfPreview(props: Props) {
     let cancelled = false;
     const timer = setTimeout(async () => {
       setRendering(true);
+      setBuildError(null);
       try {
         const blob =
           kind === "angebot"
@@ -63,6 +72,7 @@ export function LivePdfPreview(props: Props) {
         });
       } catch (e) {
         console.error(e);
+        if (!cancelled) setBuildError(e instanceof Error ? e.message : "PDF konnte nicht erzeugt werden.");
       } finally {
         if (!cancelled) setRendering(false);
       }
@@ -92,10 +102,17 @@ export function LivePdfPreview(props: Props) {
         </div>
       )}
 
-      {!pdfUrl && containerWidth > 0 && (
+      {!pdfUrl && !buildError && containerWidth > 0 && (
         <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin" />
           <span>PDF wird erzeugt …</span>
+        </div>
+      )}
+
+      {buildError && (
+        <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 px-6 text-center text-sm">
+          <p className="font-medium text-destructive">PDF konnte nicht erzeugt werden</p>
+          <p className="text-xs text-muted-foreground">{buildError}</p>
         </div>
       )}
 
