@@ -294,14 +294,14 @@ function Page() {
       <ManuellerPostenDialog open={neuOpen} onOpenChange={setNeuOpen} />
       <SteuerBezahltDialog
         posten={bezahltDialog}
-        onOpenChange={(v) => !v && setBezahltDialog(null)}
-        onConfirm={(betrag) => {
+        onOpenChange={(v: boolean) => !v && setBezahltDialog(null)}
+        onConfirm={(betrag: number | undefined) => {
           if (bezahltDialog) handleBezahlt(bezahltDialog.id, betrag);
         }}
       />
       <SteuerDetailDialog
         posten={detailDialog}
-        onOpenChange={(v) => !v && setDetailDialog(null)}
+        onOpenChange={(v: boolean) => !v && setDetailDialog(null)}
       />
     </div>
   );
