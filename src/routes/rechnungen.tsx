@@ -198,6 +198,9 @@ function Page() {
               meta={
                 <>
                   <span className="font-mono">{r.nummer}</span>
+                  {r.optionen?.wiederkehrend && (
+                    <Repeat className="h-3 w-3 text-primary" aria-label="Dauerauftrag" />
+                  )}
                   <span>· {formatDate(r.rechnungsdatum)}</span>
                   <span>· fällig {formatDate(r.faelligkeitsdatum)}</span>
                 </>
