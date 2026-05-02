@@ -1,30 +1,8 @@
-// =============================================================================
 // Tab "System & Updates"
-// =============================================================================
-// FRONTEND-STUB-HINWEIS:
-// Aktuell wird KEIN echtes Update installiert. Die Steps und der Fortschritt
-// sind reine UI-Simulation (Mock-Backend in src/lib/mock/backend.ts).
-//
-// Das spätere Pi-Backend (POST /system/update/install/:uploadId) MUSS:
-//   1. Code/Daten-Trennung respektieren — DATA_DIR niemals anfassen
-//   2. Vor jedem Schritt logging in update_runs-Tabelle
-//   3. Sicherheits-Backup VOR npm install (nicht erst danach)
-//   4. Atomar umschalten via fs.rename (kein cp -r mid-flight)
-//   5. Bei JEDEM Fehler: alten Code zurück-rename, Service starten,
-//      Fehler an Frontend zurückgeben
-//   6. Update-Endpunkt nur für authentifizierte Admin-User
-//   7. Datei-Upload max 200 MB, Zip-Bomb-Schutz beim Entpacken
-//   8. Migrations idempotent (schema_migrations-Tabelle prüft, was schon lief)
-//
-// ROLLBACK-VERTRAG (POST /system/update/rollback/:version):
-//   - Body: { passwort: string }  → bcrypt-Vergleich serverseitig (nie clientseitig)
-//   - Bei falschem Passwort: 401, Service unverändert weiter
-//   - Vor dem Code-Swap: pre-rollback-{ts}.sqlite.gz im Backup-Ordner anlegen
-//   - DATA_DIR (/var/lib/mycleancenter/) wird NIEMALS angefasst — auch nicht
-//     gelesen-mit-Lock. Nur /opt/mycleancenter/current/ wird via fs.rename
-//     getauscht (current → broken-{ts}, previous → current).
-//   - Bei Fehler: kein halb-getauschter Zustand, Service mit altem Code weiter.
-// =============================================================================
+// Zeigt aktuelle Version + Update-Upload + Versionshistorie + Live-Lauf-Dialog.
+// Backend (Step 8) ist angebunden: Multipart-Upload, SSE-getriebener Fortschritt,
+// 401-Lockout für Rollback. Wenn beim Tab-Mount ein Lauf bereits läuft, öffnet
+// sich der Fortschritts-Dialog automatisch.
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -40,6 +18,7 @@ import {
   Cpu,
   Database,
   ChevronRight,
+  Radio,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -60,6 +39,7 @@ import {
   useValidateUpdate,
   useInstallUpdate,
   useUpdateLauf,
+  useAktuellerUpdateLauf,
   useRollbackUpdate,
 } from "@/hooks/useApi";
 import type {
@@ -68,6 +48,7 @@ import type {
   UpdateStepStatus,
   InstallierteVersion,
 } from "@/lib/api/types";
+import { onSseStatus } from "@/lib/api/sse";
 import { cn } from "@/lib/utils";
 
 function formatDateTime(iso: string): string {
