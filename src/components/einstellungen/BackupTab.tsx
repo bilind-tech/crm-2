@@ -408,11 +408,11 @@ export function BackupTab() {
           open
           onClose={() => setRestoreTarget(null)}
           isUploadRestore={!!uploadPreview && restoreTarget.id === uploadPreview.uploadId}
-          onConfirm={(b) => {
+          onConfirm={(b, passwort) => {
             const isUpload = !!uploadPreview && b.id === uploadPreview.uploadId;
             const fn = isUpload
-              ? () => restoreUpload.mutateAsync(b.id)
-              : () => restore.mutateAsync(b.id);
+              ? () => restoreUpload.mutateAsync({ uploadId: b.id, passwort })
+              : () => restore.mutateAsync({ backupId: b.id, passwort });
             return fn().then(() => {
               toast.success(`Wiederhergestellt: Stand ${formatDateTime(b.zeitpunktStart)}`);
               setRestoreTarget(null);
