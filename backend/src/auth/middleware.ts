@@ -1,6 +1,7 @@
-// requireAuth-Middleware (Fastify preHandler).
+// requireAuth-Middleware (Fastify preHandler) + Cookie-Helpers.
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { resolveSession, SESSION_COOKIE } from "./sessions.js";
+import { resolveSession, SESSION_COOKIE, SLIDING_DAYS } from "./sessions.js";
+import { config } from "../config.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -8,13 +9,35 @@ declare module "fastify" {
   }
 }
 
+export function setSessionCookie(reply: FastifyReply, token: string): void {
+  reply.setCookie(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: config.nodeEnv === "production",
+    path: "/",
+    maxAge: SLIDING_DAYS * 24 * 60 * 60,
+  });
+}
+
+export function clearSessionCookie(reply: FastifyReply): void {
+  reply.clearCookie(SESSION_COOKIE, { path: "/" });
+}
+
+export function getCookieToken(req: FastifyRequest): string | undefined {
+  const c = (req as unknown as { cookies?: Record<string, string> }).cookies;
+  return c?.[SESSION_COOKIE];
+}
+
 export async function requireAuth(req: FastifyRequest, reply: FastifyReply): Promise<void> {
-  const cookies = (req as unknown as { cookies?: Record<string, string> }).cookies;
-  const token = cookies?.[SESSION_COOKIE];
+  const token = getCookieToken(req);
   const sess = token ? resolveSession(token) : null;
   if (!sess) {
     reply.status(401).send({ error: "unauthenticated" });
     return;
   }
   req.user = { id: sess.userId, username: sess.username };
+  // Cookie erneuern wenn Sliding-Update lief, damit Browser-MaxAge serverseitig folgt
+  if (sess.refreshed) {
+    setSessionCookie(reply, sess.token);
+  }
 }
