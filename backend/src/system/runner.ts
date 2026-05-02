@@ -20,7 +20,11 @@ import {
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import http from "node:http";
+import { createRequire } from "node:module";
 import { config } from "../config.js";
+
+const require = createRequire(import.meta.url);
+
 import { emit } from "../events/bus.js";
 import { audit } from "../auth/audit.js";
 import { createBackup } from "../backup/create.js";
@@ -509,5 +513,5 @@ export function reapStaleLock(): boolean {
   return false;
 }
 
-// Pseudo-require für ESM (better-sqlite3 ist CJS, andere imports benötigen require)
-const require = (await import("node:module")).createRequire(import.meta.url);
+
+
