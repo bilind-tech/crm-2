@@ -147,7 +147,7 @@ function Page() {
             <Row label={`MwSt ${r.steuersatz}%`} value={formatEUR(s.steuer)} />
             <div className="my-2 h-px bg-border" />
             <Row label="Brutto" value={formatEUR(s.brutto)} />
-            <Row label="Bezahlt" value={formatEUR(bezahlt)} />
+            {bezahlt > 0 && <Row label="Davon bezahlt" value={formatEUR(bezahlt)} />}
             <Row label="Offen" value={formatEUR(offen)} bold />
             {offen > 0 && (
               <Button
