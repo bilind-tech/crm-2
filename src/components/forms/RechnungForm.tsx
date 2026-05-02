@@ -169,6 +169,13 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
         </button>
       </div>
 
+      {vorschauNummer && (
+        <p className="-mt-3 text-xs text-muted-foreground">
+          Belegnummer:{" "}
+          <span className="font-mono font-semibold text-foreground">{vorschauNummer}</span>
+        </p>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Rechnungsdatum">
           <Input type="date" value={rechnungsdatum} onChange={(e) => setRechnungsdatumAndFrist(e.target.value)} />
