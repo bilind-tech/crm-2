@@ -9,20 +9,27 @@ Anleitung, um das CRM-Backend auf einem frisch geflashten Raspberry Pi 5 in Betr
 - SSH aktiv, Standard-User `pi` mit sudo-Rechten
 - Pi ist im LAN erreichbar unter `mycleancenter.local` (mDNS)
 
-## Erstinstallation
+## Erstinstallation (1-Befehl-Variante)
 
 ```bash
-# 1. Auf den Pi einloggen
+# Release-ZIP auf den Pi kopieren
+scp dist-release/mycleancenter-v0.2.0.zip pi@mycleancenter.local:~/
+
+# Auf dem Pi: install.sh aus dem ZIP extrahieren und mit --bootstrap starten
+ssh pi@mycleancenter.local '
+  unzip -p mycleancenter-v0.2.0.zip backend/deploy/install.sh > /tmp/install.sh
+  sudo bash /tmp/install.sh --bootstrap=$HOME/mycleancenter-v0.2.0.zip
+'
+```
+
+## Erstinstallation (manuell, ohne Bootstrap)
+
+```bash
 ssh pi@mycleancenter.local
-
-# 2. CRM-Code holen — entweder als ZIP entpacken …
 sudo mkdir -p /opt/mycleancenter/releases/initial
-sudo tar -xzf mycleancenter-vX.Y.Z.tar.gz -C /opt/mycleancenter/releases/initial
+sudo unzip -q mycleancenter-v0.2.0.zip -d /opt/mycleancenter/releases/initial
 sudo ln -sfn /opt/mycleancenter/releases/initial /opt/mycleancenter/current
-
-# 3. Setup-Skript starten (idempotent)
-cd /opt/mycleancenter/current/backend/deploy
-sudo bash install.sh
+sudo bash /opt/mycleancenter/current/backend/deploy/install.sh
 ```
 
 Das Skript:
@@ -30,10 +37,11 @@ Das Skript:
 - legt System-User `mycleancenter` an
 - erzeugt `/var/lib/mycleancenter/{db,keys,uploads,logs,backups/...}`
 - installiert Node.js 20 LTS (falls fehlt)
+- installiert Backend-Dependencies (`npm ci --omit=dev`) — Native-Module (better-sqlite3, @node-rs/argon2) werden für Pi-Architektur kompiliert
 - kopiert die systemd-Unit nach `/etc/systemd/system/mycleancenter.service`
 - erlaubt dem Service via `sudoers.d/mycleancenter` den eigenen Restart
 - richtet `logrotate` für `/var/lib/mycleancenter/logs/` ein (14 Tage Vorhalt)
-- startet den Service (`systemctl enable --now mycleancenter`)
+- startet den Service (`systemctl enable --now mycleancenter`) + Healthcheck
 
 Nach Erfolg:
 
