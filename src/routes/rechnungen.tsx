@@ -219,10 +219,11 @@ function Page() {
                   {r.status !== "bezahlt" && r.status !== "storniert" && (
                     <button
                       onClick={(e) => { e.stopPropagation(); e.preventDefault(); setZahlungFuer(r); }}
-                      className="rounded-md p-2 text-success hover:bg-success/10"
-                      title="Zahlung erfassen"
+                      className="inline-flex h-9 items-center gap-1.5 rounded-md border border-success/30 bg-success/10 px-3 text-sm font-medium text-success hover:bg-success/20"
+                      title="Zahlung erfassen — markiert die Rechnung als bezahlt"
                     >
                       <CheckCircle2 className="h-4 w-4" />
+                      <span>Zahlung erfassen</span>
                     </button>
                   )}
                   <button
@@ -326,10 +327,11 @@ function Page() {
                       {r.status !== "bezahlt" && r.status !== "storniert" && (
                         <button
                           onClick={(e) => { e.stopPropagation(); e.preventDefault(); setZahlungFuer(r); }}
-                          className="rounded-md p-1.5 text-success hover:bg-success/10"
-                          title="Zahlung erfassen"
+                          className="inline-flex h-8 items-center gap-1 rounded-md border border-success/30 bg-success/10 px-2.5 text-xs font-medium text-success hover:bg-success/20"
+                          title="Zahlung erfassen — markiert die Rechnung als bezahlt"
                         >
-                          <CheckCircle2 className="h-4 w-4" />
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <span>Zahlung</span>
                         </button>
                       )}
                       <button
