@@ -179,13 +179,13 @@ export function KundeForm({ onClose, onCreated }: Props) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <Tabs defaultValue="basis">
-        <TabsList className="h-11 w-full justify-start gap-1 rounded-full bg-muted p-1">
-          <TabsTrigger value="basis" className="rounded-full px-5">Basis</TabsTrigger>
-          <TabsTrigger value="adresse" className="rounded-full px-5">Adresse</TabsTrigger>
-          <TabsTrigger value="steuer" className="rounded-full px-5">Steuer & Zahlung</TabsTrigger>
-          <TabsTrigger value="notizen" className="rounded-full px-5">Notizen</TabsTrigger>
+        <TabsList className="no-scrollbar flex h-11 w-full justify-start gap-1 overflow-x-auto rounded-full bg-muted p-1">
+          <TabsTrigger value="basis" className="shrink-0 rounded-full px-3 text-sm sm:px-5">Basis</TabsTrigger>
+          <TabsTrigger value="adresse" className="shrink-0 rounded-full px-3 text-sm sm:px-5">Adresse</TabsTrigger>
+          <TabsTrigger value="steuer" className="shrink-0 rounded-full px-3 text-sm sm:px-5">Steuer & Zahlung</TabsTrigger>
+          <TabsTrigger value="notizen" className="shrink-0 rounded-full px-3 text-sm sm:px-5">Notizen</TabsTrigger>
         </TabsList>
 
         <TabsContent value="basis" className="mt-6 space-y-4">
