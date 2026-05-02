@@ -121,10 +121,14 @@ export function DokumentBearbeitenDialog({ dokument, open, onOpenChange }: Props
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg bg-background">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto bg-background">
           <DialogHeader>
             <DialogTitle>Dokument bearbeiten</DialogTitle>
           </DialogHeader>
+
+          <div className="-mt-1 mb-2">
+            <DriveSyncRow dokument={dokument} />
+          </div>
 
           <div className="space-y-4">
             {/* Vorschau */}
@@ -207,6 +211,48 @@ export function DokumentBearbeitenDialog({ dokument, open, onOpenChange }: Props
             <div>
               <Label htmlFor="d-besch">Beschreibung</Label>
               <Textarea id="d-besch" rows={2} value={beschreibung} onChange={(e) => setBeschreibung(e.target.value)} />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="d-kunde">Kunde</Label>
+                <Select
+                  value={kundeId || "_none"}
+                  onValueChange={(v) => {
+                    const next = v === "_none" ? "" : v;
+                    setKundeId(next);
+                    if (!next) setObjektId("");
+                  }}
+                >
+                  <SelectTrigger id="d-kunde"><SelectValue placeholder="— Kein Kunde —" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">— Kein Kunde —</SelectItem>
+                    {kunden.map((k) => (
+                      <SelectItem key={k.id} value={k.id}>
+                        {k.firmenname || `${k.vorname ?? ""} ${k.nachname ?? ""}`.trim() || k.nummer}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="d-objekt">Objekt</Label>
+                <Select
+                  value={objektId || "_none"}
+                  onValueChange={(v) => setObjektId(v === "_none" ? "" : v)}
+                  disabled={!kundeId}
+                >
+                  <SelectTrigger id="d-objekt">
+                    <SelectValue placeholder={kundeId ? "— Kein Objekt —" : "Erst Kunde wählen"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">— Kein Objekt —</SelectItem>
+                    {objekte.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm">
