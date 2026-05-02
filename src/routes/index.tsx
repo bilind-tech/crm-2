@@ -240,7 +240,9 @@ function Dashboard() {
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
-            <FileText className="h-4 w-4 text-primary" />
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <FileText className="h-4 w-4" />
+            </span>
             <h2 className="text-base font-semibold">Offene Rechnungen</h2>
           </div>
           {offene.length === 0 ? (
@@ -276,7 +278,9 @@ function Dashboard() {
                             fällig {formatDate(r.faelligkeitsdatum)}
                           </p>
                         </div>
-                        <CheckCircle2 className="h-4 w-4 text-success" />
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-success/10 text-success">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        </span>
                       </div>
                     </Link>
                   </li>
@@ -288,12 +292,16 @@ function Dashboard() {
 
         <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
-            <Bell className="h-4 w-4 text-warning" />
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-warning/10 text-warning">
+              <Bell className="h-4 w-4" />
+            </span>
             <h2 className="text-base font-semibold">Mahnwesen</h2>
           </div>
           {mahn.aktionEmpfohlen === 0 && mahn.ueberfaellig === 0 ? (
             <div className="py-6 text-center">
-              <CheckCircle2 className="mx-auto h-6 w-6 text-success" />
+              <span className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-success/10 text-success">
+                <CheckCircle2 className="h-5 w-5" />
+              </span>
               <p className="mt-2 text-sm text-muted-foreground">
                 {aktiv
                   ? `Im Zeitraum ${zeitLabel} keine offenen Mahnvorgänge.`
@@ -326,7 +334,9 @@ function Dashboard() {
       <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Repeat className="h-4 w-4 text-primary" />
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Repeat className="h-4 w-4" />
+            </span>
             <h2 className="text-base font-semibold">Daueraufträge</h2>
           </div>
           <Link
