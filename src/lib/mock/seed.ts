@@ -290,4 +290,44 @@ export function seed() {
 
 export type SeedDB = ReturnType<typeof seed>;
 
+/** Erzeugt eine plausible Backup-Historie mit Tages-/Wochen-/Monats-Backups.
+ *  Alle Einträge sind „erfolg" und abgeschlossen — werden direkt angezeigt. */
+function seedBackupHistorie(uuid: () => string): BackupEintrag[] {
+  const eintraege: BackupEintrag[] = [];
+  const heute = new Date();
+  heute.setHours(3, 0, 0, 0);
+
+  const mk = (
+    daysBack: number,
+    kategorie: "daily" | "weekly" | "monthly",
+    sizeMb: number,
+  ): BackupEintrag => {
+    const start = new Date(heute);
+    start.setDate(start.getDate() - daysBack);
+    const ende = new Date(start.getTime() + 1500 + Math.random() * 800);
+    const dateName = start.toISOString().slice(0, 10);
+    return {
+      id: uuid(),
+      zeitpunkt: start.toISOString(),
+      zeitpunktStart: start.toISOString(),
+      abgeschlossenAm: ende.toISOString(),
+      kategorie,
+      ausloeser: "auto",
+      groesseBytes: Math.round(sizeMb * 1024 * 1024),
+      status: "erfolg",
+      dateiname: `data-${kategorie}-${dateName}.sqlite.gz`,
+      driveStatus: "synced",
+    };
+  };
+
+  // 7 daily (gestern bis heute-7)
+  for (let i = 0; i < 7; i++) eintraege.push(mk(i, "daily", 11.8 + i * 0.05));
+  // 4 weekly (Sonntags, jede Woche)
+  for (let i = 1; i <= 4; i++) eintraege.push(mk(i * 7, "weekly", 11.5 + i * 0.1));
+  // 12 monthly
+  for (let i = 1; i <= 12; i++) eintraege.push(mk(i * 30, "monthly", 10.0 + i * 0.2));
+
+  return eintraege;
+}
+
 export { HEUTE };
