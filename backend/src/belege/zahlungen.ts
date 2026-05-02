@@ -4,6 +4,7 @@ import { getDatabase } from "../db/index.js";
 import { euroToCt, zahlungRowToApi, type ApiZahlung, type DbZahlung } from "./mappers.js";
 import { recomputeRechnungStatus } from "./status.js";
 import { emitBelegMutated } from "./events.js";
+import { emit } from "../events/bus.js";
 
 export interface ZahlungInput {
   datum?: string;
@@ -34,6 +35,12 @@ export function addZahlung(rechnungId: string, data: ZahlungInput): ApiZahlung |
   tx();
   recomputeRechnungStatus(rechnungId);
   emitBelegMutated("rechnung", rechnungId);
+  const statusRow = db.prepare(`SELECT status FROM rechnung WHERE id = ?`).get(rechnungId) as { status: string } | undefined;
+  emit("zahlung:erfasst", {
+    rechnungId,
+    betrag: data.betrag,
+    statusNachher: statusRow?.status ?? "unbekannt",
+  });
 
   const row = db
     .prepare(
