@@ -374,6 +374,71 @@ async function buildDoc(
   };
 }
 
+function mergeFirma(firma: Firmendaten, override?: Partial<Firmendaten>): Firmendaten {
+  if (!override) return firma;
+  // Nur definierte (nicht-leere) Felder überschreiben.
+  const merged: Firmendaten = { ...firma };
+  for (const k of Object.keys(override) as (keyof Firmendaten)[]) {
+    const v = override[k];
+    if (v !== undefined && v !== null && v !== "") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (merged as any)[k] = v;
+    }
+  }
+  return merged;
+}
+
+async function buildDocWithOverrides(
+  ctx: PdfContext,
+  titel: string,
+  meta: { label: string; wert: string }[],
+  beleg: { positionen: Position[]; rabattGesamt: number; steuersatz: number },
+  intro: string,
+  outro: string,
+  logoOverride: string | null,
+) {
+  const logo = logoOverride ?? (await logoDataUrl());
+  const t = totals(beleg.positionen, beleg.rabattGesamt, beleg.steuersatz);
+  return {
+    pageSize: "A4" as const,
+    pageMargins: [40, 90, 40, 110] as [number, number, number, number],
+    defaultStyle: { font: "Roboto", fontSize: 10, color: "#0f172a" },
+    header: header(absenderzeile(ctx.firma), logo),
+    footer: footer(ctx.firma),
+    content: [
+      {
+        margin: [0, 10, 0, 0],
+        columns: [
+          {
+            stack: [
+              { text: absenderzeile(ctx.firma), fontSize: 7, color: "#64748b", decoration: "underline" },
+              { text: "\n" },
+              ...kundeAdresse(ctx.kunde).map((l) => ({ text: l, fontSize: 10 })),
+            ],
+          },
+          {
+            width: 200,
+            stack: meta.map((m) => ({
+              columns: [
+                { text: m.label, fontSize: 9, color: "#64748b" },
+                { text: m.wert, fontSize: 9, alignment: "right", bold: true },
+              ],
+              margin: [0, 1, 0, 1] as [number, number, number, number],
+            })),
+          },
+        ],
+      },
+      { text: titel, fontSize: 18, bold: true, color: "#1e3a8a", margin: [0, 24, 0, 12] },
+      { text: anrede(ctx.kunde, ctx.ansprechpartner), margin: [0, 0, 0, 8] },
+      { text: intro, margin: [0, 0, 0, 14] },
+      leistungstabelle(beleg.positionen),
+      summenBlock(t, beleg.steuersatz),
+      { text: outro, margin: [0, 20, 0, 0] },
+      { text: ctx.firma.geschaeftsfuehrer ?? "", margin: [0, 24, 0, 0], italics: true },
+    ],
+  };
+}
+
 export async function generateAngebotPdf(angebot: Angebot, kunde: Kunde, firma: Firmendaten, ansprechpartner?: Ansprechpartner): Promise<Blob> {
   const pdfMake = await getPdfMake();
   const meta = [
@@ -387,13 +452,15 @@ export async function generateAngebotPdf(angebot: Angebot, kunde: Kunde, firma: 
     outro: angebot.optionen?.eigenesOutro || angebot.outroText,
     materialBereitgestellt: angebot.optionen?.materialBereitgestellt ?? true,
   };
-  const doc = await buildDoc(
-    { firma, kunde, ansprechpartner },
+  const effFirma = mergeFirma(firma, angebot.optionen?.firmaOverride);
+  const doc = await buildDocWithOverrides(
+    { firma: effFirma, kunde, ansprechpartner },
     `Angebot ${angebot.nummer}`,
     meta,
     { positionen: angebot.positionen, rabattGesamt: angebot.rabattGesamt, steuersatz: angebot.steuersatz },
     defaultIntroAngebot(angebot, opts),
     defaultOutroAngebot(angebot, opts),
+    angebot.optionen?.logoOverride ?? null,
   );
   return new Promise<Blob>((resolve) => {
     pdfMake.createPdf(doc).getBlob((blob: Blob) => resolve(blob));
@@ -413,13 +480,15 @@ export async function generateRechnungPdf(rechnung: Rechnung, kunde: Kunde, firm
     outro: rechnung.optionen?.eigenesOutro || rechnung.outroText,
     materialBereitgestellt: rechnung.optionen?.materialBereitgestellt ?? true,
   };
-  const doc = await buildDoc(
-    { firma, kunde, ansprechpartner },
+  const effFirma = mergeFirma(firma, rechnung.optionen?.firmaOverride);
+  const doc = await buildDocWithOverrides(
+    { firma: effFirma, kunde, ansprechpartner },
     `Rechnung ${rechnung.nummer}`,
     meta,
     { positionen: rechnung.positionen, rabattGesamt: rechnung.rabattGesamt, steuersatz: rechnung.steuersatz },
     defaultIntroRechnung(rechnung, opts),
     defaultOutroRechnung(rechnung, opts),
+    rechnung.optionen?.logoOverride ?? null,
   );
   return new Promise<Blob>((resolve) => {
     pdfMake.createPdf(doc).getBlob((blob: Blob) => resolve(blob));
