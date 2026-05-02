@@ -203,9 +203,21 @@ export function KundeBearbeitenDialog({ kunde, open, onOpenChange }: Props) {
                 maxLength={4}
                 className="font-mono uppercase tracking-wider w-40"
               />
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                3–4 Zeichen (A–Z, 0–9). Wird allen neuen Belegen dieses Kunden vorangestellt.
-              </p>
+              <div className="mt-1.5 min-h-[1.25rem] text-xs">
+                {kuerzel.length >= 3 && kuerzelFreiQ.isFetching ? (
+                  <span className="text-muted-foreground">Prüfe Verfügbarkeit…</span>
+                ) : kuerzelKonflikt ? (
+                  <span className="text-destructive">
+                    ✗ Bereits vergeben an {kuerzelKonflikt.nummer} • {kuerzelKonflikt.name}
+                  </span>
+                ) : kuerzel.length >= 3 && kuerzelFreiQ.data?.frei ? (
+                  <span className="text-emerald-600 dark:text-emerald-400">✓ Kürzel frei</span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    3–4 Zeichen (A–Z, 0–9). Wird allen neuen Belegen dieses Kunden vorangestellt.
+                  </span>
+                )}
+              </div>
             </Field>
 
             <Field label={`Nächste Nummer im Monat ${periodeLabel}`}>
