@@ -250,52 +250,25 @@ function PositionCard({ index, position: p, onChange, onRemove }: CardProps) {
             />
           </div>
 
-          {/* Menge / Einheit / Preis / MwSt */}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {/* Preis + MwSt (50/50) */}
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Menge</label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                value={p.menge}
-                onChange={(e) => onChange({ menge: Number(e.target.value) || 0 })}
-                className="h-10"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Einheit</label>
-              <Select
-                value={p.einheit}
-                onValueChange={(v) => onChange({ einheit: v as Einheit })}
-              >
-                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {EINHEITEN.map((u) => (
-                    <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">Einzelpreis €</label>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+                Preis (netto) €
+              </label>
               <Input
                 type="number"
                 inputMode="decimal"
                 step="0.01"
-                value={p.einzelpreisNetto}
+                value={p.einzelpreisNetto || ""}
                 onChange={(e) => onChange({ einzelpreisNetto: Number(e.target.value) || 0 })}
-                className="h-10"
+                placeholder="z. B. 250.00"
+                className="h-11 text-base font-semibold"
               />
             </div>
             <div>
-              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">MwSt %</label>
-              <Input
-                type="number"
-                inputMode="decimal"
-                value={p.steuersatz}
-                onChange={(e) => onChange({ steuersatz: Number(e.target.value) || 0 })}
-                className="h-10"
-              />
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">MwSt</label>
+              <MwStStepper value={p.steuersatz} onChange={(v) => onChange({ steuersatz: v })} />
             </div>
           </div>
 
