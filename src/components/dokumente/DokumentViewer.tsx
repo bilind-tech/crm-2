@@ -1,8 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { Download, Pencil, FileText, ExternalLink } from "lucide-react";
+import { Download, Pencil, FileText, ExternalLink, Loader2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useKunde, useObjekt } from "@/hooks/useApi";
+import { useDokumentBlobUrl } from "@/hooks/useDokumentBlobUrl";
 import type { Dokument } from "@/lib/api/types";
 import { DriveSyncRow } from "./DriveSyncBadge";
 
@@ -16,14 +17,15 @@ interface Props {
 export function DokumentViewer({ dokument, open, onOpenChange, onEdit }: Props) {
   const { data: kunde } = useKunde(dokument?.kundeId ?? "");
   const { data: objekt } = useObjekt(dokument?.objektId ?? "");
+  const { url: dateiUrl, loading } = useDokumentBlobUrl(dokument);
 
   if (!dokument) return null;
 
   function handleDownload() {
-    if (!dokument?.url) return;
+    if (!dateiUrl) return;
     const a = document.createElement("a");
-    a.href = dokument.url;
-    a.download = dokument.dateiname || dokument.titel;
+    a.href = dateiUrl;
+    a.download = dokument!.dateiname || dokument!.titel;
     a.target = "_blank";
     document.body.appendChild(a);
     a.click();
