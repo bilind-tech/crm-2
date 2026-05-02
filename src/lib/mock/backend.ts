@@ -184,6 +184,27 @@ function now(): string {
   return new Date().toISOString();
 }
 
+/** Mock-Drive-Ordner: "{Kategorie}/{YYYY}/{MM}". */
+function driveOrdner(kategorie: string): string {
+  const j = new Date();
+  return `${kategorie}/${j.getFullYear()}/${String(j.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Simuliert einen erfolgreichen Drive-Upload eines Dokuments nach kurzer Verzögerung. */
+function simuliereDriveSync(dok: Dokument) {
+  if (typeof setTimeout === "undefined") return;
+  setTimeout(() => {
+    dok.drive = {
+      ...(dok.drive ?? {}),
+      fileId: `mock-${dok.id}`,
+      webViewLink: `https://drive.google.com/file/d/mock-${dok.id}/view`,
+      syncedAt: now(),
+      ordner: dok.drive?.ordner ?? driveOrdner("Dokumente"),
+    };
+    persist();
+  }, 1500);
+}
+
 function nextNumber(praefix: string, n: number): string {
   const year = new Date().getFullYear();
   return praefix
