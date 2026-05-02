@@ -6,7 +6,7 @@ import {
   type HealthInfo,
 } from "@/lib/api/backendUrl";
 
-export type BackendStatus = "connected" | "disconnected" | "checking";
+export type BackendStatus = "connected" | "disconnected" | "checking" | "maintenance";
 
 export interface BackendStatusResult {
   status: BackendStatus;
