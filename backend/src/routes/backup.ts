@@ -1,7 +1,7 @@
 // /backup/* — alle authentifiziert. Restore zusätzlich passwort-bestätigt.
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { createReadStream, existsSync, statSync, unlinkSync, renameSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import * as tar from "tar";
@@ -147,7 +147,7 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
       ensureDir(config.backupsTmpDir);
       const tmpFile = path.join(config.backupsTmpDir, `upload-${uploadId}.tar.gz`);
       await new Promise<void>((resolve, reject) => {
-        const ws = data.file.pipe(require("node:fs").createWriteStream(tmpFile, { mode: 0o600 }));
+        const ws = data.file.pipe(createWriteStream(tmpFile, { mode: 0o600 }));
         ws.on("finish", () => resolve());
         ws.on("error", reject);
       });
