@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { DetailSkeleton } from "@/components/layout/DetailSkeleton";
 import { NotFoundState } from "@/components/layout/NotFoundState";
 import { useState } from "react";
-import { Download, Send, FileCheck2, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Download, Send, FileCheck2, ThumbsUp, ThumbsDown, Pencil } from "lucide-react";
 import {
   useAngebot,
   useAngebotInRechnung,
@@ -130,6 +130,11 @@ function Page() {
                 </a>
               </Button>
             )}
+            <Button asChild variant="outline" className="rounded-lg">
+              <Link to="/angebote/$id/bearbeiten" params={{ id: a.id }}>
+                <Pencil className="mr-1.5 h-4 w-4" /> PDF bearbeiten
+              </Link>
+            </Button>
             {renderPrimaryAction()}
           </>
         }

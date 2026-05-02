@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { DetailSkeleton } from "@/components/layout/DetailSkeleton";
 import { NotFoundState } from "@/components/layout/NotFoundState";
 import { useState } from "react";
-import { Download, Send, CheckCircle2, Wallet, Trash2 } from "lucide-react";
+import { Download, Send, CheckCircle2, Wallet, Trash2, Pencil } from "lucide-react";
 import { useRechnung, useAngebot, useKunde, useDeleteZahlung } from "@/hooks/useApi";
 import { useConfirm } from "@/hooks/useConfirm";
 import { useRechnungPdf } from "@/hooks/useBelegPdf";
@@ -101,6 +101,11 @@ function Page() {
                 </a>
               </Button>
             )}
+            <Button asChild variant="outline" className="rounded-lg">
+              <Link to="/rechnungen/$id/bearbeiten" params={{ id: r.id }}>
+                <Pencil className="mr-1.5 h-4 w-4" /> PDF bearbeiten
+              </Link>
+            </Button>
             {renderPrimaryAction()}
           </>
         }
