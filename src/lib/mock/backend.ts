@@ -770,8 +770,10 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
       betrag: dok.betrag,
       steuerrelevant: dok.steuerrelevant ?? false,
       hochgeladenAm: now(),
+      drive: { ordner: driveOrdner("Dokumente") },
     };
     d.dokumente.push(neu);
+    simuliereDriveSync(neu);
     logAktivitaet("dokument_hochgeladen", `Dokument ${neu.titel} hochgeladen`, { typ: "dokument", id: neu.id });
     persist();
     result = neu;
@@ -854,8 +856,10 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
         steuerrelevant: dok.steuerrelevant ?? false,
         hochgeladenAm: now(),
         quelle: "handy-scan",
+        drive: { ordner: driveOrdner("Dokumente") },
       };
       d.dokumente.push(neu);
+      simuliereDriveSync(neu);
       session.dokumentIds.push(neu.id);
       erzeugt.push(neu);
     }
