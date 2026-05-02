@@ -3,6 +3,7 @@
 // explizite Aktion (Zahlung/PATCH) geändert.
 import { getDatabase } from "../db/index.js";
 import { rechnungBruttoCt, zahlungSummeCt } from "./totals.js";
+import { emitBelegMutated } from "./events.js";
 
 export function recomputeRechnungStatus(rechnungId: string): string {
   const db = getDatabase();
@@ -36,6 +37,7 @@ export function recomputeRechnungStatus(rechnungId: string): string {
   }
   if (next !== cur.status) {
     db.prepare(`UPDATE rechnung SET status = ? WHERE id = ?`).run(next, rechnungId);
+    emitBelegMutated("rechnung", rechnungId);
   }
   return next;
 }
