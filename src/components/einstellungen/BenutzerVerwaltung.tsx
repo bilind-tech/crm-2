@@ -52,6 +52,37 @@ function CopyButton({ value }: { value: string }) {
   );
 }
 
+function druckGeheimnis(g: Geheimnis) {
+  const w = window.open("", "_blank", "width=600,height=600");
+  if (!w) return;
+  const heute = new Date().toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  w.document.write(`<!doctype html><html lang="de"><head><meta charset="utf-8">
+<title>MyCleanCenter — Zugangsdaten</title>
+<style>
+  body{font-family:system-ui,sans-serif;padding:48px;color:#111}
+  h1{font-size:22px;margin:0 0 8px}
+  .sub{color:#555;margin:0 0 32px;font-size:14px}
+  .box{border:2px solid #111;border-radius:12px;padding:24px;margin:16px 0}
+  .label{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#555;margin-bottom:8px}
+  .code{font-family:ui-monospace,Menlo,monospace;font-size:20px;letter-spacing:1px;font-weight:700;word-break:break-all}
+  .hint{background:#fffbe6;border:1px solid #d4b400;border-radius:8px;padding:12px 16px;font-size:13px;margin-top:24px}
+  .meta{margin-top:32px;font-size:12px;color:#555}
+</style></head><body>
+<h1>MyCleanCenter — Zugangsdaten</h1>
+<p class="sub">${g.titel}</p>
+${g.passwort ? `<div class="box"><div class="label">Initial-Passwort</div><div class="code">${g.passwort}</div></div>` : ""}
+<div class="box"><div class="label">Recovery-Code</div><div class="code">${g.recoveryCode}</div></div>
+<div class="hint"><strong>Wichtig:</strong> An den Benutzer übergeben und sicher verwahren. Mit dem Recovery-Code kann das Passwort später ohne Backend-Zugriff zurückgesetzt werden.</div>
+<div class="meta">Erstellt am ${heute}</div>
+<script>setTimeout(function(){window.print();},150);</script>
+</body></html>`);
+  w.document.close();
+}
+
 function GeheimnisDialog({
   data,
   onClose,
@@ -65,7 +96,7 @@ function GeheimnisDialog({
         <DialogHeader>
           <DialogTitle>{data?.titel}</DialogTitle>
           <DialogDescription>
-            Diese Daten werden NUR EINMAL angezeigt. Bitte sicher notieren.
+            Diese Daten werden NUR EINMAL angezeigt. Bitte sicher notieren oder ausdrucken.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -86,7 +117,12 @@ function GeheimnisDialog({
             </div>
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2">
+          {data && (
+            <Button variant="outline" onClick={() => druckGeheimnis(data)}>
+              <Printer className="mr-1.5 h-4 w-4" /> Drucken
+            </Button>
+          )}
           <Button onClick={onClose}>Verstanden</Button>
         </DialogFooter>
       </DialogContent>
