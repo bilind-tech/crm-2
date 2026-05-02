@@ -1,66 +1,40 @@
-## Ziel
+## Warum „Einbettung blockiert" gerade erscheint
 
-Wenn du im Zahlung-Dialog auf „Ja, voll bezahlt" oder „Speichern" klickst, sollen sich **sofort und ohne Reload** aktualisieren:
+Die Meldung ist **technisch korrekt, aber unspezifisch** und führt in die Irre. Es gibt drei mögliche Ursachen — und nur eine davon kannst du in der Stundenzettel-App selbst beheben:
 
-1. KPI-Kacheln oben auf `/rechnungen` (Eingang diesen Monat, Offene Posten, Überfällig, Gesamt)
-2. Die Tabellen-/Card-Zeile der bezahlten Rechnung (Status-Badge, Spalte „Offen", Bezahlt-Badge statt „Zahlung bestätigen")
-3. Dashboard-Kacheln auf `/` (Umsatz, offene Posten, überfällige Beträge, Umsatz-Chart, Nächste Schritte)
+1. **Du bist gerade in der Lovable-Cloud-Vorschau** (`*.lovable.app`).
+   Eine LAN-Adresse wie `http://mycleancenter.local:4001` ist von dort **technisch nicht erreichbar** — sie liegt in deinem Heim-Netz, der Cloud-Browser sitzt im Internet. Das hat nichts mit iframes zu tun. **Sobald das CRM auf dem Pi läuft, ist diese Hürde automatisch weg.**
 
-Außerdem ein kurzes Audit für alle anderen Rechnungs-Aktionen, damit nirgendwo eine veraltete Ansicht zurückbleibt.
+2. **Mixed Content**: Die Vorschau läuft über `https://`, deine Stundenzettel-App über `http://`. Browser blockieren das. Auf dem Pi laufen später beide unter derselben `http://`-Origin — auch das löst sich von selbst.
 
-## Was bereits funktioniert (geprüft)
+3. **Echte Header-Blockade**: Die Stundenzettel-App sendet `X-Frame-Options: DENY` oder eine restriktive CSP. **Nur das** muss in der Stundenzettel-App selbst gefixt werden.
 
-- `useAddZahlung` invalidiert `["rechnungen"]`, `qk.rechnung(id)`, `qk.dashboard.kennzahlen`, `qk.aktivitaeten`.
-- KPI-Kacheln auf `/rechnungen` rechnen direkt aus `useRechnungen()` → reagiert automatisch.
-- Status (`bezahlt` / `teilbezahlt`) wird im Mock-Backend per `rechnungStatusAuto(r)` aus Summe der Zahlungen abgeleitet.
+Es gibt **keine Möglichkeit**, diese Browser-Sicherheitsregeln im CRM zu umgehen — das wäre eine Schwachstelle und Browser lassen es nicht zu.
 
-## Tatsächliche Lücken, die der Fix schließt
+## Was ich ändere
 
-### A) Dashboard-Umsatzchart aktualisiert nicht
-`useAddZahlung` invalidiert nur `qk.dashboard.kennzahlen`, **nicht** `qk.dashboard.umsatz` und `qk.dashboard.warnungen`. Folge: Kacheln auf der Startseite springen, aber das Umsatz-Diagramm und die Warnungen bleiben stehen, bis man die Seite neu lädt.
+**`src/routes/stundenzettel.tsx`** — komplette Neuschreibung der Hindernis-Logik:
 
-### B) `useDeleteZahlung` invalidiert das Dashboard gar nicht
-Wer eine fehlerhafte Zahlung wieder löscht, sieht KPIs und Dashboard nicht aktualisiert.
+- Vor dem Mount des iframes wird das Umfeld analysiert: aktuelle Origin (`https?:`, `*.lovable.app`?), Ziel-URL (LAN-Host? `http:`?).
+- Bei erkennbarer Hürde (Fall 1 oder 2) erscheint **sofort** die richtige Erklärung statt 6 s zu warten und „Einbettung blockiert" zu zeigen.
+- Bei Fall 1 („LAN aus Cloud") steht klar: „Funktioniert erst auf dem Pi — die Adresse bleibt gespeichert, sobald das CRM dort läuft, ist alles gut." Plus Button „In neuem Tab" für jetzt.
+- Bei Fall 2 („Mixed Content") wird die Lösung erklärt (HTTPS für die App oder beide über dieselbe Origin auf dem Pi).
+- Nur wenn das Umfeld ok ist, wird der iframe gemountet. Schlägt der Load fehl (Timeout 6 s ohne `onload`), zeigt die Seite Fall 3 mit konkretem Beispiel-Header für die Stundenzettel-App:
+  ```
+  Content-Security-Policy: frame-ancestors 'self' http://mycleancenter.local
+  ```
+  und dem Hinweis, kein `X-Frame-Options: DENY` zu setzen.
 
-### C) Weitere Rechnungs-Mutationen ohne komplette Invalidierung
-- `useUpdateRechnung` → invalidiert `qk.dashboard.kennzahlen` nicht (Brutto/Netto-Änderung wirkt sich auf KPIs aus).
-- `useSendRechnung` → invalidiert `qk.dashboard.kennzahlen` und `qk.aktivitaeten` nicht (Status-Wechsel auf „versendet" verändert Offene Posten).
-- `useDeleteRechnung` → kein Invalidate für Dashboard.
+Damit weißt du **auf einen Blick**, ob es an deinem Setup liegt (jetzt, nicht behebbar bis zur Pi-Inbetriebnahme) oder an der Stundenzettel-App (jetzt fixbar mit einem Header).
 
-### D) „Nächste Schritte"-Card auf Startseite
-Liest aus `useRechnungen()` / `useAngebote()` → reagiert bereits korrekt, sobald `["rechnungen"]` invalidiert wird. Kein Code-Fix nötig, nur als Verifizierung.
+**Memory** `mem://features/stundenzettel-iframe.md` ergänze ich, damit ich diese drei Fälle nicht jedes Mal neu erkläre.
 
-## Änderungen
+## Was sich nicht ändert
 
-**1) `src/hooks/useApi.ts` — Invalidierungs-Set vereinheitlichen**
+- Die URL bleibt in den Einstellungen gespeichert.
+- Der Button „In neuem Tab" bleibt überall verfügbar — das ist die saubere Notlösung in der Cloud-Preview.
+- Auf dem Pi später: keine UI-Änderung nötig, nur korrekter CSP-Header in der Stundenzettel-App und alles läuft eingebettet.
 
-Helper einführen, damit alle rechnungs-relevanten Mutationen denselben Invalidate-Sweep machen:
+## Wenn du jetzt schon eine Lösung „eingebettet in der Cloud-Preview" willst
 
-```ts
-function invalidateRechnungScope(qc: QueryClient, rechnungId?: string) {
-  qc.invalidateQueries({ queryKey: ["rechnungen"] });
-  if (rechnungId) qc.invalidateQueries({ queryKey: qk.rechnung(rechnungId) });
-  qc.invalidateQueries({ queryKey: qk.dashboard.kennzahlen });
-  qc.invalidateQueries({ queryKey: qk.dashboard.umsatz });
-  qc.invalidateQueries({ queryKey: qk.dashboard.warnungen });
-  qc.invalidateQueries({ queryKey: qk.aktivitaeten });
-  qc.invalidateQueries({ queryKey: qk.benachrichtigungen });
-}
-```
-
-Verwenden in: `useAddZahlung`, `useDeleteZahlung`, `useUpdateRechnung`, `useSendRechnung`, `useDeleteRechnung`, `useCreateRechnung`.
-
-**2) Mobile Card auf `/rechnungen` (Zeile ~165–175)**
-
-`r.status === "bezahlt"` zeigt schon den grünen „Bezahlt"-Badge. Zusätzlich `r.status === "teilbezahlt"` Fall ergänzen: dezenter warnung-farbener Badge „Teilbezahlt" + weiterhin Button „Restzahlung bestätigen", damit der Live-Übergang sichtbar ist.
-
-**3) Desktop-Tabelle (Zeile ~277–293)**
-
-Analog: Bei `teilbezahlt` zusätzlichen Mini-Hinweis „Teilbezahlt" rechts vom Button und Button-Text auf „Restzahlung bestätigen" setzen, sonst wirkt es so, als sei nichts passiert.
-
-## Abnahmekriterien
-
-- Auf `/rechnungen` Zahlung „voll bezahlt" klicken → ohne Reload: Status-Badge wird grün „Bezahlt", Spalte „Offen" zeigt grünes „bezahlt", Aktions-Button verschwindet, KPI-Kachel „Eingang diesen Monat" steigt, „Offene Posten" sinkt.
-- Teilzahlung erfassen → Status-Badge wechselt auf „Teilbez.", Spalte „Offen" zeigt Restbetrag, Button-Text wird zu „Restzahlung bestätigen".
-- Auf `/` (Dashboard) sind nach dem Buchen alle Kacheln, der Umsatz-Chart und die „Nächste Schritte"-Liste live aktualisiert.
-- Zahlung wieder löschen → Kacheln und Dashboard kehren live zurück.
+Das geht nur, wenn die Stundenzettel-App **öffentlich über HTTPS** erreichbar ist (z. B. via Cloudflare-Tunnel von deinem Pi nach außen) **und** sie `frame-ancestors` für die Lovable-Domain erlaubt. Sag Bescheid, dann ergänze ich eine Anleitung dafür — aber das ist Aufwand für eine reine Vorschau-Komfortfunktion. Auf dem produktiven Pi-Setup brauchst du das nicht.
