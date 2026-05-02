@@ -71,6 +71,22 @@ export function useLiveEvents(enabled: boolean): void {
         case "einstellung:geaendert":
           qc.invalidateQueries({ queryKey: ["einstellungen"] });
           break;
+
+        case "system:update:phase":
+        case "system:update:lauf": {
+          const d = data as { laufId?: string; status?: string; stepId?: string };
+          qc.invalidateQueries({ queryKey: ["system", "update", "historie"] });
+          qc.invalidateQueries({ queryKey: ["system", "update", "lauf"] });
+          if (d?.laufId) qc.invalidateQueries({ queryKey: ["system", "update", "lauf", d.laufId] });
+          if (type === "system:update:lauf" && d?.status === "erfolg") {
+            toast.success("System-Update installiert");
+          } else if (type === "system:update:lauf" && d?.status === "fehler") {
+            toast.error("System-Update fehlgeschlagen");
+          } else if (type === "system:update:lauf" && d?.status === "rollback") {
+            toast.warning("System-Update zurückgerollt");
+          }
+          break;
+        }
       }
     });
 
