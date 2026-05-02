@@ -22,10 +22,8 @@ import {
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import http from "node:http";
-import { createRequire } from "node:module";
 import { config } from "../config.js";
 
-const require = createRequire(import.meta.url);
 
 import { emit } from "../events/bus.js";
 import { audit } from "../auth/audit.js";
