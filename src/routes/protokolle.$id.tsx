@@ -222,7 +222,7 @@ function Page() {
           pdfUrl={pdf.url}
           fileName={dateiname}
           viewButton={
-            <Button variant="outline" size="sm" onClick={onDownload} disabled={!pdf.blob}>
+            <Button variant="outline" size="sm" onClick={onDownload} disabled={!pdf.url && !pdf.blob}>
               <Download className="mr-1.5 h-4 w-4" />PDF
             </Button>
           }
