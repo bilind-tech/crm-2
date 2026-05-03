@@ -216,6 +216,30 @@ export function LivePdfPreview(props: Props) {
         </Document>
       )}
 
+      {/* Hidden pre-loader: lädt die nächste PDF im Hintergrund und tauscht atomar. */}
+      {pendingUrl && pendingUrl !== pdfUrl && (
+        <div className="pointer-events-none absolute -z-10 h-0 w-0 overflow-hidden opacity-0">
+          <Document
+            file={pendingUrl}
+            onLoadSuccess={({ numPages }) => {
+              setNumPages(numPages);
+              setPdfUrl((prev) => {
+                if (prev) URL.revokeObjectURL(prev);
+                return pendingUrl;
+              });
+              setPendingUrl(null);
+            }}
+            onLoadError={() => {
+              if (pendingUrl) URL.revokeObjectURL(pendingUrl);
+              setPendingUrl(null);
+            }}
+            loading={null}
+          >
+            <Page pageNumber={1} width={1} renderAnnotationLayer={false} renderTextLayer={false} />
+          </Document>
+        </div>
+      )}
+
       {viewerError && pdfUrl && (
         <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 px-6 text-center text-sm">
           <p className="font-medium text-destructive">PDF kann nicht angezeigt werden</p>
