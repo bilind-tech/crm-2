@@ -99,6 +99,9 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
         sha256: r.sha256,
         appVersion: r.appVersion,
         schemaVersion: r.schemaVersion,
+        driveStatus: r.driveStatus === "skip" ? undefined : r.driveStatus,
+        driveSyncedAt: r.driveSyncedAt,
+        driveError: r.driveError,
       }));
     });
 

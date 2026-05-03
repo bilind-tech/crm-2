@@ -1015,6 +1015,22 @@ export const useBackupHistorie = () =>
     queryFn: () => api.get<BackupEintrag[]>("/backup/historie"),
   });
 
+export type BackupHealth = {
+  letztesErfolgreichesBackup: string | null;
+  alterStunden: number | null;
+  warn: boolean;
+  kategorie?: string;
+  dateiname?: string;
+};
+
+/** Health-Status: Alter des letzten Backups + Warn-Flag (>36 h). */
+export const useBackupHealth = () =>
+  useQuery({
+    queryKey: ["backup", "health"] as const,
+    queryFn: () => api.get<BackupHealth>("/backup/health"),
+    refetchInterval: 60_000,
+  });
+
 export type BackupInArbeit = BackupEintrag & {
   phase: "queued" | "snapshot" | "archive" | "checksum" | "finalize" | "done" | "error";
   percent: number;

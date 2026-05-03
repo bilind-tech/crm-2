@@ -39,6 +39,7 @@ import {
   useCreateBackup,
   useBackupHistorie,
   useBackupInArbeit,
+  useBackupHealth,
   useRestoreStatus,
   useRestoreBackup,
   useUploadBackup,
@@ -88,6 +89,7 @@ export function BackupTab() {
   const { data: historie = [] } = useBackupHistorie();
   const { data: laufendeBackups = [] } = useBackupInArbeit();
   const { data: restoreState } = useRestoreStatus();
+  const { data: health } = useBackupHealth();
   const update = useUpdateBackup();
   const create = useCreateBackup();
   const restore = useRestoreBackup();
@@ -194,6 +196,29 @@ export function BackupTab() {
         zeitpunkt={form.zeitpunkt}
         autoBackup={form.autoBackup}
       />
+
+      {/* ─── Health-Warnung (Backend liefert warn=true wenn > 36 h alt) ─ */}
+      {health?.warn && form.autoBackup && (
+        <div className="rounded-2xl border border-destructive/40 bg-destructive/5 p-4">
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-destructive">
+                Backup-Warnung: kein aktuelles Backup vorhanden
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {health.alterStunden != null
+                  ? `Letztes erfolgreiches Backup vor ${health.alterStunden} Stunden.`
+                  : "Es liegt noch kein erfolgreiches Backup vor."}{" "}
+                Bitte prüfe Zeitplan und USB-SSD.
+              </p>
+            </div>
+            <Button size="sm" variant="outline" onClick={startManuell} disabled={create.isPending || hatLaufendes}>
+              Jetzt sichern
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* ─── Restore-Banner (Wartungsmodus) ───────────────────────────── */}
       {(maintenanceActive || (restoreState?.restore && restoreState.restore.phase !== "done")) && restoreState?.restore && (
@@ -582,9 +607,17 @@ function BackupGroupList({
               </p>
             </div>
             {b.driveStatus && (
-              <span title={`Google Drive: ${b.driveStatus}`}>
+              <span
+                title={
+                  b.driveStatus === "synced"
+                    ? `In Google Drive gespiegelt${b.driveSyncedAt ? ` (${formatDateTime(b.driveSyncedAt)})` : ""}`
+                    : b.driveStatus === "error"
+                      ? `Drive-Spiegelung fehlgeschlagen${b.driveError ? `: ${b.driveError}` : ""}`
+                      : "Drive-Spiegelung läuft …"
+                }
+              >
                 {b.driveStatus === "synced" ? (
-                  <Cloud className="h-3.5 w-3.5 text-muted-foreground" />
+                  <Cloud className="h-3.5 w-3.5 text-emerald-600" />
                 ) : b.driveStatus === "error" ? (
                   <CloudOff className="h-3.5 w-3.5 text-destructive" />
                 ) : (
