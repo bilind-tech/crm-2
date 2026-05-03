@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Document, Page } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
-import "@/lib/pdf/pdfjsWorker";
+import { configurePdfWorker } from "@/lib/pdf/pdfjsWorker";
+
+// react-pdf v10: workerSrc MUSS im gleichen Modul wie <Document> gesetzt werden.
+configurePdfWorker();
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useNavigate } from "@tanstack/react-router";
 

@@ -6,7 +6,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
-import "@/lib/pdf/pdfjsWorker";
+import { configurePdfWorker } from "@/lib/pdf/pdfjsWorker";
+
+configurePdfWorker();
 import { Loader2 } from "lucide-react";
 import { generateAngebotPdf, generateRechnungPdf } from "@/lib/pdf/belegPdf";
 import type { Angebot, Rechnung, Kunde, Firmendaten, Ansprechpartner } from "@/lib/api/types";
