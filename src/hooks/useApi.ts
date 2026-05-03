@@ -492,6 +492,12 @@ export const useDokumente = (params?: { kundeId?: string; objektId?: string }) =
       return api.get<Dokument[]>(`/dokumente${s ? `?${s}` : ""}`);
     },
   });
+export const useDokument = (id: string | null | undefined) =>
+  useQuery({
+    queryKey: ["dokument", id],
+    queryFn: () => api.get<Dokument>(`/dokumente/${id}`),
+    enabled: !!id,
+  });
 export const useCreateDokument = () => {
   const qc = useQueryClient();
   return useMutation({

@@ -1,6 +1,6 @@
 // Detail-Ansicht eines Protokolls: Meta links, Live-PDF-Vorschau rechts.
 // Aktionen: Drucken, PDF herunterladen, Bearbeiten, Abschließen, Löschen.
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useMatches, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, CheckCircle2, Download, FileCheck2, Loader2, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -14,13 +14,21 @@ import {
 import { PdfPreviewCard } from "@/components/pdf/PdfPreviewCard";
 import { PrintButton } from "@/components/pdf/PrintButton";
 import {
-  useAbschliessenProtokoll, useDeleteProtokoll, useFirmendaten, useKunde, useObjekte, useProtokoll,
+  useAbschliessenProtokoll, useDeleteProtokoll, useDokument, useFirmendaten, useKunde, useObjekte, useProtokoll,
 } from "@/hooks/useApi";
 import { useProtokollPdf } from "@/hooks/useProtokollPdf";
+import { useDokumentBlobUrl } from "@/hooks/useDokumentBlobUrl";
 import { downloadBlob, protokollDateiname, protokollTitel } from "@/lib/pdf/werkzeugePdf";
 import { blobToDataUrl } from "@/lib/dokumente/blobToDataUrl";
 
-export const Route = createFileRoute("/protokolle/$id")({ component: Page });
+export const Route = createFileRoute("/protokolle/$id")({ component: RouteShell });
+
+function RouteShell() {
+  const matches = useMatches();
+  const isChild = matches.some((m) => m.routeId === "/protokolle/$id/bearbeiten");
+  if (isChild) return <Outlet />;
+  return <Page />;
+}
 
 function Page() {
   const router = useRouter();
@@ -31,7 +39,19 @@ function Page() {
   const objekteQ = useObjekte(p?.kundeId);
   const firmaQ = useFirmendaten();
   const objekt = p?.objektId ? objekteQ.data?.find((o) => o.id === p.objektId) : undefined;
-  const pdf = useProtokollPdf(p, kundeQ.data, objekt, firmaQ.data);
+  const istAbgeschlossen = p?.status === "abgeschlossen";
+  // Bei abgeschlossenen Protokollen: gespeicherte PDF aus Dokumenten laden (schnell, keine Re-Generierung).
+  const dokQ = useDokument(istAbgeschlossen ? p?.dokumentId : undefined);
+  const archived = useDokumentBlobUrl(dokQ.data ?? null);
+  const livePdf = useProtokollPdf(istAbgeschlossen ? undefined : p, kundeQ.data, objekt, firmaQ.data);
+  const pdf = istAbgeschlossen
+    ? {
+        url: archived.url || null,
+        status: (archived.loading ? "loading" : archived.url ? "ready" : archived.error ? "error" : "idle") as "idle" | "loading" | "ready" | "error",
+        error: archived.error,
+        blob: null as Blob | null,
+      }
+    : livePdf;
 
   const abschliessen = useAbschliessenProtokoll(id);
   const del = useDeleteProtokoll();
@@ -60,9 +80,17 @@ function Page() {
     ? (kundeQ.data.firmenname || [kundeQ.data.vorname, kundeQ.data.nachname].filter(Boolean).join(" "))
     : "—";
 
-  const onDownload = () => {
-    if (!pdf.blob) { toast.error("PDF noch nicht bereit"); return; }
-    downloadBlob(pdf.blob, dateiname);
+  const onDownload = async () => {
+    if (pdf.blob) { downloadBlob(pdf.blob, dateiname); return; }
+    if (pdf.url) {
+      try {
+        const res = await fetch(pdf.url);
+        const b = await res.blob();
+        downloadBlob(b, dateiname);
+        return;
+      } catch { /* fallthrough */ }
+    }
+    toast.error("PDF noch nicht bereit");
   };
 
   const onAbschliessen = async () => {
@@ -113,7 +141,7 @@ function Page() {
             <Button variant="ghost" size="sm" asChild>
               <Link to="/protokolle"><ArrowLeft className="mr-1.5 h-4 w-4" />Zurück</Link>
             </Button>
-            <Button variant="outline" onClick={onDownload} disabled={!pdf.blob} className="rounded-lg">
+            <Button variant="outline" onClick={onDownload} disabled={!pdf.url && !pdf.blob} className="rounded-lg">
               <Download className="mr-1.5 h-4 w-4" />PDF
             </Button>
             <PrintButton url={pdf.url} variant="outline" size="default" />
@@ -196,7 +224,7 @@ function Page() {
           pdfUrl={pdf.url}
           fileName={dateiname}
           viewButton={
-            <Button variant="outline" size="sm" onClick={onDownload} disabled={!pdf.blob}>
+            <Button variant="outline" size="sm" onClick={onDownload} disabled={!pdf.url && !pdf.blob}>
               <Download className="mr-1.5 h-4 w-4" />PDF
             </Button>
           }
