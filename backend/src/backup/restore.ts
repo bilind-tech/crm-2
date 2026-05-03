@@ -83,8 +83,11 @@ function safeRm(p: string): void {
   }
 }
 
-/** Atomarer Verzeichnis-Swap: aktueller Stand → old, neuer Stand → live. */
+/** Atomarer Verzeichnis-Swap: aktueller Stand → old, neuer Stand → live.
+ *  Live-Pfad MUSS innerhalb dataDir liegen — Defense-in-Depth gegen
+ *  Pfad-Manipulation aus präparierten Backup-Archiven. */
 function swapDir(live: string, fresh: string, oldBackup: string): void {
+  assertInsideDataDir(live, "restore.swap.live");
   if (existsSync(live)) {
     renameSync(live, oldBackup);
   }
@@ -92,6 +95,7 @@ function swapDir(live: string, fresh: string, oldBackup: string): void {
 }
 
 function rollbackSwap(live: string, oldBackup: string): void {
+  assertInsideDataDir(live, "restore.rollback.live");
   try {
     safeRm(live);
     if (existsSync(oldBackup)) renameSync(oldBackup, live);
