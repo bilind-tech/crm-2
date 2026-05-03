@@ -5,8 +5,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -14,7 +12,6 @@ import {
 } from "recharts";
 import {
   BarChart3,
-  LineChart as LineIcon,
   AreaChart as AreaIcon,
   TrendingUp,
   TrendingDown,
