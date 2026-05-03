@@ -114,6 +114,7 @@ export function PdfCanvasViewer({
 
       {pdfUrl && !loadError && containerWidth > 0 && (
         <Document
+          key={pdfUrl}
           file={pdfUrl}
           onLoadSuccess={({ numPages }) => setNumPages(numPages)}
           onLoadError={(err) => {
