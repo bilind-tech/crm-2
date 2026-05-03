@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useUpdateAngebot, useUpdateRechnung } from "@/hooks/useApi";
+import { useInvalidateBelegPdf } from "@/hooks/useBelegPdf";
 import type { Angebot, Rechnung } from "@/lib/api/types";
 
 type BelegKind = "angebot" | "rechnung";
