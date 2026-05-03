@@ -260,6 +260,17 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(409).send({ error: "Es läuft bereits ein Update — bitte warten" });
     }
 
+    // Rollback NUR auf den direkten Vorgänger erlaubt — kein Mehrfach-Sprung.
+    const prev = getPreviousVersionStamp();
+    if (!prev) {
+      return reply.status(400).send({ error: "Keine vorherige Version verfügbar." });
+    }
+    if (req.params.version !== prev) {
+      return reply.status(400).send({
+        error: `Rollback nur auf den direkten Vorgänger erlaubt (${prev}).`,
+      });
+    }
+
     try {
       const { laufId } = await manualRollback(req.params.version, userId);
       audit({ userId, ip: req.ip, action: "system.update.rollback_start", detail: { laufId, version: req.params.version } });
