@@ -119,11 +119,14 @@ export function PositionenEditor({
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/20 px-3 py-3">
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => add("einzel")} className="rounded-full">
-            <Plus className="mr-1 h-3.5 w-3.5" /> Einzelposition
+          <Button size="sm" onClick={() => add("pauschal")} className="rounded-full">
+            <Plus className="mr-1 h-3.5 w-3.5" /> Pauschal
           </Button>
-          <Button variant="outline" size="sm" onClick={() => add("pauschal")} className="rounded-full">
-            <Receipt className="mr-1 h-3.5 w-3.5" /> Pauschal-Block
+          <Button variant="outline" size="sm" onClick={() => add("stunden")} className="rounded-full">
+            <Clock className="mr-1 h-3.5 w-3.5" /> Stunden
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => add("einzel")} className="rounded-full">
+            <FileText className="mr-1 h-3.5 w-3.5" /> Einzel
           </Button>
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs sm:text-sm">
