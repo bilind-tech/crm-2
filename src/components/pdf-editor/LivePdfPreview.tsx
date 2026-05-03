@@ -29,8 +29,8 @@ type Props =
   | ({ kind: "angebot"; draft: Angebot } & CommonProps)
   | ({ kind: "rechnung"; draft: Rechnung } & CommonProps);
 
-const DEBOUNCE_MS = 600;
-const LOADER_DELAY_MS = 400;
+const DEBOUNCE_MS = 300;
+const LOADER_DELAY_MS = 250;
 
 // Volatile Server-Felder aus Build-Trigger ausschließen, damit Server-Echos
 // (Timestamps) keinen erneuten PDF-Build auslösen.
@@ -82,6 +82,9 @@ export function LivePdfPreview(props: Props) {
     return () => clearTimeout(t);
   }, [rendering]);
 
+  // Pending-URL: erst tauschen, wenn neue PDF erfolgreich geladen ist (atomarer Swap → kein Flackern).
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
+
   // Debounced PDF-Build — alte URL bleibt bis neue geladen ist (kein Flicker).
   useEffect(() => {
     let cancelled = false;
@@ -95,11 +98,11 @@ export function LivePdfPreview(props: Props) {
             : await generateRechnungPdf(draft as Rechnung, kunde, firma, ansprechpartner);
         if (cancelled) return;
         const newUrl = URL.createObjectURL(result.blob);
-        setPdfUrl((prev) => {
+        setHotspots(result.hotspots);
+        setPendingUrl((prev) => {
           if (prev) URL.revokeObjectURL(prev);
           return newUrl;
         });
-        setHotspots(result.hotspots);
         setViewerError(null);
       } catch (e) {
         console.error(e);
@@ -119,6 +122,7 @@ export function LivePdfPreview(props: Props) {
   useEffect(() => {
     return () => {
       if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+      if (pendingUrl) URL.revokeObjectURL(pendingUrl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -210,6 +214,30 @@ export function LivePdfPreview(props: Props) {
             );
           })}
         </Document>
+      )}
+
+      {/* Hidden pre-loader: lädt die nächste PDF im Hintergrund und tauscht atomar. */}
+      {pendingUrl && pendingUrl !== pdfUrl && (
+        <div className="pointer-events-none absolute -z-10 h-0 w-0 overflow-hidden opacity-0">
+          <Document
+            file={pendingUrl}
+            onLoadSuccess={({ numPages }) => {
+              setNumPages(numPages);
+              setPdfUrl((prev) => {
+                if (prev) URL.revokeObjectURL(prev);
+                return pendingUrl;
+              });
+              setPendingUrl(null);
+            }}
+            onLoadError={() => {
+              if (pendingUrl) URL.revokeObjectURL(pendingUrl);
+              setPendingUrl(null);
+            }}
+            loading={null}
+          >
+            <Page pageNumber={1} width={1} renderAnnotationLayer={false} renderTextLayer={false} />
+          </Document>
+        </div>
       )}
 
       {viewerError && pdfUrl && (

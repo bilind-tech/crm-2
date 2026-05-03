@@ -49,6 +49,7 @@ export function PdfEditorLayout(props: Props) {
     <HotspotInlineEditor
       fieldId={fieldId}
       draft={draft}
+      kind={kind}
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       set={editor.set as any}
       onOpenAdvanced={() => {

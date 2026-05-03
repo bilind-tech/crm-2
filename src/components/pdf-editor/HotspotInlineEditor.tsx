@@ -10,19 +10,26 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { Angebot, Rechnung, Position } from "@/lib/api/types";
 import { metaForId } from "@/lib/pdf/fieldMap";
+import {
+  defaultIntroAngebot,
+  defaultIntroRechnung,
+  defaultOutroAngebot,
+  defaultOutroRechnung,
+} from "@/lib/pdf/belegPdf";
 
 type Draft = Angebot | Rechnung;
 
 interface Props {
   fieldId: string;
   draft: Draft;
+  kind: "angebot" | "rechnung";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   set: (key: any, value: any) => void;
   onOpenAdvanced: () => void;
   onClose: () => void;
 }
 
-export function HotspotInlineEditor({ fieldId, draft, set, onOpenAdvanced, onClose }: Props) {
+export function HotspotInlineEditor({ fieldId, draft, kind, set, onOpenAdvanced, onClose }: Props) {
   const meta = metaForId(fieldId);
   const firstRef = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
 
@@ -136,7 +143,13 @@ export function HotspotInlineEditor({ fieldId, draft, set, onOpenAdvanced, onClo
           {Header}
           <Textarea
             ref={firstRef as React.RefObject<HTMLTextAreaElement>}
-            value={draft.optionen?.eigenesIntro ?? draft.introText ?? ""}
+            value={
+              draft.optionen?.eigenesIntro ??
+              draft.introText ??
+              (kind === "angebot"
+                ? defaultIntroAngebot(draft as Angebot)
+                : defaultIntroRechnung(draft as Rechnung))
+            }
             onChange={(e) => {
               const v = e.target.value;
               const opt = draft.optionen ?? {
@@ -160,7 +173,13 @@ export function HotspotInlineEditor({ fieldId, draft, set, onOpenAdvanced, onClo
           {Header}
           <Textarea
             ref={firstRef as React.RefObject<HTMLTextAreaElement>}
-            value={draft.optionen?.eigenesOutro ?? draft.outroText ?? ""}
+            value={
+              draft.optionen?.eigenesOutro ??
+              draft.outroText ??
+              (kind === "angebot"
+                ? defaultOutroAngebot(draft as Angebot, { materialBereitgestellt: draft.optionen?.materialBereitgestellt })
+                : defaultOutroRechnung(draft as Rechnung, { materialBereitgestellt: draft.optionen?.materialBereitgestellt }))
+            }
             onChange={(e) => {
               const v = e.target.value;
               const opt = draft.optionen ?? {

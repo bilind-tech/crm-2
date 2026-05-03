@@ -89,12 +89,12 @@ export function useBelegEditor<T extends Angebot | Rechnung>(
     }
   }, [draft, isDirty, kind, updateAngebot, updateRechnung]);
 
-  // Autosave nach 3s ohne Änderung — silent (kein Toast).
+  // Autosave nach 1.5s ohne Änderung — silent (kein Toast).
   useEffect(() => {
     if (!isDirty) return;
     const t = setTimeout(() => {
       void save({ silent: true });
-    }, 3000);
+    }, 1500);
     return () => clearTimeout(t);
   }, [draft, isDirty, save]);
 

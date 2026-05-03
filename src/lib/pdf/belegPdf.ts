@@ -258,39 +258,48 @@ function metaBox(meta: { label: string; wert: string }[], variant: "box" | "plai
   let noteRowsCount = 0;
   if (headerNote) {
     const noteLines = headerNote.split("\n");
-    for (const line of noteLines) {
+    noteLines.forEach((line, idx) => {
+      const isLast = idx === noteLines.length - 1;
       body.push([
-        { text: line, fontSize: 10, bold: true, colSpan: 2, border: [false, false, false, false], margin: [0, 0, 0, 0] },
+        {
+          text: line,
+          fontSize: 9.5,
+          bold: true,
+          colSpan: 2,
+          border: [false, false, false, false],
+          margin: [0, 0, 0, isLast ? 2 : 0],
+          lineHeight: 1.15,
+        },
         {},
       ]);
       noteRowsCount++;
-    }
+    });
   }
   meta.forEach((m) => {
     body.push([
-      { text: m.label, fontSize: 10, border: [false, false, false, false], margin: [0, 2, 8, 2] },
-      { text: m.wert, fontSize: 10, alignment: "right", border: [false, false, false, false], margin: [0, 2, 0, 2] },
+      { text: m.label, fontSize: 9.5, border: [false, false, false, false], margin: [0, 1, 8, 1], lineHeight: 1.2 },
+      { text: m.wert, fontSize: 9.5, alignment: "right", border: [false, false, false, false], margin: [0, 1, 0, 1], lineHeight: 1.2 },
     ]);
   });
   const dividerIndex = noteRowsCount; // Linie zwischen Note und Daten
   return {
     id: "meta",
-    width: 245,
+    width: 235,
     table: {
       widths: ["auto", "*"],
       body,
     },
     layout: {
       hLineWidth: (i: number, node: { table: { body: unknown[][] } }) => {
-        if (i === 0 || i === node.table.body.length) return 0.7;
-        if (i === dividerIndex && noteRowsCount > 0) return 0.5;
+        if (i === 0 || i === node.table.body.length) return 0.6;
+        if (i === dividerIndex && noteRowsCount > 0) return 0.4;
         return 0;
       },
-      vLineWidth: (i: number, node: { table: { widths: unknown[] } }) => (i === 0 || i === node.table.widths.length ? 0.7 : 0),
+      vLineWidth: (i: number, node: { table: { widths: unknown[] } }) => (i === 0 || i === node.table.widths.length ? 0.6 : 0),
       hLineColor: () => COLOR_TEXT,
       vLineColor: () => COLOR_TEXT,
-      paddingTop: () => 4,
-      paddingBottom: () => 4,
+      paddingTop: () => 2,
+      paddingBottom: () => 2,
       paddingLeft: () => 8,
       paddingRight: () => 8,
     },
@@ -305,11 +314,11 @@ interface BuildOptions {
   materialBereitgestellt?: boolean;
 }
 
-function defaultIntroAngebot(a: Angebot, opts: BuildOptions) {
+export function defaultIntroAngebot(a: Angebot, opts: BuildOptions = {}) {
   if (opts.intro) return opts.intro;
   return `gerne unterbreiten wir Ihnen ein Angebot für „${a.titel}" und folgende Leistungen:`;
 }
-function defaultOutroAngebot(a: Angebot, opts: BuildOptions) {
+export function defaultOutroAngebot(a: Angebot, opts: BuildOptions = {}) {
   if (opts.outro) return opts.outro;
   const teile = [
     opts.materialBereitgestellt
@@ -321,11 +330,11 @@ function defaultOutroAngebot(a: Angebot, opts: BuildOptions) {
   ].filter(Boolean);
   return teile.join("\n\n");
 }
-function defaultIntroRechnung(_r: Rechnung, opts: BuildOptions) {
+export function defaultIntroRechnung(_r: Rechnung, opts: BuildOptions = {}) {
   if (opts.intro) return opts.intro;
   return `hiermit übersenden wir Ihnen die Rechnung für folgende Leistungen:`;
 }
-function defaultOutroRechnung(_r: Rechnung, opts: BuildOptions) {
+export function defaultOutroRechnung(_r: Rechnung, opts: BuildOptions = {}) {
   if (opts.outro) return opts.outro;
   const teile = [
     "Vielen Dank für Ihren Auftrag.",
