@@ -1,66 +1,66 @@
-## Ziel
+# Plan 1 — PDF-Vorschau stabil & ohne Flackern
 
-PDF-Vorschau auf Detailseiten (Angebote/Rechnungen) lädt nur **einmal** beim ersten Öffnen, danach sofort aus dem Cache — und wird nach Editor-Änderungen sauber durch die neue Version ersetzt. Wording: „erstellt" statt „erzeugt".
+## Ausgangslage (was schon stimmt)
 
-## Status-Check (was schon stimmt)
+- `useBelegPdf` nutzt React Query mit `staleTime: Infinity`, `gcTime: 30 min`, eigener Blob-URL-Lifecycle und verzögertem `revokeObjectURL` (StrictMode-sicher).
+- `useBelegEditor` ruft nach Save `invalidatePdf(art, id)` auf.
+- `useLiveEvents` invalidiert bei `beleg:mutated` zusätzlich `["pdf", art, id]`.
+- Mock-Modus hat LRU-Cache in `src/lib/pdf/belegPdf.ts` (max 50).
+- `PdfPreviewCard` zeigt bereits „PDF wird erstellt …".
 
-Das Backend macht das bereits richtig:
-- `backend/src/pdf/cache.ts` legt PDFs unter `{dataDir}/pdf-cache/{art}/{id}-{hash}.pdf` ab, atomar via `rename`, und **löscht beim Schreiben automatisch alle alten Hash-Dateien zur selben ID**. Es gibt also nie zwei Versionen pro Beleg.
-- `wirePdfCacheInvalidation` invalidiert den Cache automatisch beim `beleg:mutated`-Event (das der Editor-Save bereits feuert).
-- Die Route `/rechnungen/:id/pdf` liefert ETag + `X-Pdf-Cache: hit/miss` und unterstützt 304.
+## Was noch fehlt / falsch ist
 
-Das Problem liegt **rein im Frontend**:
-1. `useBelegPdf` ruft bei jedem Mount erneut `fetchBackendPdf` auf, ohne React-Query — d.h. Detail-Seite zu/auf = neuer Fetch + neuer Loader.
-2. Der Hook zeigt „loading" auch bei Cache-Hits (sub-100 ms), was als Flackern wirkt.
-3. Im Mock-Modus (Lovable-Preview) wird jedes Mal komplett neu im Browser gebaut — daher der lange Spinner.
-4. Wording „erzeugt" statt „erstellt".
+### A. Status-0-Bug nach Reload („Unexpected server response (0)")
+Der gespeicherte Blob lebt nur im React-Query-Cache **dieser Session**. Bei vollem Browser-Reload ist der Cache leer → Hook baut neu. Soweit korrekt.
+Das eigentliche Problem: die alte `blob:`-URL aus der vorherigen Session steht u.U. noch in irgendeinem persistenten Container (Drive-Status-Card, History-State) oder wurde an `react-pdf` übergeben, **bevor** `containerWidth>0` gemessen wurde. `react-pdf` ruft die URL dann ab, der Browser meldet Status 0 (Blob existiert nicht mehr).
 
-## Umsetzung
+Gegenmaßnahme:
+- In `PdfCanvasViewer`: bei jedem `pdfUrl`-Wechsel `setLoadError(null)` **und** `setNumPages(0)` (steht da) — zusätzlich den alten `<Document>` per `key={pdfUrl}` hart neu mounten, damit kein PDF.js-Worker-Task mit toter URL überlebt.
+- In `useBlobUrl`: Wenn `query.isFetching && !query.data`, ist `entryRef.current` evtl. noch eine alte URL aus voriger Beleg-ID (Wechsel zwischen zwei Belegen). Lösung: Hook bekommt einen zweiten Parameter `cacheKey` (Beleg-ID); wenn `cacheKey` wechselt, sofort revoke + null setzen.
+- Im PdfViewerDialog: bei `open=false` Blob-URL nicht weiter halten — `key={pdfUrl}` am Document-Element.
 
-### 1. PDF-Hook auf React Query umbauen (`src/hooks/useBelegPdf.ts`)
+### B. Wording-Inkonsistenz
+- `src/components/pdf/PdfCanvasViewer.tsx:86` → „PDF wird erzeugt …" → **„PDF wird erstellt …"**
+- `src/components/pdf/PdfViewerDialog.tsx:103` → „PDF wird erzeugt …" → **„PDF wird erstellt …"**
+- `src/components/pdf/PdfViewerDialog.tsx:110` → „PDF konnte nicht erzeugt werden" → **„PDF konnte nicht erstellt werden"**
 
-`useAngebotPdf` / `useRechnungPdf` werden zu `useQuery`-basierten Hooks:
+### C. Loader-Politik
+Aktuell zeigt `PdfPreviewCard` den Spinner sobald `status === "loading"`. Bei Cache-Hit innerhalb derselben Session ist `query.data` sofort da → kein Spinner. Bei Cache-Miss (erstes Öffnen, nach Reload) erscheint der Spinner — gewollt.
+Eine kleine Verbesserung: solange `query.isFetching` läuft **und** wir noch eine alte gültige URL für dieselbe ID halten (Refetch nach Invalidation), das alte PDF stehen lassen statt Spinner zu zeigen — das ist mit dem heutigen `useBlobUrl`-Verhalten bereits so. Hier nur eine Mini-Änderung: Wenn `status==="loading"` aber `pdfUrl != null`, NICHT mehr „PDF wird erstellt …" einblenden, sondern nichts (URL bleibt sichtbar).
 
-- QueryKey: `["pdf", art, id]` — pro Beleg nur **eine** Query, geräteweit gecached.
-- `staleTime: Infinity`, `gcTime: 30 min` → solange App offen, nie nachladen.
-- `queryFn`:
-  - Backend-Modus: `fetch /{art}/:id/pdf` → `Blob` + ETag aus Header lesen, beides zurückgeben.
-  - Mock-Modus: `generateRechnungPdf/...` aufrufen, Blob zurückgeben.
-- Rückgabe: stabiler `blobUrl` — wird in `useMemo` aus dem Blob gebaut und beim Unmount via `URL.revokeObjectURL` freigegeben (über einen `useEffect`-Cleanup, der den vorigen Blob revoked, sobald ein neuer kommt).
-- `status` mappt von Query-State: `idle | loading | ready | error`. **„loading" wird nur beim allerersten Fetch gezeigt** — jeder weitere Mount derselben ID liefert sofort `data` und damit `ready`.
+### D. Editor → Detailseite Refresh
+`useBelegEditor` invalidiert bereits — funktioniert nur, wenn der Editor und die Detailseite **denselben QueryClient** teilen. Aktuell ja, weil QueryClient root-global ist. Ein Test-Trace im Mock-Modus reicht.
 
-### 2. Cache-Invalidation nach Editor-Speichern
+### E. Mock-LRU bei großem Beleg
+`pdfLru` cached pro semantischem Hash. Bei reinem ID-Wechsel (Editor speichert → semantischer Hash ändert sich) entsteht ein neuer Eintrag, alter bleibt bis LRU-Verdrängung. Ungenutzte Einträge zur selben `id` proaktiv löschen, sobald ein neuer geschrieben wird (Disk-Backend macht das schon).
 
-- In `useBelegEditor` (Save-Mutation) nach erfolgreichem PATCH: `queryClient.invalidateQueries({ queryKey: ["pdf", art, id] })`.
-- Zusätzlich im `useLiveEvents`-Handler für `beleg:mutated`: gleiche Invalidation. Damit greift der Refresh auch auf anderen Geräten/Tabs.
-- Backend überschreibt physisch beim nächsten Render — alte Datei verschwindet (passiert schon in `writeCached`).
+## Konkrete Änderungen
 
-### 3. Mock-Backend: PDF-Cache im Speicher
+| Datei | Änderung |
+|---|---|
+| `src/components/pdf/PdfCanvasViewer.tsx` | Wording „erzeugt"→„erstellt"; `key={pdfUrl}` auf `<Document>` |
+| `src/components/pdf/PdfViewerDialog.tsx` | Wording an 2 Stellen; `key={pdfUrl}` auf `<Document>`; bei `open=false` `pdfUrl` nicht rendern |
+| `src/hooks/useBelegPdf.ts` | `useBlobUrl(blob, cacheKey)` — bei `cacheKey`-Wechsel sofort revoke; Status-Logik: `loading + pdfUrl` → kein Loader-Text in Card |
+| `src/components/pdf/PdfPreviewCard.tsx` | Loader-Text nur wenn `!pdfUrl`; sonst altes PDF stehen lassen während Refetch |
+| `src/lib/pdf/belegPdf.ts` | beim `lruSet` alle Einträge mit gleicher ID-Präfix entfernen |
 
-Im Mock-Modus (Lovable-Preview) gibt es keinen Pi. Damit das Verhalten gleich aussieht:
-- Modul-lokale `Map<string, Blob>` keyed auf `${art}:${id}:${semantischer-hash}` in `src/lib/pdf/belegPdf.ts`.
-- Vor `generateAngebotPdf/...` Cache prüfen, nach Build füllen. Bei semantischer Änderung des Belegs entsteht neuer Key, alter Blob darf garbage-collected werden (wir behalten max. 50 Einträge LRU).
+## Akzeptanzkriterien
 
-### 4. Wording & Loader-Politik
+1. **Reload auf Detailseite**: PDF baut einmal (Spinner ~1-2s), dann sichtbar — kein „Status (0)"-Fehler mehr.
+2. **Tab-Wechsel weg & zurück**: PDF sofort sichtbar, kein Spinner.
+3. **Editor → Save → zurück zur Detailseite**: PDF aktualisiert sich einmalig, ohne weißes Flackern (altes Bild bleibt bis neues geladen).
+4. **Wechsel zwischen zwei verschiedenen Belegen**: Beim Wechsel verschwindet die alte Vorschau sofort, neue baut auf — kein Status-0.
+5. **Wording**: Überall „PDF wird erstellt" / „konnte nicht erstellt werden". Kein „erzeugt" mehr im Code.
+6. **Mock & Backend gleich**: Verhalten in Lovable-Preview und (später) auf Pi identisch.
 
-- `PdfPreviewCard.tsx`: „PDF wird erzeugt …" → „PDF wird erstellt …".
-- Loader (Spinner + Text) **nur** zeigen, wenn `status === "loading"` UND kein vorheriger Blob für diese ID existiert (also wirklich erster Build). Bei Re-Mount mit Cache-Hit: kein Loader, direkt PDF.
-- Spinner nicht mit künstlichem Delay aus-/einblenden — mit React-Query-Cache entsteht das Flackern gar nicht erst.
+## Was NICHT angefasst wird
 
-### 5. Garantien (Anti-Bug-Leitplanken)
+- Backend-PDF-Cache, Disk-Layout, ETag-Logik, Drive-Upload — alles korrekt.
+- React-Query-Setup, QueryClient-Konfiguration im root.
+- `fetchBackendPdf` (Backend-Fetcher).
 
-- Live-Editor → Detailseite: Editor-Save-Mutation invalidiert Query, Detailseite holt neue PDF (1× Loader, dann fest).
-- Backend stellt sicher, dass im Cache-Verzeichnis pro `id` immer nur **eine** `.pdf` existiert (`writeCached` löscht andere Hashes derselben ID atomar **nach** erfolgreichem `rename`).
-- Bei Render-Fehler bleibt die alte Cache-Datei erhalten (kein Datenverlust), Frontend zeigt Fehler.
-- ETag-Header bleibt erhalten — Browser-Reload nutzt 304.
-- Drive-Upload-Pfad bleibt unberührt (orthogonal zum Cache).
+## Risiko
 
-## Geänderte Dateien
+Sehr niedrig. Reines UI-Refactoring + Wording. Kein Schema-, kein Backend-, kein Migrations-Touch. Vollständig in einem Schritt umsetzbar.
 
-- `src/hooks/useBelegPdf.ts` — komplette Umstellung auf React Query
-- `src/lib/pdf/belegPdf.ts` — kleine LRU-Cache-Map für Mock-Modus
-- `src/hooks/useBelegEditor.ts` — Query-Invalidation nach Save
-- `src/hooks/useLiveEvents.ts` — Invalidation bei `beleg:mutated`
-- `src/components/pdf/PdfPreviewCard.tsx` — Wording „erstellt", Loader-Logik
-
-Backend und Cache-Disk-Layout bleiben unverändert.
+Sag „Go", dann setze ich diesen Plan in einem Rutsch um.

@@ -24,6 +24,15 @@ function lruGet(key: string): { blob: Blob; hotspots: RuntimeHotspot[] } | null 
   return v;
 }
 function lruSet(key: string, value: { blob: Blob; hotspots: RuntimeHotspot[] }): void {
+  // Alte Einträge derselben Beleg-ID (anderer semantischer Hash) verwerfen,
+  // damit pro ID stets nur die aktuelle PDF-Version im Cache liegt — analog
+  // zum Disk-Cache des Backends, der alte Hash-Dateien atomar löscht.
+  const idPrefix = key.slice(0, key.indexOf(":", 2) + 1); // "a:<id>:" / "r:<id>:"
+  if (idPrefix.length > 2) {
+    for (const k of pdfLru.keys()) {
+      if (k !== key && k.startsWith(idPrefix)) pdfLru.delete(k);
+    }
+  }
   pdfLru.set(key, value);
   while (pdfLru.size > PDF_LRU_MAX) {
     const firstKey = pdfLru.keys().next().value;

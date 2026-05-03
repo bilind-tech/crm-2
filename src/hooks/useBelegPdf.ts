@@ -67,25 +67,27 @@ async function buildRechnung(rechnung: Rechnung, kunde: Kunde, firma: Firmendate
  * sich der Blob tatsächlich ändert, und verzögern das endgültige Revoke beim
  * Unmount minimal, damit ein direkter Re-Mount dieselbe URL weiter nutzen kann.
  */
-function useBlobUrl(blob: Blob | undefined): string | null {
-  const entryRef = useRef<{ blob: Blob; url: string } | null>(null);
+function useBlobUrl(blob: Blob | undefined, cacheKey: string): string | null {
+  const entryRef = useRef<{ blob: Blob; url: string; cacheKey: string } | null>(null);
+
+  // Wechsel der Beleg-Identität → alte URL sofort freigeben, sonst zeigt
+  // react-pdf u. U. noch die Vorgänger-PDF an oder läuft mit toter URL.
+  if (entryRef.current && entryRef.current.cacheKey !== cacheKey) {
+    URL.revokeObjectURL(entryRef.current.url);
+    entryRef.current = null;
+  }
 
   if (blob) {
     if (!entryRef.current || entryRef.current.blob !== blob) {
-      // Vorgänger sofort freigeben — wir wechseln auf eine neue Blob-Identität.
       if (entryRef.current) URL.revokeObjectURL(entryRef.current.url);
-      entryRef.current = { blob, url: URL.createObjectURL(blob) };
+      entryRef.current = { blob, url: URL.createObjectURL(blob), cacheKey };
     }
   }
-  // Wenn `blob` (vorübergehend) undefined ist (z. B. während Refetch), behalten
-  // wir die letzte URL bewusst gültig — sonst flackert die Vorschau.
 
   useEffect(() => {
     return () => {
       const entry = entryRef.current;
       if (!entry) return;
-      // Verzögertes Revoke: StrictMode-Doppelcleanup oder schnelles Re-Mount
-      // (Tab-Wechsel, Routenwechsel) bekommen die URL noch.
       const url = entry.url;
       entryRef.current = null;
       setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -118,7 +120,7 @@ export function useAngebotPdf(angebot?: Angebot): UsePdfResult {
     refetchOnReconnect: false,
   });
 
-  const url = useBlobUrl(query.data?.blob);
+  const url = useBlobUrl(query.data?.blob, angebot?.id ?? "noop");
   const status: Status = !enabled ? "idle"
     : query.isError ? "error"
     : query.data ? "ready"
@@ -148,7 +150,7 @@ export function useRechnungPdf(rechnung?: Rechnung): UsePdfResult {
     refetchOnReconnect: false,
   });
 
-  const url = useBlobUrl(query.data?.blob);
+  const url = useBlobUrl(query.data?.blob, rechnung?.id ?? "noop");
   const status: Status = !enabled ? "idle"
     : query.isError ? "error"
     : query.data ? "ready"
