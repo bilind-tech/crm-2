@@ -166,6 +166,7 @@ export function EmailVersandDialog({
     setPdfAnhangAktiv(true);
     setMode("visuell");
     setPhase("idle");
+    setMahnConfirm(false);
 
     let standardVorlage: EmailVorlage | undefined;
     if (mahnStufe && mahnEinstellungen) {
