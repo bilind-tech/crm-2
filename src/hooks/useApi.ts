@@ -607,19 +607,19 @@ export const useUpdateSmtp = () => {
   });
 };
 export const useTestSmtp = () =>
-  useMutation({ mutationFn: () => api.post<{ erfolg: boolean; nachricht: string }>("/einstellungen/smtp/test") });
+  useMutation({ mutationFn: () => api.post<{ erfolg: boolean; nachricht: string; demo?: boolean }>("/einstellungen/smtp/test") });
 
 /** SMTP-Verbindungstest (verify, kein Versand) — synchron, klare Fehler-Klartexte. */
 export const useVerifySmtp = () =>
   useMutation({
-    mutationFn: () => api.post<{ ok: boolean; latencyMs?: number; error?: string; errorCode?: string }>("/email/verify"),
+    mutationFn: () => api.post<{ ok: boolean; latencyMs?: number; error?: string; errorCode?: string; demo?: boolean }>("/email/verify"),
   });
 
 /** Echte Test-Mail an eine eingegebene Adresse senden (genau eine Mail, per User-Klick). */
 export const useSendTestMail = () =>
   useMutation({
     mutationFn: (an: string) =>
-      api.post<{ ok: boolean; messageId?: string; error?: string; errorCode?: string }>("/email/test", { an }),
+      api.post<{ ok: boolean; messageId?: string; error?: string; errorCode?: string; demo?: boolean }>("/email/test", { an }),
   });
 
 export const useNummernkreise = () =>
