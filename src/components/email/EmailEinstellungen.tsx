@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { LoadingPlaceholder } from "@/components/layout/LoadingPlaceholder";
 import { toast } from "sonner";
-import { Plus, Trash2, Pencil, Star, Check, AlertCircle, Loader2, Eye, Code2 } from "lucide-react";
+import { Plus, Trash2, Pencil, Star, Check, AlertCircle, Loader2, Eye, Code2, Zap, Send, ShieldCheck, ShieldAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,8 @@ import {
   useSmtp,
   useUpdateSmtp,
   useTestSmtp,
+  useVerifySmtp,
+  useSendTestMail,
 } from "@/hooks/useApi";
 import type { EmailVorlage, EmailSignatur, EmailKontext } from "@/lib/api/types";
 import { ALLE_PLATZHALTER } from "@/lib/email/placeholders";
@@ -509,6 +511,8 @@ export function SmtpTab() {
   const { data: smtp } = useSmtp();
   const update = useUpdateSmtp();
   const test = useTestSmtp();
+  const verify = useVerifySmtp();
+  const sendTest = useSendTestMail();
   const [form, setForm] = useState({
     server: smtp?.server ?? "",
     port: smtp?.port ?? 587,
@@ -518,6 +522,13 @@ export function SmtpTab() {
     ssl: smtp?.ssl ?? true,
     passwort: "",
   });
+  const [status, setStatus] = useState<{
+    state: "unknown" | "ok" | "error";
+    nachricht?: string;
+    code?: string;
+    latencyMs?: number;
+  }>({ state: "unknown" });
+  const [testEmpfaenger, setTestEmpfaenger] = useState("");
 
   // Synchronisiere wenn Daten ankommen
   useEffect(() => {
@@ -550,19 +561,119 @@ export function SmtpTab() {
       onSuccess: () => {
         toast.success("SMTP-Einstellungen gespeichert");
         setForm((f) => ({ ...f, passwort: "" }));
+        setStatus({ state: "unknown" });
       },
+    });
+  };
+
+  const handleStratoPreset = () => {
+    setForm((f) => ({
+      ...f,
+      server: "smtp.strato.de",
+      port: 465,
+      ssl: true,
+    }));
+    toast.info("Strato-Preset eingefügt — bitte Benutzer/Passwort prüfen und speichern.");
+  };
+
+  const handleVerify = () => {
+    setStatus({ state: "unknown" });
+    verify.mutate(undefined, {
+      onSuccess: (res) => {
+        if (res.ok) {
+          setStatus({ state: "ok", latencyMs: res.latencyMs });
+          toast.success(`Verbindung erfolgreich${res.latencyMs ? ` (${res.latencyMs} ms)` : ""}`);
+        } else {
+          setStatus({ state: "error", nachricht: res.error, code: res.errorCode });
+          toast.error(`Verbindung fehlgeschlagen: ${res.error ?? "Unbekannter Fehler"}`);
+        }
+      },
+      onError: (e: unknown) => {
+        const msg = (e as Error)?.message ?? "Unbekannter Fehler";
+        setStatus({ state: "error", nachricht: msg });
+        toast.error(`Verbindung fehlgeschlagen: ${msg}`);
+      },
+    });
+  };
+
+  const handleSendTest = () => {
+    const adr = testEmpfaenger.trim();
+    if (!adr) {
+      toast.error("Bitte Empfängeradresse für Test-Mail angeben.");
+      return;
+    }
+    sendTest.mutate(adr, {
+      onSuccess: (res) => {
+        if (res.ok) toast.success(`Test-Mail an ${adr} versendet`);
+        else toast.error(`Test-Mail fehlgeschlagen: ${res.error ?? "Unbekannt"}`);
+      },
+      onError: (e: unknown) =>
+        toast.error(`Test-Mail fehlgeschlagen: ${(e as Error)?.message ?? ""}`),
     });
   };
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-        <div className="mb-5">
-          <h2 className="text-lg font-semibold">SMTP-Server</h2>
-          <p className="text-sm text-muted-foreground">
-            Zugangsdaten für den E-Mail-Versand. Das Passwort wird verschlüsselt im Pi-Backend
-            gespeichert und nie zurückgegeben.
+      {/* Manual-Only Hinweis */}
+      <div className="flex items-start gap-2 rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+        <div className="space-y-0.5">
+          <p className="font-medium text-foreground">Manueller Versand garantiert</p>
+          <p className="text-muted-foreground">
+            E-Mails werden ausschließlich nach deinem direkten Klick verschickt — keine
+            Hintergrund-Jobs, keine Cron-Mails, keine automatischen Mahnungen.
           </p>
+        </div>
+      </div>
+
+      {/* Status-Banner */}
+      {status.state !== "unknown" && (
+        <div
+          className={cn(
+            "flex items-start gap-2 rounded-xl border p-4 text-sm",
+            status.state === "ok"
+              ? "border-success/40 bg-success/5"
+              : "border-destructive/40 bg-destructive/5",
+          )}
+        >
+          {status.state === "ok" ? (
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+          ) : (
+            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          )}
+          <div className="space-y-0.5">
+            <p className="font-medium text-foreground">
+              {status.state === "ok"
+                ? `Verbindung OK${status.latencyMs ? ` · ${status.latencyMs} ms` : ""}`
+                : "Verbindung fehlgeschlagen"}
+            </p>
+            {status.nachricht && (
+              <p className="text-muted-foreground">
+                {status.code && <span className="font-mono text-xs">[{status.code}] </span>}
+                {status.nachricht}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">SMTP-Server</h2>
+            <p className="text-sm text-muted-foreground">
+              Zugangsdaten für den E-Mail-Versand. Das Passwort wird verschlüsselt im Pi-Backend
+              gespeichert und nie zurückgegeben.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleStratoPreset}
+            className="shrink-0 gap-1.5"
+          >
+            <Zap className="h-3.5 w-3.5" /> Strato-Preset
+          </Button>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -623,31 +734,84 @@ export function SmtpTab() {
                 onChange={(e) => setForm({ ...form, ssl: e.target.checked })}
                 className="h-4 w-4"
               />
-              <span>SSL/TLS verwenden (empfohlen)</span>
+              <span>SSL/TLS verwenden (empfohlen — Strato Port 465)</span>
             </label>
           </div>
         </div>
 
-        <div className="mt-6 flex items-center justify-between gap-3 border-t border-border pt-4">
-          <Button
-            variant="outline"
-            onClick={() =>
-              test.mutate(undefined, {
-                onSuccess: (res) =>
-                  res.erfolg
-                    ? toast.success(res.nachricht)
-                    : toast.error(res.nachricht),
-              })
-            }
-            disabled={test.isPending || !smtp.passwortGesetzt}
-          >
-            {test.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
-            Verbindung testen
-          </Button>
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={handleVerify}
+              disabled={verify.isPending || !smtp.passwortGesetzt}
+              className="gap-1.5"
+            >
+              {verify.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ShieldCheck className="h-4 w-4" />
+              )}
+              Verbindung prüfen
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() =>
+                test.mutate(undefined, {
+                  onSuccess: (res) =>
+                    res.erfolg ? toast.success(res.nachricht) : toast.error(res.nachricht),
+                })
+              }
+              disabled={test.isPending || !smtp.passwortGesetzt}
+            >
+              {test.isPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+              Schnelltest
+            </Button>
+          </div>
           <Button onClick={handleSpeichern} disabled={update.isPending}>
             <Check className="mr-1.5 h-4 w-4" /> Speichern
           </Button>
         </div>
+      </div>
+
+      {/* Test-Mail Karte */}
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold">Test-Mail senden</h2>
+          <p className="text-sm text-muted-foreground">
+            Schickt genau eine Mail an die angegebene Adresse — nur per Klick, kein Auto-Versand.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            type="email"
+            value={testEmpfaenger}
+            onChange={(e) => setTestEmpfaenger(e.target.value)}
+            placeholder="empfaenger@beispiel.de"
+            className="flex-1"
+          />
+          <Button
+            onClick={handleSendTest}
+            disabled={
+              sendTest.isPending ||
+              !smtp.passwortGesetzt ||
+              !testEmpfaenger.trim()
+            }
+            className="gap-1.5"
+          >
+            {sendTest.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            Test-Mail senden
+          </Button>
+        </div>
+        {!smtp.passwortGesetzt && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Erst SMTP-Passwort speichern, dann ist der Versand aktiv.
+          </p>
+        )}
       </div>
 
       <div className="flex items-start gap-2 rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">

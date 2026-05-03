@@ -140,6 +140,7 @@ export function EmailVersandDialog({
   const [mode, setMode] = useState<EditorMode>("visuell");
   const [zeigeCcBcc, setZeigeCcBcc] = useState(false);
   const [phase, setPhase] = useState<SendPhase>("idle");
+  const [mahnConfirm, setMahnConfirm] = useState(false);
   const visuellRef = useRef<HTMLDivElement>(null);
 
   const ctx: PlaceholderContext = useMemo(
@@ -165,6 +166,7 @@ export function EmailVersandDialog({
     setPdfAnhangAktiv(true);
     setMode("visuell");
     setPhase("idle");
+    setMahnConfirm(false);
 
     let standardVorlage: EmailVorlage | undefined;
     if (mahnStufe && mahnEinstellungen) {
@@ -235,6 +237,11 @@ export function EmailVersandDialog({
     const empfaenger = empfaengerListe(an);
     if (!empfaenger.length) {
       toast.error("Bitte mindestens einen Empfänger angeben.");
+      return;
+    }
+    // Zweistufige Bestätigung für Mahnungen
+    if (mahnStufe && !mahnConfirm) {
+      setMahnConfirm(true);
       return;
     }
     const belegTyp =
@@ -554,6 +561,29 @@ export function EmailVersandDialog({
           )}
         </div>
 
+        {mahnStufe && mahnConfirm && (
+          <div className="mx-6 mb-3 flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <div className="space-y-0.5">
+              <p className="font-medium text-foreground">
+                Mahnstufe {mahnStufe} wirklich versenden?
+              </p>
+              <p className="text-xs text-muted-foreground">
+                An {anChips.join(", ") || an}. Klicke nochmal auf „E-Mail senden", um den
+                Versand zu bestätigen.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMahnConfirm(false)}
+              className="ml-auto rounded-full p-1 text-muted-foreground hover:bg-muted/40"
+              aria-label="Bestätigung abbrechen"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
         <DialogFooter className="gap-2 border-t border-border bg-muted/20 px-6 py-4 sm:gap-2">
           <Button
             variant="outline"
@@ -580,6 +610,10 @@ export function EmailVersandDialog({
             ) : pdfAnhangAktiv && pdfStatus === "loading" ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" /> PDF wird vorbereitet …
+              </>
+            ) : mahnStufe && mahnConfirm ? (
+              <>
+                <AlertCircle className="h-4 w-4" /> Mahnung bestätigen & senden
               </>
             ) : (
               <>
