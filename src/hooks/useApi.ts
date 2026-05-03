@@ -1376,6 +1376,8 @@ export const useProtokollByDokumentId = (dokumentId: string | null | undefined) 
     },
     enabled: !!dokumentId,
   });
+
+export const useCreateProtokoll = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: Partial<Protokoll> & { kind: ProtokollKind }) =>
