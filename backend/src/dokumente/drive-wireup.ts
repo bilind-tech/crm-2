@@ -10,9 +10,9 @@ let wired = false;
 export function wireDokumenteDriveAutoEnqueue(): void {
   if (wired) return;
   wired = true;
-  onEvent("dokument:erstellt", (payload: unknown) => {
+  on("dokument:erstellt", (payload) => {
     try {
-      const id = (payload as { id?: string } | null)?.id;
+      const id = payload?.id;
       if (!id) return;
       const settings = loadDriveSettings();
       if (settings.autoUpload === false) return;
