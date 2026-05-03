@@ -9,7 +9,9 @@ import { getRechnung } from "../belege/rechnungen-repo.js";
 import { getKunde } from "../kunden/repo.js";
 import { setStatusError, setStatusOk, loadDriveSettings } from "./oauth.js";
 import { applyFileNameTemplate, applyPathTemplate, type NamingContext } from "./naming.js";
-import { getDokument, setDriveStatus, readDokumentDatei } from "../dokumente/repo.js";
+import { getDokument, getDokumentRaw, setDriveStatus } from "../dokumente/repo.js";
+import { absolutePath } from "../dokumente/storage.js";
+import { readFile } from "node:fs/promises";
 
 let started = false;
 let isRunning = false;
