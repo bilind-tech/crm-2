@@ -5,8 +5,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -14,7 +12,6 @@ import {
 } from "recharts";
 import {
   BarChart3,
-  LineChart as LineIcon,
   AreaChart as AreaIcon,
   TrendingUp,
   TrendingDown,
@@ -24,7 +21,7 @@ import { useUmsatz } from "@/hooks/useApi";
 import { formatEUR } from "@/lib/format";
 
 type ChartZeitraum = "6m" | "12m" | "jahr" | "letztesJahr" | "quartal";
-type ChartTyp = "bar" | "line" | "area";
+type ChartTyp = "bar" | "area";
 type Wert = "brutto" | "netto";
 
 interface State {
@@ -277,7 +274,6 @@ function TypToggle({
 }) {
   const opts: { v: ChartTyp; Icon: typeof BarChart3; title: string }[] = [
     { v: "bar", Icon: BarChart3, title: "Balken" },
-    { v: "line", Icon: LineIcon, title: "Linie" },
     { v: "area", Icon: AreaIcon, title: "Fläche" },
   ];
   return (
@@ -423,25 +419,6 @@ function renderChart(
         {/* unsichtbar — nur für Tooltip */}
         <Bar dataKey={inaktiv} fill={farbeInaktiv} />
       </BarChart>
-    );
-  }
-  if (state.typ === "line") {
-    return (
-      <LineChart data={data} onClick={(e) => onKlick(e?.activePayload?.[0]?.payload ?? {})}>
-        {grid}
-        {xAxis}
-        {yAxis}
-        {tooltip}
-        <Line
-          type="monotone"
-          dataKey={aktiv}
-          stroke={farbeAktiv}
-          strokeWidth={2}
-          dot={{ r: 3, fill: farbeAktiv }}
-          activeDot={{ r: 5, style: cursorStyle }}
-        />
-        <Line type="monotone" dataKey={inaktiv} stroke="transparent" dot={false} />
-      </LineChart>
     );
   }
   // area
