@@ -6,7 +6,7 @@ interface Props {
   title: string;
   description?: string;
   /** Pfad zur passenden Listen-Seite (z. B. „/kunden"). */
-  backTo: "/kunden" | "/angebote" | "/rechnungen" | "/objekte";
+  backTo: "/kunden" | "/angebote" | "/rechnungen" | "/objekte" | "/protokolle";
   backLabel: string;
 }
 
