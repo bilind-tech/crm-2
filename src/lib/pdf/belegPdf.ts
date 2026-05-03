@@ -6,6 +6,32 @@ import type { Angebot, Rechnung, Position, Kunde, Firmendaten, Ansprechpartner }
 import logoUrl from "@/assets/logo.png";
 import { A4, createHotspotTracker, type RuntimeHotspot } from "./hotspotTracker";
 
+// ───────── Mock-LRU-Cache (nur Lovable-Preview) ────────────────────────────
+// Im Pi-Backend übernimmt der Disk-Cache (`backend/src/pdf/cache.ts`) diese
+// Aufgabe. Hier vermeidet der LRU rein clientseitig wiederholtes pdfmake-
+// Rendern, wenn dieselbe Beleg-Version mehrfach geöffnet wird.
+const PDF_LRU_MAX = 50;
+const pdfLru = new Map<string, { blob: Blob; hotspots: RuntimeHotspot[] }>();
+
+const VOLATILE_PDF_KEYS = new Set(["aktualisiertAm", "updatedAt", "erstelltAm", "createdAt", "geaendertAm"]);
+function semanticPdfKey(parts: unknown[]): string {
+  return JSON.stringify(parts, (k, v) => (VOLATILE_PDF_KEYS.has(k) ? undefined : v));
+}
+function lruGet(key: string): { blob: Blob; hotspots: RuntimeHotspot[] } | null {
+  const v = pdfLru.get(key);
+  if (!v) return null;
+  pdfLru.delete(key); pdfLru.set(key, v); // refresh recency
+  return v;
+}
+function lruSet(key: string, value: { blob: Blob; hotspots: RuntimeHotspot[] }): void {
+  pdfLru.set(key, value);
+  while (pdfLru.size > PDF_LRU_MAX) {
+    const firstKey = pdfLru.keys().next().value;
+    if (firstKey === undefined) break;
+    pdfLru.delete(firstKey);
+  }
+}
+
 export interface PdfBuildResult {
   blob: Blob;
   hotspots: RuntimeHotspot[];
