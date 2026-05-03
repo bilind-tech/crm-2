@@ -669,25 +669,6 @@ function SendOverlay({
       ) : (
         <>
           <div className="relative">
-            {/* Sparkle-Burst — funktionale Erfolgs-Mikroanimation */}
-            {[...Array(8)].map((_, i) => {
-              const angle = (i / 8) * 2 * Math.PI;
-              const tx = Math.cos(angle) * 55;
-              const ty = Math.sin(angle) * 55;
-              return (
-                <Sparkles
-                  key={i}
-                  className="pointer-events-none absolute left-1/2 top-1/2 h-3 w-3 text-primary"
-                  style={
-                    {
-                      animation: "spark-out 0.9s ease-out forwards",
-                      "--tx": `${tx}px`,
-                      "--ty": `${ty}px`,
-                    } as React.CSSProperties
-                  }
-                />
-              );
-            })}
             <div
               className="grid h-20 w-20 place-content-center rounded-full bg-success/15 ring-2 ring-success/40"
               style={{
