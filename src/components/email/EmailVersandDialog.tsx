@@ -239,12 +239,12 @@ export function EmailVersandDialog({
 
     setPhase("sending");
 
-    // -----------------------------------------------------------------------
-    // FRONTEND-STUB: Aufruf geht aktuell an useSendEmail → /email/versand
-    // ins Mock-Backend (src/lib/mock/backend.ts). Es wird KEINE echte Mail
-    // verschickt. Sobald das Pi-Backend mit nodemailer + Strato läuft, wird
-    // hier automatisch eine echte Mail ausgelöst — keine UI-Änderung nötig.
-    // -----------------------------------------------------------------------
+    // Idempotenz-Key pro Klick — Backend erkennt Doppelklicks und sendet nicht zweimal.
+    const idempotenzKey =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `mail-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
     send.mutate(
       {
         belegTyp,
@@ -262,7 +262,8 @@ export function EmailVersandDialog({
             ? [{ name: pdfDateiname, sizeBytes: 0, kind: "pdf-beleg" }]
             : [],
         mahnStufe,
-      },
+        idempotenzKey,
+      } as Parameters<typeof send.mutate>[0],
       {
         onSuccess: (res) => {
           if (res.status === "sent") {
