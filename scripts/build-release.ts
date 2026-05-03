@@ -137,6 +137,20 @@ function run(cmd: string, cwd: string): void {
   execSync(cmd, { cwd, stdio: "inherit" });
 }
 
+function hasCommand(cmd: string): boolean {
+  try {
+    execSync(`command -v ${cmd}`, { stdio: "ignore", shell: "/bin/sh" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function runPackageScript(script: string, cwd: string): void {
+  const runner = hasCommand("bun") ? "bun run" : "npm run";
+  run(`${runner} ${script}`, cwd);
+}
+
 function copyTree(src: string, dest: string): void {
   if (!existsSync(src)) fail(`Quelle fehlt: ${src}`);
   mkdirSync(dest, { recursive: true });
@@ -208,7 +222,7 @@ async function main(): Promise<void> {
 
   if (!args.skipFrontend) {
     log("Frontend bauen");
-    run("npm run build", ROOT);
+    runPackageScript("build", ROOT);
     const frontendDist = path.join(ROOT, "dist");
     if (!existsSync(frontendDist)) fail("Frontend-Build hat dist/ nicht erzeugt");
     copyTree(frontendDist, path.join(stagingRoot, "dist"));
@@ -219,7 +233,7 @@ async function main(): Promise<void> {
 
   if (!args.skipBackend) {
     log("Backend bauen");
-    run("npm run build", path.join(ROOT, "backend"));
+    runPackageScript("build", path.join(ROOT, "backend"));
     const backendDist = path.join(ROOT, "backend/dist");
     if (!existsSync(backendDist)) fail("Backend-Build hat backend/dist/ nicht erzeugt");
     copyTree(backendDist, path.join(stagingRoot, "backend/dist"));
