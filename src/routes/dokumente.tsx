@@ -124,6 +124,7 @@ function Page() {
         subtitle="Quittungen, Rechnungen und Belege zentral ablegen — mit Frist und Erinnerung."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <GlobalDriveSyncBadge dokumente={alle} />
             <PrimaryAction
               icon={Smartphone}
               label="Vom Handy scannen"
