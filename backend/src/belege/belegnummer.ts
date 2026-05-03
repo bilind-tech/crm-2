@@ -15,6 +15,7 @@ import { getDatabase } from "../db/index.js";
 import {
   fallbackPrefix,
   formatBelegnummer,
+  parseBelegnummer,
   periodeMMYY,
   type BelegArt,
 } from "./nummer-format.js";
@@ -120,9 +121,7 @@ export function reserviereNummer(input: {
   grund?: string;
 }): { ok: true } | { ok: false; grund: "kollision" | "format" } {
   const db = getDatabase();
-  // Format prüfen
-  const importParse = await import("./nummer-format.js");
-  if (!importParse.parseBelegnummer(input.nummer)) {
+  if (!parseBelegnummer(input.nummer)) {
     return { ok: false, grund: "format" };
   }
   const tabelle = input.art === "angebot" ? "angebot" : "rechnung";
