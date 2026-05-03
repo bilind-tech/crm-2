@@ -1212,19 +1212,7 @@ export const useRestoreStatus = (enabled = true) =>
   });
 
 
-export const useSitzungen = () =>
-  useQuery({
-    queryKey: qk.einstellungen.sitzungen,
-    queryFn: () => api.get<SitzungEintrag[]>("/einstellungen/sitzungen"),
-  });
-
-export const useAlleSitzungenBeenden = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.post<void>("/einstellungen/sitzungen/alle-beenden"),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.einstellungen.sitzungen }),
-  });
-};
+// (Sitzungs-Hooks entfernt — Single-User-Modus, keine Session-Verwaltung mehr.)
 
 
 // ---------- System & Updates ----------

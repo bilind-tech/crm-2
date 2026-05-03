@@ -214,44 +214,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true };
   });
 
-  // ---------- Sessions ----------
-
-  app.get("/auth/sessions", { preHandler: requireAuth }, async (req) => {
-    const currentToken = getCookieToken(req);
-    const items = listSessions(req.user!.id).map((s) => ({
-      id: s.token.slice(0, 12),
-      tokenHint: s.token.slice(0, 6) + "…",
-      createdAt: s.createdAt,
-      lastSeenAt: s.lastSeenAt,
-      expiresAt: s.expiresAt,
-      userAgent: s.userAgent,
-      ip: s.ip,
-      current: s.token === currentToken,
-      _t: s.token,
-    }));
-    return { sessions: items };
-  });
-
-  app.delete("/auth/sessions", { preHandler: requireAuth }, async (req) => {
-    const currentToken = getCookieToken(req);
-    const n = deleteAllSessionsForUser(req.user!.id, currentToken ?? undefined);
-    audit({ userId: req.user!.id, action: "auth.sessions.revoke-all", ip: req.ip });
-    return { ok: true, beendet: n };
-  });
-
-  app.delete<{ Params: { token: string } }>(
-    "/auth/sessions/:token",
-    { preHandler: requireAuth },
-    async (req, reply) => {
-      const ok = deleteSessionForUser(req.params.token, req.user!.id);
-      if (!ok) {
-        reply.status(404);
-        return { error: "not-found" };
-      }
-      audit({ userId: req.user!.id, action: "auth.session.revoke", ip: req.ip });
-      return { ok: true };
-    },
-  );
+  // ---------- Sessions: Verwaltungs-Endpoints entfernt (Single-User-Modus) ----------
 
   // ---------- Recovery ----------
 

@@ -200,40 +200,5 @@ export async function einstellungenRoutes(app: FastifyInstance): Promise<void> {
   // Google Drive: Routen liegen in routes/drive.ts (echter OAuth-Flow + Settings).
 
 
-  // Sessions
-  app.get("/einstellungen/sitzungen", async (req) => {
-    if (!req.user) return [];
-    const currentToken = getCookieToken(req);
-    return listSessions(req.user.id).map((s) => ({ ...s, isCurrent: s.token === currentToken }));
-  });
-  app.delete("/einstellungen/sitzungen/:token", async (req, reply) => {
-    if (!req.user) {
-      reply.status(401);
-      return { error: "unauthenticated" };
-    }
-    const params = z.object({ token: z.string().min(1) }).safeParse(req.params);
-    if (!params.success) {
-      reply.status(422);
-      return { error: "validation" };
-    }
-    const ok = deleteSessionForUser(params.data.token, req.user.id);
-    if (!ok) {
-      reply.status(404);
-      return { error: "not-found" };
-    }
-    audit({ userId: req.user.id, action: "settings.sessions.revoke", ip: req.ip });
-    return { ok: true };
-  });
-  app.post("/einstellungen/sitzungen/alle-beenden", async (req) => {
-    if (!req.user) return { revoked: 0 };
-    const currentToken = getCookieToken(req);
-    const n = deleteAllSessionsForUser(req.user.id, currentToken);
-    audit({
-      userId: req.user.id,
-      action: "settings.sessions.revoke-all",
-      detail: { revoked: n },
-      ip: req.ip,
-    });
-    return { revoked: n };
-  });
+  // Sessions-Verwaltung entfernt (Single-User-Modus).
 }
