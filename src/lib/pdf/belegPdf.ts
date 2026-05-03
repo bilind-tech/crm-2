@@ -20,11 +20,26 @@ async function getPdfMake(): Promise<AnyPdfMake> {
   if (pdfMakeInstance) return pdfMakeInstance;
   // Dynamische Imports — pdfmake darf nicht im SSR-Bundle landen.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pm: any = (await import("pdfmake/build/pdfmake")).default;
+  const pmMod: any = await import("pdfmake/build/pdfmake");
+  const pm: AnyPdfMake = pmMod?.default ?? pmMod;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const vfs: any = await import("pdfmake/build/vfs_fonts");
-  const vfsData = vfs?.default?.vfs ?? vfs?.vfs ?? vfs?.pdfMake?.vfs ?? vfs?.default?.pdfMake?.vfs;
-  if (vfsData) pm.vfs = vfsData;
+  const vfsMod: any = await import("pdfmake/build/vfs_fonts");
+  // pdfmake 0.3.x: vfs_fonts exportiert das rohe vfs-Objekt (filename → base64).
+  // Frühere Versionen lieferten { pdfMake: { vfs } } oder { vfs }.
+  const vfsData =
+    vfsMod?.default?.vfs ??
+    vfsMod?.vfs ??
+    vfsMod?.pdfMake?.vfs ??
+    vfsMod?.default?.pdfMake?.vfs ??
+    (vfsMod?.default && typeof vfsMod.default === "object" ? vfsMod.default : null) ??
+    (typeof vfsMod === "object" && !("default" in vfsMod) ? vfsMod : null);
+  if (vfsData) {
+    if (typeof pm.addVirtualFileSystem === "function") {
+      pm.addVirtualFileSystem(vfsData);
+    } else {
+      pm.vfs = vfsData;
+    }
+  }
   pdfMakeInstance = pm;
   return pm;
 }
@@ -457,9 +472,24 @@ async function buildDocWithOverrides(
 
 async function renderPdf(doc: unknown, hotspots: RuntimeHotspot[]): Promise<PdfBuildResult> {
   const pdfMake = await getPdfMake();
-  const blob = await new Promise<Blob>((resolve) => {
-    pdfMake.createPdf(doc).getBlob((b: Blob) => resolve(b));
+  // pdfmake 0.3.x: getBlob() ist async/Promise — die alte Callback-Variante
+  // wird nicht mehr aufgerufen und würde den Spinner endlos laufen lassen.
+  const pdfDoc = pdfMake.createPdf(doc);
+  const result: Blob | unknown = await new Promise<Blob>((resolve, reject) => {
+    try {
+      const ret = pdfDoc.getBlob((b: Blob) => resolve(b));
+      // Wenn getBlob ein Promise zurückgibt (neue API), darüber resolven.
+      if (ret && typeof (ret as Promise<Blob>).then === "function") {
+        (ret as Promise<Blob>).then(resolve, reject);
+      }
+    } catch (err) {
+      reject(err);
+    }
   });
+  const blob = result as Blob;
+  if (!(blob instanceof Blob) || blob.size === 0) {
+    throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
+  }
   return { blob, hotspots };
 }
 
