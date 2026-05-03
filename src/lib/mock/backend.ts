@@ -1341,6 +1341,20 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     } else {
       result = { ok: true, latencyMs: 240 + Math.floor(Math.random() * 180) };
     }
+  } else if (m === "POST" && match(path, "/email/test")) {
+    // Mock: simuliert eine echte Test-Mail. Erfordert vollständige SMTP-Konfig.
+    await new Promise((r) => setTimeout(r, 500));
+    const an = (body as { an?: string } | undefined)?.an?.trim();
+    if (!an) {
+      result = { ok: false, errorCode: "EINPUT", error: "Empfängeradresse fehlt." };
+    } else if (!d.smtp.passwortGesetzt || !d.smtp.server || !d.smtp.benutzer) {
+      result = { ok: false, errorCode: "ECONFIG", error: "SMTP nicht konfiguriert — bitte Server, Benutzer und Passwort speichern." };
+    } else if (!d.smtp.absenderEmail) {
+      result = { ok: false, errorCode: "ECONFIG", error: "Absender-E-Mail fehlt." };
+    } else {
+      logAktivitaet("einstellung_geaendert", `Test-Mail an ${an} (Mock — kein realer Versand)`);
+      result = { ok: true, messageId: `mock-${Date.now()}@local` };
+    }
   } else if (m === "GET" && match(path, "/einstellungen/nummernkreise")) {
     result = d.nummernkreise;
   } else if (m === "PATCH" && match(path, "/einstellungen/nummernkreise")) {
