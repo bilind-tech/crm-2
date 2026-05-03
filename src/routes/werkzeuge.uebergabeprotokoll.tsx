@@ -20,6 +20,7 @@ import type { Kunde, Objekt } from "@/lib/api/types";
 import {
   downloadBlob,
   generateUebergabeprotokollPdf,
+  nextProtokollNummer,
   safeFilename,
   type ProtokollArt,
 } from "@/lib/pdf/werkzeugePdf";
@@ -75,10 +76,11 @@ function Page() {
 
   const empfaengerEmail = useMemo(() => kunde?.email ?? "", [kunde]);
 
-  const buildBlob = async (): Promise<Blob> => {
+  const buildBlob = async (nummer?: string): Promise<Blob> => {
     if (!kunde) throw new Error("Bitte zuerst einen Kunden auswählen.");
     return generateUebergabeprotokollPdf({
       art,
+      nummer,
       datum,
       uhrzeit,
       vertreterAuftraggeber: vertreterAg,
@@ -92,6 +94,12 @@ function Page() {
     });
   };
 
+  const withTimeout = <T,>(p: Promise<T>, ms: number, msg: string): Promise<T> =>
+    Promise.race<T>([
+      p,
+      new Promise<T>((_, rej) => setTimeout(() => rej(new Error(msg)), ms)),
+    ]);
+
   const handleErstellen = async (downloadOnly: boolean) => {
     if (!kunde) {
       toast.error("Bitte zuerst einen Kunden auswählen.");
@@ -99,19 +107,24 @@ function Page() {
     }
     setBusy(true);
     try {
-      const blob = await buildBlob();
+      const nummer = nextProtokollNummer("PR");
+      const blob = await withTimeout(
+        buildBlob(nummer),
+        30000,
+        "PDF-Erstellung dauert zu lange — bitte erneut versuchen.",
+      );
       const fname = `${
         art === "uebergabe"
           ? "Uebergabeprotokoll"
           : art === "abnahme"
             ? "Abnahmeprotokoll"
             : "Protokoll"
-      }_${safeFilename(kundenAnzeige(kunde))}_${datum}.pdf`;
+      }_${nummer.replace("/", "-")}_${safeFilename(kundenAnzeige(kunde))}.pdf`;
       downloadBlob(blob, fname);
       toast.success("PDF wurde heruntergeladen");
       try {
         await createDokument.mutateAsync({
-          titel: `${artLabel(art)} – ${kundenAnzeige(kunde)} – ${datum}`,
+          titel: `${artLabel(art)} ${nummer} – ${kundenAnzeige(kunde)} – ${datum}`,
           typ: "protokoll",
           kundeId: kunde.id,
           objektId: objekt?.id,
@@ -136,11 +149,10 @@ function Page() {
               ? `Bitte das soeben heruntergeladene PDF im E-Mail-Dialog anhängen. Empfänger vorbelegt: ${empfaengerEmail}`
               : "Beim Kunden ist keine E-Mail hinterlegt — bitte manuell ergänzen.",
         });
-        // Folge-Plan: direkter Anhang über EmailVersandDialog mit Blob-Upload.
       }
     } catch (e) {
       console.error(e);
-      toast.error("PDF konnte nicht erzeugt werden.");
+      toast.error(e instanceof Error ? e.message : "PDF konnte nicht erzeugt werden.");
     } finally {
       setBusy(false);
     }

@@ -1,11 +1,11 @@
-// Werkzeug-PDFs: schlanke Stub-Layouts mit pdfmake.
-// Echtes Layout passiert, sobald die Original-Vorlagen vorliegen — das hier
-// liefert sofort ein verwendbares, sauberes Protokoll im My-Clean-Center-Look.
+// Werkzeug-PDFs (Übergabe-/Abnahmeprotokoll, Schlüsselübergabe).
+// Layout 1:1 angelehnt an belegPdf.ts (Angebot/Rechnung): selber Header mit
+// Logo rechts, Absenderzeile links, dezente Linien, 4-Spalten-Footer aus
+// Firmendaten. Damit fühlen sich die Protokolle wie ein Beleg an.
 
-import logoUrl from "@/assets/logo.png";
+import logoFallback from "@/assets/logo.png";
 import type { Firmendaten, Kunde, Objekt } from "@/lib/api/types";
 
-// pdfmake hat unvollständige Typen — wir nutzen any-Casts wie in belegPdf.ts.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type AnyPdfMake = any;
 let pdfMakeInstance: AnyPdfMake = null;
@@ -20,22 +20,20 @@ async function getPdfMake(): Promise<AnyPdfMake> {
     vfsMod?.vfs ??
     vfsMod?.pdfMake?.vfs ??
     vfsMod?.default?.pdfMake?.vfs ??
-    (vfsMod?.default && typeof vfsMod.default === "object"
-      ? vfsMod.default
-      : null) ??
+    (vfsMod?.default && typeof vfsMod.default === "object" ? vfsMod.default : null) ??
     (typeof vfsMod === "object" && !("default" in vfsMod) ? vfsMod : null);
   if (vfsData) {
-    if (typeof pm.addVirtualFileSystem === "function")
-      pm.addVirtualFileSystem(vfsData);
+    if (typeof pm.addVirtualFileSystem === "function") pm.addVirtualFileSystem(vfsData);
     else pm.vfs = vfsData;
   }
   pdfMakeInstance = pm;
   return pm;
 }
 
-async function logoDataUrl(): Promise<string | null> {
+async function logoDataUrl(src?: string): Promise<string | null> {
   try {
-    const res = await fetch(logoUrl);
+    const url = src && src.trim() ? src : logoFallback;
+    const res = await fetch(url);
     const blob = await res.blob();
     return await new Promise<string>((resolve, reject) => {
       const r = new FileReader();
@@ -48,68 +46,184 @@ async function logoDataUrl(): Promise<string | null> {
   }
 }
 
+// ───────── Konstanten / Helpers (synchron zu belegPdf.ts) ────────────────
+
+const COLOR_TEXT = "#000000";
+const COLOR_MUTED = "#555555";
+const COLOR_LINE = "#bdbdbd";
+
 export function kundeName(k?: Kunde): string {
   if (!k) return "—";
   if (k.typ === "firma" && k.firmenname) return k.firmenname;
   return [k.vorname, k.nachname].filter(Boolean).join(" ") || k.nummer;
 }
 
-function kundenBlock(k?: Kunde, o?: Objekt): string {
-  if (!k) return "";
-  const lines: string[] = [kundeName(k)];
-  if (o) lines.push(`Objekt: ${o.name}`);
-  const adr = o
-    ? [o.strasse, [o.plz, o.ort].filter(Boolean).join(" ")]
-    : [k.strasse, [k.plz, k.ort].filter(Boolean).join(" ")];
-  for (const l of adr) if (l) lines.push(l);
-  return lines.join("\n");
+function kundeAdresse(k: Kunde, o?: Objekt): string[] {
+  const lines: string[] = [];
+  if (k.firmenname) lines.push(k.firmenname);
+  const person = [k.vorname, k.nachname].filter(Boolean).join(" ");
+  if (person) lines.push(person);
+  if (o) {
+    if (o.name) lines.push(`Objekt: ${o.name}`);
+    if (o.strasse) lines.push(o.strasse);
+    const plzOrt = [o.plz, o.ort].filter(Boolean).join(" ");
+    if (plzOrt) lines.push(plzOrt);
+  } else {
+    if (k.strasse) lines.push(k.strasse);
+    const plzOrt = [k.plz, k.ort].filter(Boolean).join(" ");
+    if (plzOrt) lines.push(plzOrt);
+  }
+  return lines;
 }
 
-function firmaBlock(f?: Firmendaten): string {
+function absenderzeile(f?: Firmendaten): string {
   if (!f) return "";
-  const lines = [
-    f.firmenname,
-    f.strasse,
-    [f.plz, f.ort].filter(Boolean).join(" "),
-    f.telefon ? `Tel: ${f.telefon}` : "",
-    f.email ?? "",
-  ].filter(Boolean);
-  return lines.join("\n");
+  const teile = [f.firmenname, f.strasse, `${f.plz ?? ""} ${f.ort ?? ""}`.trim()].filter(Boolean);
+  return teile.join(" – ");
 }
 
-const sharedStyles = {
-  h1: { fontSize: 18, bold: true, margin: [0, 0, 0, 4] as [number, number, number, number] },
-  meta: { fontSize: 9, color: "#666" },
-  label: { fontSize: 9, color: "#666", margin: [0, 6, 0, 2] as [number, number, number, number] },
-  block: { fontSize: 10, lineHeight: 1.3 },
-  sectionTitle: {
-    fontSize: 11,
-    bold: true,
-    margin: [0, 12, 0, 6] as [number, number, number, number],
-  },
-};
-
-async function buildHeader(titel: string, untertitel: string, firma?: Firmendaten) {
-  const logo = await logoDataUrl();
+function header(firma: Firmendaten | undefined, logo: string | null) {
   return {
+    margin: [55, 30, 55, 0] as [number, number, number, number],
     columns: [
       {
         width: "*",
         stack: [
-          { text: titel, style: "h1" },
-          { text: untertitel, style: "meta" },
+          {
+            text: absenderzeile(firma),
+            fontSize: 8,
+            color: COLOR_TEXT,
+            decoration: "underline",
+            margin: [0, 50, 0, 0],
+          },
         ],
       },
       logo
-        ? { image: logo, width: 90, alignment: "right" as const }
+        ? { width: 270, image: logo, fit: [270, 120], alignment: "right" }
         : {
-            width: 90,
-            text: firma?.firmenname ?? "",
-            alignment: "right" as const,
+            width: 270,
+            text: (firma?.firmenname || "MY CLEAN CENTER").toUpperCase(),
             bold: true,
+            fontSize: 20,
+            color: COLOR_TEXT,
+            alignment: "right",
           },
     ],
   };
+}
+
+function footer(firma?: Firmendaten) {
+  return function () {
+    const f = firma ?? ({} as Firmendaten);
+    const cell = (lines: (string | null | undefined)[]) => ({
+      stack: lines.filter(Boolean).map((l) => ({ text: l as string, fontSize: 7, color: COLOR_TEXT })),
+    });
+    return {
+      margin: [55, 0, 55, 12] as [number, number, number, number],
+      stack: [
+        { canvas: [{ type: "line", x1: 0, y1: 0, x2: 485, y2: 0, lineWidth: 0.5, lineColor: COLOR_LINE }] },
+        {
+          margin: [0, 8, 0, 0] as [number, number, number, number],
+          columns: [
+            cell([
+              f.firmenname,
+              f.geschaeftsfuehrer ? `Geschäftsführer: ${f.geschaeftsfuehrer}` : null,
+              [f.strasse, [f.plz, f.ort].filter(Boolean).join(" ")].filter(Boolean).join(" - "),
+            ]),
+            cell(["Bank", f.bankName, f.iban]),
+            cell([f.telefon, f.email]),
+            cell([f.handelsregister, f.ustId ? `USt-ID: ${f.ustId}` : null, f.webseite]),
+          ],
+          columnGap: 12,
+        },
+      ],
+    };
+  };
+}
+
+function metaBox(meta: { label: string; wert: string }[]) {
+  const body: unknown[][] = meta.map((m) => [
+    { text: m.label, fontSize: 9.5, border: [false, false, false, false], margin: [0, 1, 8, 1], lineHeight: 1.2 },
+    { text: m.wert, fontSize: 9.5, alignment: "right", border: [false, false, false, false], margin: [0, 1, 0, 1], lineHeight: 1.2 },
+  ]);
+  return {
+    width: 235,
+    table: { widths: ["auto", "*"], body },
+    layout: {
+      hLineWidth: (i: number, node: { table: { body: unknown[][] } }) =>
+        i === 0 || i === node.table.body.length ? 0.6 : 0,
+      vLineWidth: (i: number, node: { table: { widths: unknown[] } }) =>
+        i === 0 || i === node.table.widths.length ? 0.6 : 0,
+      hLineColor: () => COLOR_TEXT,
+      vLineColor: () => COLOR_TEXT,
+      paddingTop: () => 2,
+      paddingBottom: () => 2,
+      paddingLeft: () => 8,
+      paddingRight: () => 8,
+    },
+  };
+}
+
+function sectionTitle(text: string) {
+  return {
+    text: text.toUpperCase(),
+    fontSize: 10,
+    bold: true,
+    color: COLOR_TEXT,
+    characterSpacing: 0.6,
+    margin: [0, 16, 0, 4] as [number, number, number, number],
+  };
+}
+
+function thinLine() {
+  return { canvas: [{ type: "line", x1: 0, y1: 0, x2: 485, y2: 0, lineWidth: 0.4, lineColor: COLOR_LINE }] };
+}
+
+function unterschriftenBlock(linksLabel: string, linksName: string, rechtsLabel: string, rechtsName: string) {
+  return {
+    margin: [0, 30, 0, 0] as [number, number, number, number],
+    columns: [
+      {
+        width: "*",
+        stack: [
+          { text: linksName || " ", fontSize: 10, margin: [0, 0, 0, 28] },
+          { canvas: [{ type: "line", x1: 0, y1: 0, x2: 220, y2: 0, lineWidth: 0.5, lineColor: COLOR_TEXT }] },
+          { text: linksLabel, fontSize: 8, color: COLOR_MUTED, margin: [0, 3, 0, 0] },
+        ],
+      },
+      {
+        width: "*",
+        stack: [
+          { text: rechtsName || " ", fontSize: 10, margin: [0, 0, 0, 28] },
+          { canvas: [{ type: "line", x1: 0, y1: 0, x2: 220, y2: 0, lineWidth: 0.5, lineColor: COLOR_TEXT }] },
+          { text: rechtsLabel, fontSize: 8, color: COLOR_MUTED, margin: [0, 3, 0, 0] },
+        ],
+      },
+    ],
+    columnGap: 24,
+  };
+}
+
+// ───────── Protokoll-Nummer (Frontend-Mock) ───────────────────────────────
+// Format analog Belegnummern: PR{MM}{YY}/{NN} bzw. SU{MM}{YY}/{NN}
+// Zähler pro Monat in localStorage. Pi-Backend übernimmt das später.
+
+export type ProtokollKuerzel = "PR" | "SU";
+
+export function nextProtokollNummer(kuerzel: ProtokollKuerzel): string {
+  const now = new Date();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const yy = String(now.getFullYear()).slice(-2);
+  const key = `mcc:protokollNr:${kuerzel}:${yy}${mm}`;
+  let n = 1;
+  try {
+    const raw = localStorage.getItem(key);
+    n = raw ? Number(raw) + 1 : 1;
+    localStorage.setItem(key, String(n));
+  } catch {
+    /* SSR / no storage */
+  }
+  return `${kuerzel}${mm}${yy}/${String(n).padStart(2, "0")}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,6 +234,7 @@ export type ProtokollArt = "uebergabe" | "abnahme" | "beides";
 
 export interface UebergabeprotokollData {
   art: ProtokollArt;
+  nummer?: string;
   datum: string; // YYYY-MM-DD
   uhrzeit: string; // HH:MM
   vertreterAuftraggeber: string;
@@ -142,82 +257,62 @@ export async function generateUebergabeprotokollPdf(
   data: UebergabeprotokollData,
 ): Promise<Blob> {
   const titel = PROTOKOLL_ART_LABEL[data.art];
-  const header = await buildHeader(
-    titel,
-    `Datum: ${formatDatum(data.datum)} · Uhrzeit: ${data.uhrzeit}`,
-    data.firma,
-  );
+  const logo = await logoDataUrl(data.firma?.logoUrl);
+
+  const meta: { label: string; wert: string }[] = [];
+  if (data.nummer) meta.push({ label: "Protokoll-Nr.", wert: data.nummer });
+  meta.push({ label: "Datum", wert: formatDatum(data.datum) });
+  meta.push({ label: "Uhrzeit", wert: data.uhrzeit });
+  if (data.kunde?.nummer) meta.push({ label: "Kunden-Nr.", wert: data.kunde.nummer });
+
+  const adresse = data.kunde ? kundeAdresse(data.kunde, data.objekt) : ["—"];
 
   const doc = {
-    pageSize: "A4",
-    pageMargins: [40, 40, 40, 60],
+    pageSize: "A4" as const,
+    pageMargins: [55, 155, 55, 100] as [number, number, number, number],
+    defaultStyle: { font: "Roboto", fontSize: 10, color: COLOR_TEXT, lineHeight: 1.25 },
+    header: header(data.firma, logo),
+    footer: footer(data.firma),
     content: [
-      header,
       {
         columns: [
           {
             width: "*",
-            stack: [
-              { text: "Auftragnehmer", style: "label" },
-              { text: firmaBlock(data.firma), style: "block" },
-            ],
+            stack: adresse.map((l, i) => ({ text: l, fontSize: 10, bold: i === 0 })),
           },
-          {
-            width: "*",
-            stack: [
-              { text: "Auftraggeber", style: "label" },
-              { text: kundenBlock(data.kunde, data.objekt), style: "block" },
-            ],
-          },
+          metaBox(meta),
         ],
-        columnGap: 16,
+        columnGap: 20,
       },
-      { text: "Leistungsumfang", style: "sectionTitle" },
-      { text: data.leistungsumfang || "—", style: "block" },
-      { text: "Mängel / Bemerkungen", style: "sectionTitle" },
-      { text: data.bemerkungen || "Keine.", style: "block" },
-      { text: "Ergebnis", style: "sectionTitle" },
+      { text: titel, fontSize: 22, bold: true, color: COLOR_TEXT, margin: [0, 30, 0, 14] },
+
+      sectionTitle("Leistungsumfang"),
+      thinLine(),
+      { text: data.leistungsumfang || "—", fontSize: 10, margin: [0, 6, 0, 0] },
+
+      sectionTitle("Mängel / Bemerkungen"),
+      thinLine(),
+      { text: data.bemerkungen || "Keine.", fontSize: 10, margin: [0, 6, 0, 0] },
+
+      sectionTitle("Ergebnis"),
+      thinLine(),
       {
         text: data.ohneVorbehalt
           ? "Die Leistung wird ohne Vorbehalt abgenommen."
           : "Die Leistung wird mit den oben genannten Vorbehalten / Mängeln abgenommen.",
-        style: "block",
+        fontSize: 10,
+        margin: [0, 6, 0, 0],
       },
-      { text: "Anwesende Personen", style: "sectionTitle" },
-      {
-        columns: [
-          {
-            width: "*",
-            stack: [
-              { text: "Auftraggeber", style: "label" },
-              {
-                text: data.vertreterAuftraggeber || "—",
-                style: "block",
-                margin: [0, 0, 0, 30],
-              },
-              { canvas: [{ type: "line", x1: 0, y1: 0, x2: 220, y2: 0, lineWidth: 0.5 }] },
-              { text: "Unterschrift Auftraggeber", style: "meta" },
-            ],
-          },
-          {
-            width: "*",
-            stack: [
-              { text: "Auftragnehmer", style: "label" },
-              {
-                text: data.vertreterAuftragnehmer || "—",
-                style: "block",
-                margin: [0, 0, 0, 30],
-              },
-              { canvas: [{ type: "line", x1: 0, y1: 0, x2: 220, y2: 0, lineWidth: 0.5 }] },
-              { text: "Unterschrift Auftragnehmer", style: "meta" },
-            ],
-          },
-        ],
-        columnGap: 24,
-      },
+
+      sectionTitle("Anwesende Personen / Unterschriften"),
+      thinLine(),
+      unterschriftenBlock(
+        "Unterschrift Auftraggeber",
+        data.vertreterAuftraggeber,
+        "Unterschrift Auftragnehmer",
+        data.vertreterAuftragnehmer,
+      ),
     ],
-    styles: sharedStyles,
-    defaultStyle: { fontSize: 10, color: "#111" },
   };
 
   return await renderToBlob(doc);
@@ -238,6 +333,7 @@ export interface SchluesselZeile {
 
 export interface SchluesseluebergabeData {
   richtung: SchluesselRichtung;
+  nummer?: string;
   datum: string;
   uhrzeit: string;
   schluessel: SchluesselZeile[];
@@ -257,124 +353,104 @@ export async function generateSchluesseluebergabePdf(
     data.richtung === "ausgabe"
       ? "Schlüsselübergabe — Ausgabe"
       : "Schlüsselübergabe — Rücknahme";
-  const header = await buildHeader(
-    titel,
-    `Datum: ${formatDatum(data.datum)} · Uhrzeit: ${data.uhrzeit}`,
-    data.firma,
-  );
+  const logo = await logoDataUrl(data.firma?.logoUrl);
+
+  const meta: { label: string; wert: string }[] = [];
+  if (data.nummer) meta.push({ label: "Beleg-Nr.", wert: data.nummer });
+  meta.push({ label: "Datum", wert: formatDatum(data.datum) });
+  meta.push({ label: "Uhrzeit", wert: data.uhrzeit });
+  if (data.kunde?.nummer) meta.push({ label: "Kunden-Nr.", wert: data.kunde.nummer });
+
+  const adresse = data.kunde ? kundeAdresse(data.kunde, data.objekt) : ["—"];
+
+  const zeilen =
+    data.schluessel.length > 0
+      ? data.schluessel
+      : [{ bezeichnung: "—", anzahl: 0, schluesselNr: "", bemerkung: "" } as SchluesselZeile];
 
   const tabelle = {
     table: {
       headerRows: 1,
-      widths: ["*", 40, 80, "*"],
+      widths: ["*", 50, 90, "*"],
       body: [
         [
-          { text: "Bezeichnung", bold: true },
-          { text: "Anzahl", bold: true, alignment: "right" as const },
-          { text: "Schlüssel-Nr.", bold: true },
-          { text: "Bemerkung", bold: true },
+          { text: "Bezeichnung", bold: true, fontSize: 10, margin: [0, 4, 0, 4] },
+          { text: "Anzahl", bold: true, fontSize: 10, alignment: "center", margin: [0, 4, 0, 4] },
+          { text: "Schlüssel-Nr.", bold: true, fontSize: 10, margin: [0, 4, 0, 4] },
+          { text: "Bemerkung", bold: true, fontSize: 10, margin: [0, 4, 0, 4] },
         ],
-        ...(data.schluessel.length > 0
-          ? data.schluessel
-          : [
-              {
-                bezeichnung: "—",
-                anzahl: 0,
-                schluesselNr: "",
-                bemerkung: "",
-              } as SchluesselZeile,
-            ]
-        ).map((z) => [
-          z.bezeichnung || "—",
-          { text: String(z.anzahl ?? 0), alignment: "right" as const },
-          z.schluesselNr || "—",
-          z.bemerkung || "",
+        ...zeilen.map((z) => [
+          { text: z.bezeichnung || "—", fontSize: 10 },
+          { text: String(z.anzahl ?? 0), fontSize: 10, alignment: "center" },
+          { text: z.schluesselNr || "—", fontSize: 10 },
+          { text: z.bemerkung || "", fontSize: 10 },
         ]),
       ],
     },
     layout: {
-      hLineWidth: () => 0.5,
-      vLineWidth: () => 0,
-      hLineColor: () => "#ccc",
+      hLineWidth: () => 0.6,
+      vLineWidth: () => 0.6,
+      hLineColor: () => COLOR_TEXT,
+      vLineColor: () => COLOR_TEXT,
+      paddingTop: () => 6,
+      paddingBottom: () => 6,
+      paddingLeft: () => 8,
+      paddingRight: () => 8,
     },
     margin: [0, 6, 0, 0] as [number, number, number, number],
   };
 
   const doc = {
-    pageSize: "A4",
-    pageMargins: [40, 40, 40, 60],
+    pageSize: "A4" as const,
+    pageMargins: [55, 155, 55, 100] as [number, number, number, number],
+    defaultStyle: { font: "Roboto", fontSize: 10, color: COLOR_TEXT, lineHeight: 1.25 },
+    header: header(data.firma, logo),
+    footer: footer(data.firma),
     content: [
-      header,
       {
         columns: [
           {
             width: "*",
-            stack: [
-              { text: "Auftragnehmer", style: "label" },
-              { text: firmaBlock(data.firma), style: "block" },
-            ],
+            stack: adresse.map((l, i) => ({ text: l, fontSize: 10, bold: i === 0 })),
           },
-          {
-            width: "*",
-            stack: [
-              { text: "Auftraggeber", style: "label" },
-              { text: kundenBlock(data.kunde, data.objekt), style: "block" },
-            ],
-          },
+          metaBox(meta),
         ],
-        columnGap: 16,
+        columnGap: 20,
       },
-      { text: "Übergebene Schlüssel", style: "sectionTitle" },
+      { text: titel, fontSize: 22, bold: true, color: COLOR_TEXT, margin: [0, 30, 0, 14] },
+
+      sectionTitle("Übergebene Schlüssel"),
       tabelle,
-      data.pfandEur && data.pfandEur > 0
-        ? {
-            text: `Hinterlegtes Pfand: ${data.pfandEur.toLocaleString("de-DE", { minimumFractionDigits: 2 })} EUR`,
-            style: "block",
-            margin: [0, 8, 0, 0],
-          }
-        : { text: "" },
-      { text: "Bestätigung", style: "sectionTitle" },
+
+      ...(data.pfandEur && data.pfandEur > 0
+        ? [
+            {
+              text: `Hinterlegtes Pfand: ${data.pfandEur.toLocaleString("de-DE", { minimumFractionDigits: 2 })} EUR`,
+              fontSize: 10,
+              margin: [0, 8, 0, 0] as [number, number, number, number],
+            },
+          ]
+        : []),
+
+      sectionTitle("Bestätigung"),
+      thinLine(),
       {
         text: data.bestaetigt
           ? data.richtung === "ausgabe"
             ? "Der Auftraggeber bestätigt den Erhalt der oben genannten Schlüssel."
             : "Der Auftragnehmer bestätigt die Rückgabe der oben genannten Schlüssel."
           : "Empfang/Rückgabe noch nicht bestätigt.",
-        style: "block",
+        fontSize: 10,
+        margin: [0, 6, 0, 0],
       },
-      { text: " ", margin: [0, 12, 0, 0] },
-      {
-        columns: [
-          {
-            width: "*",
-            stack: [
-              {
-                text: data.vertreterAuftraggeber || "—",
-                style: "block",
-                margin: [0, 0, 0, 30],
-              },
-              { canvas: [{ type: "line", x1: 0, y1: 0, x2: 220, y2: 0, lineWidth: 0.5 }] },
-              { text: "Unterschrift Auftraggeber", style: "meta" },
-            ],
-          },
-          {
-            width: "*",
-            stack: [
-              {
-                text: data.vertreterAuftragnehmer || "—",
-                style: "block",
-                margin: [0, 0, 0, 30],
-              },
-              { canvas: [{ type: "line", x1: 0, y1: 0, x2: 220, y2: 0, lineWidth: 0.5 }] },
-              { text: "Unterschrift Auftragnehmer", style: "meta" },
-            ],
-          },
-        ],
-        columnGap: 24,
-      },
+
+      unterschriftenBlock(
+        "Unterschrift Auftraggeber",
+        data.vertreterAuftraggeber,
+        "Unterschrift Auftragnehmer",
+        data.vertreterAuftragnehmer,
+      ),
     ],
-    styles: sharedStyles,
-    defaultStyle: { fontSize: 10, color: "#111" },
   };
 
   return await renderToBlob(doc);
@@ -387,9 +463,21 @@ export async function generateSchluesseluebergabePdf(
 async function renderToBlob(doc: any): Promise<Blob> {
   const pm = await getPdfMake();
   const pdfDoc = pm.createPdf(doc);
-  return await new Promise<Blob>((resolve) => {
-    pdfDoc.getBlob((b: Blob) => resolve(b));
+  const result: Blob | unknown = await new Promise<Blob>((resolve, reject) => {
+    try {
+      const ret = pdfDoc.getBlob((b: Blob) => resolve(b));
+      if (ret && typeof (ret as Promise<Blob>).then === "function") {
+        (ret as Promise<Blob>).then(resolve, reject);
+      }
+    } catch (err) {
+      reject(err);
+    }
   });
+  const blob = result as Blob;
+  if (!(blob instanceof Blob) || blob.size === 0) {
+    throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
+  }
+  return blob;
 }
 
 function formatDatum(iso: string): string {

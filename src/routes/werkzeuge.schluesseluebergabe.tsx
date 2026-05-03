@@ -19,6 +19,7 @@ import type { Kunde, Objekt } from "@/lib/api/types";
 import {
   downloadBlob,
   generateSchluesseluebergabePdf,
+  nextProtokollNummer,
   safeFilename,
   type SchluesselRichtung,
   type SchluesselZeile,
@@ -72,13 +73,14 @@ function Page() {
     setZeilen((zs) => zs.map((z, idx) => (idx === i ? { ...z, ...patch } : z)));
   };
 
-  const buildBlob = async (): Promise<Blob> => {
+  const buildBlob = async (nummer?: string): Promise<Blob> => {
     if (!kunde) throw new Error("Bitte zuerst einen Kunden auswählen.");
     const cleanZeilen = zeilen.filter((z) => z.bezeichnung.trim() !== "");
     if (cleanZeilen.length === 0) throw new Error("Bitte mindestens einen Schlüssel eintragen.");
     const pfandNum = pfand ? parseFloat(pfand.replace(",", ".")) : undefined;
     return generateSchluesseluebergabePdf({
       richtung,
+      nummer,
       datum,
       uhrzeit,
       schluessel: cleanZeilen,
@@ -92,6 +94,12 @@ function Page() {
     });
   };
 
+  const withTimeout = <T,>(p: Promise<T>, ms: number, msg: string): Promise<T> =>
+    Promise.race<T>([
+      p,
+      new Promise<T>((_, rej) => setTimeout(() => rej(new Error(msg)), ms)),
+    ]);
+
   const handleErstellen = async (downloadOnly: boolean) => {
     if (!kunde) {
       toast.error("Bitte zuerst einen Kunden auswählen.");
@@ -104,14 +112,19 @@ function Page() {
     }
     setBusy(true);
     try {
-      const blob = await buildBlob();
-      const fname = `Schluesseluebergabe_${safeFilename(kundenAnzeige(kunde))}_${datum}.pdf`;
+      const nummer = nextProtokollNummer("SU");
+      const blob = await withTimeout(
+        buildBlob(nummer),
+        30000,
+        "PDF-Erstellung dauert zu lange — bitte erneut versuchen.",
+      );
+      const fname = `Schluesseluebergabe_${nummer.replace("/", "-")}_${safeFilename(kundenAnzeige(kunde))}.pdf`;
       downloadBlob(blob, fname);
       toast.success("PDF wurde heruntergeladen");
       try {
         const richtungLabel = richtung === "ausgabe" ? "Ausgabe" : "Rücknahme";
         await createDokument.mutateAsync({
-          titel: `Schlüsselübergabe (${richtungLabel}) – ${kundenAnzeige(kunde)} – ${datum}`,
+          titel: `Schlüsselübergabe ${nummer} (${richtungLabel}) – ${kundenAnzeige(kunde)} – ${datum}`,
           typ: "protokoll",
           kundeId: kunde.id,
           objektId: objekt?.id,
