@@ -1567,6 +1567,35 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
       if (dup) { result = dup; persist(); }
     }
     if (!result) {
+    // Pre-Check: SMTP MUSS vollständig konfiguriert sein, sonst kann keine Mail raus.
+    // Niemals einen Fake-Erfolg zurückliefern, wenn die Voraussetzungen fehlen.
+    const smtpFehlt =
+      !d.smtp.server?.trim() || !d.smtp.benutzer?.trim() || !d.smtp.passwortGesetzt;
+    if (smtpFehlt) {
+      const eintrag: EmailVersand = {
+        id: uuid(),
+        belegTyp: v.belegTyp ?? "allgemein",
+        belegId: v.belegId,
+        kundeId: v.kundeId,
+        empfaenger: v.empfaenger ?? [],
+        cc: v.cc ?? [],
+        bcc: v.bcc ?? [],
+        betreff: v.betreff ?? "",
+        koerperHtml: v.koerperHtml ?? "",
+        vorlageId: v.vorlageId,
+        signaturId: v.signaturId,
+        anhaenge: v.anhaenge ?? [],
+        status: "failed",
+        versendetAm: now(),
+        fehlerGrund:
+          "SMTP ist nicht konfiguriert. Bitte unter Einstellungen → E-Mail Server, Benutzer und Passwort hinterlegen.",
+        messageId: undefined,
+      };
+      // Bewusst KEIN Eintrag in d.emailVersand, KEIN Statuswechsel am Beleg, KEIN Aktivitätslog.
+      // Sonst würde der Versuch in der Versand-Historie als "fehlgeschlagen" auftauchen,
+      // obwohl der User noch gar keine Konfiguration vorgenommen hat.
+      result = eintrag;
+    } else {
     // Mock: 90% Erfolg, 10% zufälliger Fehler — Spinner bleibt sichtbar
     await new Promise((r) => setTimeout(r, 1200));
     const erfolgreich = Math.random() > 0.1;
