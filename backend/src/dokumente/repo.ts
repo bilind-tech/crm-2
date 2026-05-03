@@ -1,6 +1,7 @@
 // Repo für Dokumente + Upload-Sessions.
 import crypto from "node:crypto";
 import { getDatabase } from "../db/index.js";
+import { emit } from "../events/bus.js";
 import { rowToDokument, rowToUploadSession, type DokumentRow, type UploadSessionRow } from "./mappers.js";
 import type {
   Dokument, DokumentMetaInput, DokumentListFilter, DokumentTyp, DokumentQuelle,
