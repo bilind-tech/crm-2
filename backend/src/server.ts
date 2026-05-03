@@ -245,6 +245,7 @@ async function main(): Promise<void> {
       sessionsWarmed: warmed,
       backupZombiesReaped: zombies,
       backupOrphansRemoved: orphans,
+      restoreTmpRemoved,
     },
     "MyCleanCenter backend ready",
   );
