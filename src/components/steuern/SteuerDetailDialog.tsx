@@ -189,7 +189,44 @@ export function SteuerDetailDialog({ posten, onOpenChange }: Props) {
             </div>
           )}
         </div>
+
+        <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+          <div className="flex gap-2">
+            {istManuell && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                  <Pencil className="mr-1.5 h-4 w-4" /> Bearbeiten
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleLoeschen}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="mr-1.5 h-4 w-4" /> Löschen
+                </Button>
+              </>
+            )}
+          </div>
+          {istOffen && (
+            <Button onClick={() => setBezahltOpen(true)}>
+              <CheckCircle2 className="mr-1.5 h-4 w-4" /> Als bezahlt markieren
+            </Button>
+          )}
+        </DialogFooter>
       </DialogContent>
+
+      <SteuerAlsBezahltDialog
+        open={bezahltOpen}
+        onOpenChange={setBezahltOpen}
+        vorschlag={posten.geschaetzterBetrag}
+        onSpeichern={handleBezahlt}
+      />
+      <ManuellerPostenDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        editPosten={istManuell ? posten : undefined}
+      />
     </Dialog>
   );
 }
