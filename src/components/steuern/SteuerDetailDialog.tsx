@@ -34,11 +34,39 @@ export function SteuerDetailDialog({ posten, onOpenChange }: Props) {
   const { data: rechnungen = [] } = useRechnungen();
   const { data: dokumente = [] } = useDokumente();
   const { data: kunden = [] } = useKunden();
+  const { setBezahlt } = useBezahltMarkierungen();
+  const { remove: removeManuell } = useManuellePosten();
+
+  const [bezahltOpen, setBezahltOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   if (!posten) return null;
 
   const grundlage = posten.berechnungsgrundlage;
   const refRechnungen = grundlage
+    ? rechnungen.filter((r) => grundlage.rechnungIds.includes(r.id))
+    : [];
+  const refDokumente = grundlage
+    ? dokumente.filter((d) => grundlage.dokumentIds.includes(d.id))
+    : [];
+
+  const istManuell = !posten.automatisch;
+  const istOffen = posten.status !== "bezahlt";
+
+  function handleBezahlt(eintrag: BezahltMarkierung) {
+    if (!posten) return;
+    setBezahlt(posten.id, eintrag);
+    toast.success("Als bezahlt markiert");
+    onOpenChange(false);
+  }
+
+  function handleLoeschen() {
+    if (!posten) return;
+    if (!confirm(`„${posten.titel}" wirklich löschen?`)) return;
+    removeManuell(posten.id);
+    toast.success("Termin gelöscht");
+    onOpenChange(false);
+  }
     ? rechnungen.filter((r) => grundlage.rechnungIds.includes(r.id))
     : [];
   const refDokumente = grundlage
