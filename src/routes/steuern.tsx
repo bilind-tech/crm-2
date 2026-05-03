@@ -366,6 +366,8 @@ function Page() {
         posten={allePosten}
         onSpeichern={handleZahlungSpeichern}
       />
+      <ManuellerPostenDialog open={manuellOpen} onOpenChange={setManuellOpen} />
+      <SteuerExportDialog open={exportOpen} onOpenChange={setExportOpen} defaultJahr={jahr} />
     </div>
   );
 }
