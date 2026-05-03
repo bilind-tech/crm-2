@@ -80,9 +80,17 @@ function Page() {
     ? (kundeQ.data.firmenname || [kundeQ.data.vorname, kundeQ.data.nachname].filter(Boolean).join(" "))
     : "—";
 
-  const onDownload = () => {
-    if (!pdf.blob) { toast.error("PDF noch nicht bereit"); return; }
-    downloadBlob(pdf.blob, dateiname);
+  const onDownload = async () => {
+    if (pdf.blob) { downloadBlob(pdf.blob, dateiname); return; }
+    if (pdf.url) {
+      try {
+        const res = await fetch(pdf.url);
+        const b = await res.blob();
+        downloadBlob(b, dateiname);
+        return;
+      } catch { /* fallthrough */ }
+    }
+    toast.error("PDF noch nicht bereit");
   };
 
   const onAbschliessen = async () => {
