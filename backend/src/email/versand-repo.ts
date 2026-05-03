@@ -35,6 +35,7 @@ interface Row {
   betreff: string; body_html: string;
   beleg_art: BelegArt | null; beleg_id: string | null;
   vorlage_id: string | null; signatur_id: string | null;
+  mahn_stufe: number | null;
   idempotenz_key: string;
   status: EmailVersandStatus; versuche: number;
   naechster_versuch_at: string | null; versendet_am: string | null;
@@ -47,6 +48,7 @@ const map = (r: Row): EmailVersand => ({
   betreff: r.betreff, bodyHtml: r.body_html,
   belegArt: r.beleg_art, belegId: r.beleg_id,
   vorlageId: r.vorlage_id, signaturId: r.signatur_id,
+  mahnStufe: r.mahn_stufe,
   idempotenzKey: r.idempotenz_key, status: r.status, versuche: r.versuche,
   naechsterVersuchAt: r.naechster_versuch_at, versendetAm: r.versendet_am,
   fehlerText: r.fehler_text, messageId: r.message_id,
