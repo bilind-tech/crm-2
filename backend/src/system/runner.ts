@@ -420,11 +420,17 @@ export async function manualRollback(
         });
 
         await stepRun(laufId, "rollback", async () => {
+          // Defekte aktive Version (sofern abweichend) in broken-* sichern
+          const cur = readCurrentTarget();
+          if (cur && cur !== target) {
+            const broken = brokenDir(nowStamp());
+            try { safeRename(cur, broken); } catch { /* ignore */ }
+          }
           const tmpLink = currentLink() + ".tmp";
-          try { unlinkSync(tmpLink); } catch { /* ignore */ }
-          symlinkSync(target, tmpLink);
-          try { unlinkSync(currentLink()); } catch { /* ignore */ }
-          renameSync(tmpLink, currentLink());
+          try { safeUnlink(tmpLink); } catch { /* ignore */ }
+          safeSymlink(target, tmpLink);
+          try { safeUnlink(currentLink()); } catch { /* ignore */ }
+          safeRename(tmpLink, currentLink());
           return `Symlink → ${target}`;
         });
 
