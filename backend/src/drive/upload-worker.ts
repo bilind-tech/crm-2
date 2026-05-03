@@ -12,6 +12,8 @@ import { applyFileNameTemplate, applyPathTemplate, type NamingContext } from "./
 import { getDokument, getDokumentRaw, setDriveStatus } from "../dokumente/repo.js";
 import { absolutePath } from "../dokumente/storage.js";
 import { readFile } from "node:fs/promises";
+import { getProtokollByDokumentId } from "../protokolle/repo.js";
+import { getObjekt } from "../kunden/repo.js";
 
 let started = false;
 let isRunning = false;
