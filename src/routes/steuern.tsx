@@ -137,7 +137,8 @@ function Page() {
   );
 
   const offeneUst = offene.filter((p) => p.art === "ust");
-  const offeneErtrag = offene.filter((p) => p.art !== "ust");
+  const offeneErtrag = offene.filter((p) => p.art !== "ust" && p.art !== "manuell");
+  const offeneManuell = offene.filter((p) => p.art === "manuell");
 
   function handleZahlungSpeichern(postenId: string, eintrag: BezahltMarkierung) {
     setBezahlt(postenId, eintrag);
@@ -153,14 +154,40 @@ function Page() {
         title="Steuern"
         subtitle="Automatisch aus Rechnungen und Belegen berechnet."
         actions={
-          <PrimaryAction
-            icon={Plus}
-            label="Zahlung erfassen"
-            onClick={() => setZahlungOpen(true)}
-          />
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
+              <Download className="mr-1.5 h-4 w-4" /> Export
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setManuellOpen(true)}>
+              <CalendarPlus className="mr-1.5 h-4 w-4" /> Manueller Termin
+            </Button>
+            <PrimaryAction
+              icon={Plus}
+              label="Zahlung erfassen"
+              onClick={() => setZahlungOpen(true)}
+            />
+          </div>
         }
       />
 
+      {/* Jahres-Wechsler */}
+      <div className="flex items-center gap-1 rounded-xl border border-border bg-card p-1 w-fit">
+        {jahreOptionen.map((j) => (
+          <button
+            key={j}
+            type="button"
+            onClick={() => setJahr(j)}
+            className={cn(
+              "px-3 py-1.5 text-sm font-medium rounded-lg transition",
+              j === jahr
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted",
+            )}
+          >
+            {j}
+          </button>
+        ))}
+      </div>
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KpiCard
