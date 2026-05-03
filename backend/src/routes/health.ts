@@ -21,6 +21,9 @@ function diskFree(dir: string): { freeBytes: number | null; totalBytes: number |
 }
 
 export async function healthRoutes(app: FastifyInstance): Promise<void> {
+  // Public — bewusst minimal: Status, Version, Uptime, Maintenance.
+  // Sensible Felder (DB-Pfad, Master-Key-Vorhandensein) leben in /health/detail
+  // und sind dort hinter requireAuth.
   app.get("/health", async () => {
     const db = getDatabase();
     let dbOk = false;
@@ -36,8 +39,7 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
       status: dbOk ? "ok" : "degraded",
       version: config.version,
       schemaVersion: getSchemaVersion(),
-      db: { ok: dbOk, wal: isWalActive(db), path: config.dbPath },
-      masterKey: { present: existsSync(config.keyPath) },
+      db: { ok: dbOk, wal: isWalActive(db) },
       maintenance: maint.active,
       uptimeSec: Math.floor((Date.now() - startTime) / 1000),
     };
@@ -63,6 +65,8 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
       version: config.version,
       schemaVersion: getSchemaVersion(),
       uptimeSec: Math.floor((Date.now() - startTime) / 1000),
+      db: { ok: true, wal: isWalActive(db), path: config.dbPath },
+      masterKey: { present: existsSync(config.keyPath) },
       counts: { user: userCnt, session: sessCnt, audit: auditCnt, backup: visible.length },
       disk: {
         dataDir: config.dataDir,

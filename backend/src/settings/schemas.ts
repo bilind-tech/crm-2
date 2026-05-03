@@ -132,7 +132,23 @@ export const SteuerSchema = z.object({
 });
 
 export const StundenzettelSchema = z.object({
-  externeUrl: z.string().trim().max(500).default(""),
+  externeUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .default("")
+    .refine(
+      (v) => {
+        if (!v) return true;
+        try {
+          const u = new URL(v);
+          return u.protocol === "http:" || u.protocol === "https:";
+        } catch {
+          return false;
+        }
+      },
+      { message: "Muss eine gültige http:// oder https:// URL sein" },
+    ),
 });
 
 // Bereich-Definition: name -> Schema, sensible-flag.

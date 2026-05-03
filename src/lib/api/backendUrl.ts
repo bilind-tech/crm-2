@@ -56,8 +56,8 @@ export interface HealthInfo {
   status: string;
   version: string;
   schemaVersion: number;
-  db: { ok: boolean; wal: boolean; path: string };
-  masterKey: { present: boolean };
+  db: { ok: boolean; wal: boolean; path?: string };
+  masterKey?: { present: boolean };
   uptimeSec: number;
   maintenance?: { active: boolean; reason?: string };
 }

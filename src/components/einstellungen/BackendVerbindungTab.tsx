@@ -10,6 +10,7 @@ import {
   setBackendUrl,
 } from "@/lib/api/backendUrl";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
+import { MockDataResetCard } from "@/components/einstellungen/MockDataResetCard";
 import { cn } from "@/lib/utils";
 
 export function BackendVerbindungTab() {
@@ -95,10 +96,14 @@ export function BackendVerbindungTab() {
                     {health.db.ok ? "OK" : "Fehler"}
                     {health.db.wal ? " · WAL" : ""}
                   </dd>
-                  <dt>Master-Key</dt>
-                  <dd className="text-foreground">
-                    {health.masterKey.present ? "vorhanden" : "fehlt"}
-                  </dd>
+                  {health.masterKey && (
+                    <>
+                      <dt>Master-Key</dt>
+                      <dd className="text-foreground">
+                        {health.masterKey.present ? "vorhanden" : "fehlt"}
+                      </dd>
+                    </>
+                  )}
                   <dt>Uptime</dt>
                   <dd className="text-foreground">
                     {Math.floor(health.uptimeSec / 60)} min
@@ -148,6 +153,8 @@ export function BackendVerbindungTab() {
           <code> NODE_ENV=production</code>.
         </p>
       </div>
+
+      <MockDataResetCard />
     </div>
   );
 }
