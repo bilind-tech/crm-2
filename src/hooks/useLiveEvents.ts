@@ -6,6 +6,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { onSse, startSse } from "@/lib/api/sse";
 
+// Throttle für Drive-Fehler-Toasts: maximal 1× pro 60 s.
+let lastDriveErrToast = 0;
+
 export function useLiveEvents(enabled: boolean): void {
   const qc = useQueryClient();
 
