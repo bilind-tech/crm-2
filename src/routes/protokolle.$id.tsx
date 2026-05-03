@@ -39,7 +39,19 @@ function Page() {
   const objekteQ = useObjekte(p?.kundeId);
   const firmaQ = useFirmendaten();
   const objekt = p?.objektId ? objekteQ.data?.find((o) => o.id === p.objektId) : undefined;
-  const pdf = useProtokollPdf(p, kundeQ.data, objekt, firmaQ.data);
+  const istAbgeschlossen = p?.status === "abgeschlossen";
+  // Bei abgeschlossenen Protokollen: gespeicherte PDF aus Dokumenten laden (schnell, keine Re-Generierung).
+  const dokQ = useDokument(istAbgeschlossen ? p?.dokumentId : undefined);
+  const archived = useDokumentBlobUrl(dokQ.data ?? null);
+  const livePdf = useProtokollPdf(istAbgeschlossen ? undefined : p, kundeQ.data, objekt, firmaQ.data);
+  const pdf = istAbgeschlossen
+    ? {
+        url: archived.url || null,
+        status: (archived.loading ? "loading" : archived.url ? "ready" : archived.error ? "error" : "idle") as "idle" | "loading" | "ready" | "error",
+        error: archived.error,
+        blob: null as Blob | null,
+      }
+    : livePdf;
 
   const abschliessen = useAbschliessenProtokoll(id);
   const del = useDeleteProtokoll();
