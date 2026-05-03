@@ -15,11 +15,14 @@ import {
   Info,
   Plus,
   X,
+  CalendarPlus,
+  Download,
 } from "lucide-react";
 import { useRechnungen, useDokumente } from "@/hooks/useApi";
 import {
   useSteuerEinstellungen,
   useBezahltMarkierungen,
+  useManuellePosten,
   type BezahltMarkierung,
 } from "@/lib/steuern/store";
 import {
@@ -34,6 +37,8 @@ import { formatEUR, formatDate, daysBetween, todayISO } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { SteuerDetailDialog } from "@/components/steuern/SteuerDetailDialog";
 import { SteuerZahlungDialog } from "@/components/steuern/SteuerZahlungDialog";
+import { ManuellerPostenDialog } from "@/components/steuern/ManuellerPostenDialog";
+import { SteuerExportDialog } from "@/components/steuern/SteuerExportDialog";
 
 export const Route = createFileRoute("/steuern")({
   head: () => ({
