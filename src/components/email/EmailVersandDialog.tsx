@@ -636,11 +636,6 @@ function SendOverlay({
           60% { transform: scale(1.15); opacity: 1; }
           100% { transform: scale(1); opacity: 1; }
         }
-        @keyframes spark-out {
-          0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-          30% { opacity: 1; }
-          100% { transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0.6); opacity: 0; }
-        }
       `}</style>
 
       {phase === "sending" ? (
