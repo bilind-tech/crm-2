@@ -2,6 +2,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, FileDown, Loader2, Mail, Plus, Trash2 } from "lucide-react";
+import { PrintButton } from "@/components/pdf/PrintButton";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -69,6 +70,26 @@ function Page() {
     setZeilen((zs) => zs.map((z, idx) => (idx === i ? { ...z, ...patch } : z)));
   };
 
+  const buildBlob = async (): Promise<Blob> => {
+    if (!kunde) throw new Error("Bitte zuerst einen Kunden auswählen.");
+    const cleanZeilen = zeilen.filter((z) => z.bezeichnung.trim() !== "");
+    if (cleanZeilen.length === 0) throw new Error("Bitte mindestens einen Schlüssel eintragen.");
+    const pfandNum = pfand ? parseFloat(pfand.replace(",", ".")) : undefined;
+    return generateSchluesseluebergabePdf({
+      richtung,
+      datum,
+      uhrzeit,
+      schluessel: cleanZeilen,
+      pfandEur: Number.isFinite(pfandNum) ? pfandNum : undefined,
+      vertreterAuftraggeber: vertreterAg,
+      vertreterAuftragnehmer: vertreterAn,
+      bestaetigt,
+      kunde,
+      objekt,
+      firma: firmaQ.data,
+    });
+  };
+
   const handleErstellen = async (downloadOnly: boolean) => {
     if (!kunde) {
       toast.error("Bitte zuerst einen Kunden auswählen.");
@@ -81,20 +102,7 @@ function Page() {
     }
     setBusy(true);
     try {
-      const pfandNum = pfand ? parseFloat(pfand.replace(",", ".")) : undefined;
-      const blob = await generateSchluesseluebergabePdf({
-        richtung,
-        datum,
-        uhrzeit,
-        schluessel: cleanZeilen,
-        pfandEur: Number.isFinite(pfandNum) ? pfandNum : undefined,
-        vertreterAuftraggeber: vertreterAg,
-        vertreterAuftragnehmer: vertreterAn,
-        bestaetigt,
-        kunde,
-        objekt,
-        firma: firmaQ.data,
-      });
+      const blob = await buildBlob();
       const fname = `Schluesseluebergabe_${safeFilename(kundenAnzeige(kunde))}_${datum}.pdf`;
       downloadBlob(blob, fname);
       toast.success("PDF wurde heruntergeladen");
@@ -108,7 +116,7 @@ function Page() {
       }
     } catch (e) {
       console.error(e);
-      toast.error("PDF konnte nicht erzeugt werden.");
+      toast.error(e instanceof Error ? e.message : "PDF konnte nicht erzeugt werden.");
     } finally {
       setBusy(false);
     }
