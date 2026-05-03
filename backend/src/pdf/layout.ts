@@ -307,7 +307,7 @@ function buildDoc(args: BuildArgs) {
               bold: i === 0,
             })),
           },
-          metaBox(args.meta, args.metaVariant),
+          metaBox(args.meta, args.metaVariant, args.metaNote),
         ],
         columnGap: 20,
       },
