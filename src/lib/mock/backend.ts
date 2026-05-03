@@ -1681,6 +1681,7 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     }
     (eintrag as EmailVersand & { idempotenzKey?: string }).idempotenzKey = v.idempotenzKey;
     result = eintrag;
+    } // end else (smtp ok)
     } // end if (!result)
   }
 
