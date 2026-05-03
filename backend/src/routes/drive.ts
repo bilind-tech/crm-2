@@ -141,18 +141,13 @@ export async function driveRoutes(app: FastifyInstance): Promise<void> {
         clientId: body.clientId ?? cur.clientId ?? "",
         rootFolderName: body.rootOrdnerName ?? cur.rootFolderName ?? "mycleancenter.cm",
         unterordnerSchema: {
-          ...(cur.unterordnerSchema ?? {
-            rechnungen: "Rechnungen/{YYYY}/{MM}",
-            angebote: "Angebote/{YYYY}/{MM}",
-            dokumente: "Dokumente/{YYYY}/{MM}",
-          }),
+          ...DEFAULT_FOLDERS,
+          ...(cur.unterordnerSchema ?? {}),
           ...(body.unterordnerSchema ?? {}),
         } as GoogleDriveSettings["unterordnerSchema"],
         dateinameSchema: {
-          ...(cur.dateinameSchema ?? {
-            rechnung: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
-            angebot: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
-          }),
+          ...DEFAULT_FILES,
+          ...(cur.dateinameSchema ?? {}),
           ...(body.dateinameSchema ?? {}),
         } as GoogleDriveSettings["dateinameSchema"],
         autoUpload: body.autoUpload ?? cur.autoUpload ?? true,
