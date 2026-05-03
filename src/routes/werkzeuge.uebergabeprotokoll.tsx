@@ -124,10 +124,10 @@ function Page() {
           hochgeladenAm: new Date().toISOString(),
           quelle: "upload",
         });
-        toast.success("Im Bereich „Dokumente" gespeichert");
+        toast.success('Im Bereich „Dokumente" gespeichert');
       } catch (e) {
         console.error(e);
-        toast.warning("Konnte nicht in „Dokumente" gespeichert werden — PDF ist heruntergeladen.");
+        toast.warning('Konnte nicht in „Dokumente" gespeichert werden — PDF ist heruntergeladen.');
       }
       if (!downloadOnly) {
         toast.message("E-Mail-Versand", {
