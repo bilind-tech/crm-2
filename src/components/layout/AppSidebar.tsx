@@ -10,7 +10,6 @@ import {
   Wrench,
   Settings,
   Lock,
-  LogOut,
 } from "lucide-react";
 import {
   Sidebar,
@@ -43,7 +42,7 @@ export function AppSidebar() {
   const { state, isMobile, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed";
   const path = useRouterState({ select: (r) => r.location.pathname });
-  const { lock, logout } = useAuth();
+  const { lock } = useAuth();
   const closeOnMobile = () => {
     if (isMobile) setOpenMobile(false);
   };
@@ -184,16 +183,6 @@ export function AppSidebar() {
             >
               <Lock className="h-4 w-4" />
               {!collapsed && <span>Sperren</span>}
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              tooltip="Abmelden"
-              onClick={() => void logout()}
-              className="text-muted-foreground hover:bg-sidebar-accent/60"
-            >
-              <LogOut className="h-4 w-4" />
-              {!collapsed && <span>Abmelden</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
