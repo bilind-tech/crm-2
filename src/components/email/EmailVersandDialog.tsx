@@ -52,6 +52,7 @@ import {
   useFirmendaten,
   useMahnEinstellungen,
   useSendEmail,
+  useSmtp,
 } from "@/hooks/useApi";
 import {
   findUnresolvedPlaceholders,
