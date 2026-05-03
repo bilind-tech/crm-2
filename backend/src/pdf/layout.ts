@@ -77,12 +77,12 @@ function header(f: FirmaForPdf, logoDataUrl: string | null) {
       {
         width: "*",
         stack: [
-          { text: absenderzeile(f), fontSize: 8, color: COLOR_TEXT, decoration: "underline", margin: [0, 35, 0, 0] },
+          { text: absenderzeile(f), fontSize: 8, color: COLOR_TEXT, decoration: "underline", margin: [0, 50, 0, 0] },
         ],
       },
       logoDataUrl
-        ? { width: 230, image: logoDataUrl, fit: [230, 100], alignment: "right" }
-        : { width: 230, text: f.firmenname.toUpperCase(), bold: true, fontSize: 18, color: COLOR_TEXT, alignment: "right" },
+        ? { width: 270, image: logoDataUrl, fit: [270, 120], alignment: "right" }
+        : { width: 270, text: f.firmenname.toUpperCase(), bold: true, fontSize: 20, color: COLOR_TEXT, alignment: "right" },
     ],
   };
 }
@@ -93,7 +93,7 @@ function footer(f: FirmaForPdf) {
       stack: lines.filter(Boolean).map((l) => ({ text: l as string, fontSize: 7, color: COLOR_TEXT })),
     });
     return {
-      margin: [55, 0, 55, 25] as [number, number, number, number],
+      margin: [55, 0, 55, 12] as [number, number, number, number],
       stack: [
         { canvas: [{ type: "line", x1: 0, y1: 0, x2: 485, y2: 0, lineWidth: 0.5, lineColor: COLOR_LINE }] },
         {
@@ -288,7 +288,7 @@ function buildDoc(args: BuildArgs) {
   const signatur = signaturFromFirma(args.firma);
   return {
     pageSize: "A4" as const,
-    pageMargins: [55, 130, 55, 130] as [number, number, number, number],
+    pageMargins: [55, 155, 55, 100] as [number, number, number, number],
     defaultStyle: { font: DEFAULT_FONT, fontSize: 10, color: COLOR_TEXT, lineHeight: 1.25 },
     header: header(args.firma, args.logoDataUrl),
     footer: footer(args.firma),
