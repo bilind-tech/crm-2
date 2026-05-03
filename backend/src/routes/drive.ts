@@ -8,6 +8,70 @@ import {
 import { ensureRootFolder, createTextFile, resetDriveClient } from "../drive/folders.js";
 import { listUploads, retry, type DriveUploadStatus, type BelegArt } from "../drive/upload-repo.js";
 import { tickDriveQueue } from "../drive/upload-worker.js";
+import { getSetting, setSetting } from "../settings/store.js";
+import { GoogleDriveSchema, SENSITIVE_KEYS, type GoogleDriveSettings } from "../settings/schemas.js";
+
+interface DriveResponse {
+  // Form, die das Frontend (GoogleDriveEinstellungen) erwartet
+  verbunden: boolean;
+  kontoEmail?: string;
+  verbundenAm?: string;
+  rootOrdnerName: string;
+  rootOrdnerId?: string;
+  unterordnerSchema: { rechnungen: string; angebote: string; dokumente: string };
+  dateinameSchema: { rechnung: string; angebot: string };
+  autoUpload: boolean;
+  letzteSynchronisation?: string;
+  letzterFehler?: string;
+  // Diagnose-Felder (intern, schadet aber nicht im Frontend)
+  clientId?: string;
+  clientIdIsSet: boolean;
+  clientSecretIsSet: boolean;
+  refreshTokenIsSet: boolean;
+}
+
+function buildResponse(): DriveResponse {
+  const s = loadDriveSettings();
+  return {
+    verbunden: s.refreshTokenIsSet,
+    kontoEmail: s.kontoEmail,
+    verbundenAm: undefined, // optional: kann später aus Audit-Log gezogen werden
+    rootOrdnerName: s.rootFolderName ?? "mycleancenter.cm",
+    rootOrdnerId: s.rootOrdnerId,
+    unterordnerSchema: s.unterordnerSchema ?? {
+      rechnungen: "Rechnungen/{YYYY}/{MM}",
+      angebote: "Angebote/{YYYY}/{MM}",
+      dokumente: "Dokumente/{YYYY}/{MM}",
+    },
+    dateinameSchema: s.dateinameSchema ?? {
+      rechnung: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
+      angebot: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
+    },
+    autoUpload: s.autoUpload ?? true,
+    letzteSynchronisation: s.letzteSynchronisation,
+    letzterFehler: s.letzterFehler,
+    clientId: s.clientId,
+    clientIdIsSet: !!s.clientId,
+    clientSecretIsSet: s.clientSecretIsSet,
+    refreshTokenIsSet: s.refreshTokenIsSet,
+  };
+}
+
+const PatchBodySchema = z.object({
+  clientId: z.string().trim().max(500).optional(),
+  clientSecret: z.string().trim().max(500).optional(),
+  rootOrdnerName: z.string().trim().min(1).max(100).optional(),
+  unterordnerSchema: z.object({
+    rechnungen: z.string().trim().min(1).max(200),
+    angebote: z.string().trim().min(1).max(200),
+    dokumente: z.string().trim().min(1).max(200).optional(),
+  }).partial().optional(),
+  dateinameSchema: z.object({
+    rechnung: z.string().trim().min(1).max(200),
+    angebot: z.string().trim().min(1).max(200),
+  }).partial().optional(),
+  autoUpload: z.coerce.boolean().optional(),
+}).strict();
 
 export async function driveRoutes(app: FastifyInstance): Promise<void> {
   // Public: nur Callback (Google ruft uns ohne Cookie auf)
@@ -43,7 +107,52 @@ export async function driveRoutes(app: FastifyInstance): Promise<void> {
   app.register(async (scoped) => {
     scoped.addHook("preHandler", requireAuth);
 
-    scoped.get("/einstellungen/google-drive", async () => loadDriveSettings());
+    scoped.get("/einstellungen/google-drive", async () => buildResponse());
+
+    scoped.patch("/einstellungen/google-drive", async (req, reply) => {
+      const parsed = PatchBodySchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        reply.status(422);
+        return { error: "validation", issues: parsed.error.issues };
+      }
+      const body = parsed.data;
+      // Secret separat in verschlüsseltem Setting
+      if (body.clientSecret !== undefined && body.clientSecret.length > 0) {
+        setSetting(SENSITIVE_KEYS.googleClientSecret, body.clientSecret, { encrypt: true });
+      }
+      // Restliche Felder ins googleDrive-Setting mergen
+      const cur = (getSetting<GoogleDriveSettings>("googleDrive") ?? {}) as Partial<GoogleDriveSettings>;
+      const merged: Partial<GoogleDriveSettings> = {
+        clientId: body.clientId ?? cur.clientId ?? "",
+        rootFolderName: body.rootOrdnerName ?? cur.rootFolderName ?? "mycleancenter.cm",
+        unterordnerSchema: {
+          ...(cur.unterordnerSchema ?? {
+            rechnungen: "Rechnungen/{YYYY}/{MM}",
+            angebote: "Angebote/{YYYY}/{MM}",
+            dokumente: "Dokumente/{YYYY}/{MM}",
+          }),
+          ...(body.unterordnerSchema ?? {}),
+        } as GoogleDriveSettings["unterordnerSchema"],
+        dateinameSchema: {
+          ...(cur.dateinameSchema ?? {
+            rechnung: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
+            angebot: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
+          }),
+          ...(body.dateinameSchema ?? {}),
+        } as GoogleDriveSettings["dateinameSchema"],
+        autoUpload: body.autoUpload ?? cur.autoUpload ?? true,
+      };
+      // Schema-Validierung für Defaults
+      const v = GoogleDriveSchema.safeParse(merged);
+      if (!v.success) {
+        reply.status(422);
+        return { error: "validation", issues: v.error.issues };
+      }
+      setSetting("googleDrive", v.data);
+      // Settings-Cache des Drive-Clients invalidieren
+      resetDriveClient();
+      return buildResponse();
+    });
 
     scoped.post("/einstellungen/google-drive/connect", async (req, reply) => {
       try {
@@ -58,7 +167,7 @@ export async function driveRoutes(app: FastifyInstance): Promise<void> {
     scoped.post("/einstellungen/google-drive/disconnect", async () => {
       disconnect();
       resetDriveClient();
-      return { ok: true };
+      return buildResponse();
     });
 
     scoped.post("/einstellungen/google-drive/test", async (_req, reply) => {
@@ -69,12 +178,18 @@ export async function driveRoutes(app: FastifyInstance): Promise<void> {
           name: `verbindungstest-${new Date().toISOString().slice(0, 10)}.txt`,
           content: "MyCleanCenter — Verbindungstest erfolgreich.",
         });
-        return { ok: true, rootOrdnerId: root, fileId: out.id, webViewLink: out.webViewLink };
+        return {
+          erfolg: true,
+          nachricht: "Verbindung erfolgreich getestet — Datei wurde im Root-Ordner erstellt.",
+          rootOrdnerId: root,
+          fileId: out.id,
+          webViewLink: out.webViewLink,
+        };
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         setStatusError(msg);
         reply.status(500);
-        return { ok: false, error: msg };
+        return { erfolg: false, nachricht: msg };
       }
     });
 
@@ -82,7 +197,7 @@ export async function driveRoutes(app: FastifyInstance): Promise<void> {
       const q = z.object({
         status: z.enum(["pending", "running", "erfolg", "fehler", "manuell"]).optional(),
         beleg_id: z.string().optional(),
-        beleg_art: z.enum(["angebot", "rechnung"]).optional(),
+        beleg_art: z.enum(["angebot", "rechnung", "dokument"]).optional(),
         limit: z.coerce.number().int().min(1).max(500).optional(),
         offset: z.coerce.number().int().min(0).optional(),
       }).parse(req.query ?? {});
