@@ -467,6 +467,11 @@ export function BackupTab() {
             <p className="text-xs text-muted-foreground">
               Erfordert eine verbundene Drive-Anbindung in Einstellungen → Google Drive.
             </p>
+            <p className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-xs text-destructive">
+              ⚠ Sicherheitshinweis: Backups in Google Drive enthalten den verschlüsselten Master-Key.
+              Wer Zugriff auf das verbundene Drive-Konto hat, kann SMTP-Passwort, OAuth-Token und
+              GitHub-PAT entschlüsseln. Drive-Konto entsprechend absichern (2FA aktiv).
+            </p>
           </div>
           <Switch
             checked={form.driveSpiegel}
