@@ -120,7 +120,7 @@ export function useAngebotPdf(angebot?: Angebot): UsePdfResult {
     refetchOnReconnect: false,
   });
 
-  const url = useBlobUrl(query.data?.blob);
+  const url = useBlobUrl(query.data?.blob, angebot?.id ?? "noop");
   const status: Status = !enabled ? "idle"
     : query.isError ? "error"
     : query.data ? "ready"
