@@ -9,6 +9,7 @@
 // =============================================================================
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import {
   Send,
   Mail,
@@ -22,6 +23,7 @@ import {
   Pencil,
   Check,
   Plus,
+  Settings,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -50,6 +52,7 @@ import {
   useFirmendaten,
   useMahnEinstellungen,
   useSendEmail,
+  useSmtp,
 } from "@/hooks/useApi";
 import {
   findUnresolvedPlaceholders,
@@ -107,7 +110,16 @@ export function EmailVersandDialog({
   const { data: signaturen = [] } = useEmailSignaturen();
   const { data: firma } = useFirmendaten();
   const { data: mahnEinstellungen } = useMahnEinstellungen();
+  const { data: smtp } = useSmtp();
   const send = useSendEmail();
+
+  // Harte Voraussetzung: ohne SMTP kein Versand. UI muss das klar zeigen
+  // und den Senden-Button sperren — sonst entsteht ein falsches Erfolgs-Signal.
+  const smtpKonfiguriert = !!(
+    smtp?.server?.trim() &&
+    smtp?.benutzer?.trim() &&
+    smtp?.passwortGesetzt
+  );
 
   const passendeVorlagen = useMemo(
     () => vorlagen.filter((v) => v.kontext === kontext || v.kontext === "allgemein"),
@@ -219,6 +231,13 @@ export function EmailVersandDialog({
   const istValide = an.trim().length > 0 && betreff.trim().length > 0;
 
   const handleSend = () => {
+    if (!smtpKonfiguriert) {
+      toast.error("SMTP nicht konfiguriert", {
+        description:
+          "Bitte unter Einstellungen → E-Mail Server, Benutzer und Passwort hinterlegen.",
+      });
+      return;
+    }
     const empfaenger = empfaengerListe(an);
     if (!empfaenger.length) {
       toast.error("Bitte mindestens einen Empfänger angeben.");
@@ -286,7 +305,19 @@ export function EmailVersandDialog({
         },
         onError: (e: unknown) => {
           setPhase("idle");
-          toast.error(`Versand fehlgeschlagen: ${(e as Error)?.message ?? ""}`);
+          // Backend (Pi) liefert HTTP 412 + { error: "smtp-not-configured", message }
+          // wenn SMTP nicht konfiguriert ist. Zeige die exakte Server-Message.
+          const err = e as { message?: string; status?: number; body?: { error?: string; message?: string } };
+          const isSmtpFehlt = err?.body?.error === "smtp-not-configured" || err?.status === 412;
+          if (isSmtpFehlt) {
+            toast.error("SMTP nicht konfiguriert", {
+              description:
+                err?.body?.message ??
+                "Bitte unter Einstellungen → E-Mail Server, Benutzer und Passwort hinterlegen.",
+            });
+          } else {
+            toast.error(`Versand fehlgeschlagen: ${err?.body?.message ?? err?.message ?? ""}`);
+          }
         },
       },
     );
@@ -336,6 +367,30 @@ export function EmailVersandDialog({
             </div>
           </div>
         </div>
+
+        {/* SMTP-Warn-Banner — Versand ist ohne Konfiguration unmöglich */}
+        {!smtpKonfiguriert && (
+          <div className="mx-6 mt-4 flex items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-3.5">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+            <div className="min-w-0 flex-1 space-y-1">
+              <p className="text-sm font-semibold text-foreground">
+                E-Mail-Versand nicht möglich — SMTP nicht konfiguriert
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Hinterlege zuerst Server, Benutzer und Passwort, sonst kann keine
+                Mail an Kunden gesendet werden.
+              </p>
+              <Link
+                to="/einstellungen"
+                hash="email"
+                onClick={() => onOpenChange(false)}
+                className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                <Settings className="h-3 w-3" /> Zu E-Mail-Einstellungen
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Send-Overlay (Animation während Versand & nach Erfolg) */}
         {phase !== "idle" && <SendOverlay phase={phase} empfaenger={anChips} />}
@@ -582,6 +637,7 @@ export function EmailVersandDialog({
             onClick={handleSend}
             disabled={
               !istValide ||
+              !smtpKonfiguriert ||
               send.isPending ||
               phase !== "idle" ||
               (pdfAnhangAktiv && pdfStatus === "loading")
