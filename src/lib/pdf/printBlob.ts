@@ -21,11 +21,38 @@ function isLikelyIosSafari(): boolean {
   return isIos && isSafari;
 }
 
-function openInNewTab(url: string): void {
-  const win = window.open(url, "_blank", "noopener,noreferrer");
-  if (!win) {
-    throw new Error("Pop-up blockiert. Bitte Pop-ups für diese Seite erlauben oder das PDF herunterladen und manuell drucken.");
+function downloadAsFallback(url: string): void {
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "";
+    a.rel = "noreferrer";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch {
+    /* noop */
   }
+}
+
+function openInNewTab(url: string): boolean {
+  try {
+    const win = window.open(url, "_blank", "noopener,noreferrer");
+    if (win) return true;
+  } catch {
+    /* noop */
+  }
+  // Pop-up blockiert → als Download anbieten, leise Toast
+  downloadAsFallback(url);
+  try {
+    // sonner ist global verfügbar; dynamischer Import vermeidet harte Kopplung
+    import("sonner").then(({ toast }) => {
+      toast.message("Druck-Dialog konnte nicht geöffnet werden", {
+        description: "Datei wurde stattdessen heruntergeladen.",
+      });
+    }).catch(() => { /* noop */ });
+  } catch { /* noop */ }
+  return false;
 }
 
 /** Druckt eine vorhandene Blob-URL. URL wird NICHT freigegeben (gehört dem Caller). */
