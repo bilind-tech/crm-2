@@ -650,6 +650,10 @@ export interface BackupEintrag {
   dateiname: string;
   /** Optional: Drive-Spiegel-Status. */
   driveStatus?: "pending" | "synced" | "error";
+  /** Zeitpunkt der erfolgreichen Drive-Spiegelung (ISO). */
+  driveSyncedAt?: string | null;
+  /** Fehlermeldung bei driveStatus === "error". */
+  driveError?: string | null;
 }
 
 // ---------- System / Updates ----------
