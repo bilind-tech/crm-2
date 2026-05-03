@@ -63,16 +63,23 @@ function Page() {
   const { data: dokumente = [] } = useDokumente();
   const { data: einstellungen } = useSteuerEinstellungen();
   const { map: bezahltMap, setBezahlt, removeBezahlt } = useBezahltMarkierungen();
+  const { posten: manuellePosten } = useManuellePosten();
 
   const [detailDialog, setDetailDialog] = useState<SteuerPosten | null>(null);
   const [zahlungOpen, setZahlungOpen] = useState(false);
+  const [manuellOpen, setManuellOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
-  const jahr = new Date().getFullYear();
+  const aktuellesJahr = new Date().getFullYear();
+  const [jahr, setJahr] = useState(aktuellesJahr);
+  const jahreOptionen = [aktuellesJahr - 2, aktuellesJahr - 1, aktuellesJahr];
 
-  // Automatisch generierte Posten + Bezahlt-Overlay aus dem Store
+  // Automatisch generierte Posten + manuelle Posten + Bezahlt-Overlay
   const allePosten = useMemo<SteuerPosten[]>(() => {
     const auto = generiereAutomatischePosten(rechnungen, dokumente, einstellungen, jahr);
-    return auto.map((p) => {
+    const manuellJahr = manuellePosten.filter((p) => p.zeitraum.jahr === jahr);
+    const merged = [...auto, ...manuellJahr];
+    return merged.map((p) => {
       const b = bezahltMap[p.id];
       if (!b) return p;
       return {
@@ -83,7 +90,7 @@ function Page() {
         notiz: b.notiz ?? p.notiz,
       };
     });
-  }, [rechnungen, dokumente, einstellungen, jahr, bezahltMap]);
+  }, [rechnungen, dokumente, einstellungen, jahr, bezahltMap, manuellePosten]);
 
   const kennzahlen = useMemo(
     () => berechneKennzahlen(allePosten, rechnungen, dokumente, einstellungen, jahr),
