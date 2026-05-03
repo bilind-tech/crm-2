@@ -139,6 +139,28 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
       const sha = await sha256File(zipPath);
       const sizeBytes = file.file.bytesRead;
       const gueltigBis = new Date(Date.now() + 30 * 60_000).toISOString();
+
+      // Echter Migrations-Diff aus dem entpackten Paket
+      let diff;
+      try {
+        diff = computeMigrationsDiff(extractDir);
+      } catch {
+        diff = { pending: [], downgrade: false, liveVersion: 0, paketVersion: 0 };
+      }
+      if (diff.downgrade) {
+        rmSync(stage, { recursive: true, force: true });
+        return reply.status(400).send({
+          uploadId: null, fileName: file.filename, sizeBytes: 0, version: manifest.appVersion,
+          pendingMigrations: [], warnings: [], valide: false,
+          fehlerGrund: `Schema-Downgrade verweigert: Paket bringt Migrations bis ${diff.paketVersion}, Live-DB ist bei ${diff.liveVersion}.`,
+        });
+      }
+      const warnings: string[] = [];
+      if (manifest.hinweise) warnings.push(manifest.hinweise);
+      if (diff.pending.length > 5) {
+        warnings.push(`${diff.pending.length} ausstehende Migrationen — bitte vorher Backup prüfen.`);
+      }
+
       insertPaket({
         id: uploadId,
         dateiname: file.filename,
@@ -154,7 +176,7 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
         userId: req.user!.id,
         ip: req.ip,
         action: "system.update.validiert",
-        detail: { uploadId, version: manifest.appVersion, sizeBytes },
+        detail: { uploadId, version: manifest.appVersion, sizeBytes, pendingMigrations: diff.pending.length },
       });
 
       return {
@@ -162,8 +184,8 @@ export async function systemRoutes(app: FastifyInstance): Promise<void> {
         fileName: file.filename,
         sizeBytes,
         version: manifest.appVersion,
-        pendingMigrations: [],   // TODO später: aus extractDir Migrationen lesen
-        warnings: manifest.hinweise ? [manifest.hinweise] : [],
+        pendingMigrations: diff.pending,
+        warnings,
         valide: true,
       };
     } catch (e) {
