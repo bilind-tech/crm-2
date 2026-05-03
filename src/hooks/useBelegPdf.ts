@@ -12,7 +12,7 @@
 // Mock-Modus (Lovable-Preview): pdfmake baut im Browser, Ergebnis liegt zusätzlich
 //   in einer LRU-Map in `belegPdf.ts`.
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useKunde, useFirmendaten } from "@/hooks/useApi";
 import { generateAngebotPdf, generateRechnungPdf } from "@/lib/pdf/belegPdf";
