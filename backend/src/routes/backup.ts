@@ -61,9 +61,29 @@ export async function backupRoutes(app: FastifyInstance): Promise<void> {
     return { restore: r, maintenance: m };
   });
 
+  // /backup/health darf vom Frontend ohne Auth nicht abgefragt werden — bleibt im scoped-Bereich.
+
   // Alle anderen Routen: auth pflicht.
   app.register(async (scoped) => {
     scoped.addHook("preHandler", requireAuth);
+
+    // Health: letztes erfolgreiches Backup, Alter in Stunden, Warn-Flag
+    scoped.get("/backup/health", async () => {
+      const rows = listVisible();
+      const last = rows[0];
+      if (!last) {
+        return { letztesErfolgreichesBackup: null, alterStunden: null, warn: true };
+      }
+      const t = new Date(last.completedAt ?? last.startedAt).getTime();
+      const stunden = Math.floor((Date.now() - t) / 3600_000);
+      return {
+        letztesErfolgreichesBackup: last.completedAt ?? last.startedAt,
+        alterStunden: stunden,
+        warn: stunden > 36,
+        kategorie: last.category,
+        dateiname: last.filename,
+      };
+    });
 
     scoped.get("/backup/historie", async () => {
       return listVisible().map((r) => ({
