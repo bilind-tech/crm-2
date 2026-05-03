@@ -4,6 +4,12 @@
 
 import type { Angebot, Rechnung, Position, Kunde, Firmendaten, Ansprechpartner } from "@/lib/api/types";
 import logoUrl from "@/assets/logo.png";
+import { A4, createHotspotTracker, type RuntimeHotspot } from "./hotspotTracker";
+
+export interface PdfBuildResult {
+  blob: Blob;
+  hotspots: RuntimeHotspot[];
+}
 
 // pdfmake-Typen sind unvollständig — wir benutzen any-Cast, um Layout-Definitionen frei zu halten.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
