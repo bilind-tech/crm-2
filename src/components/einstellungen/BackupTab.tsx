@@ -607,9 +607,17 @@ function BackupGroupList({
               </p>
             </div>
             {b.driveStatus && (
-              <span title={`Google Drive: ${b.driveStatus}`}>
+              <span
+                title={
+                  b.driveStatus === "synced"
+                    ? `In Google Drive gespiegelt${b.driveSyncedAt ? ` (${formatDateTime(b.driveSyncedAt)})` : ""}`
+                    : b.driveStatus === "error"
+                      ? `Drive-Spiegelung fehlgeschlagen${b.driveError ? `: ${b.driveError}` : ""}`
+                      : "Drive-Spiegelung läuft …"
+                }
+              >
                 {b.driveStatus === "synced" ? (
-                  <Cloud className="h-3.5 w-3.5 text-muted-foreground" />
+                  <Cloud className="h-3.5 w-3.5 text-emerald-600" />
                 ) : b.driveStatus === "error" ? (
                   <CloudOff className="h-3.5 w-3.5 text-destructive" />
                 ) : (
