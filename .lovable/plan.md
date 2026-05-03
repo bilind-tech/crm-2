@@ -1,51 +1,80 @@
-# Fix: Button bleibt nach Zahlungsbestätigung als „Zahlung bestätigen" stehen
+# Sidebar-Label „Sonstiges" + Protokolle automatisch als Dokument speichern
 
-## Ursache (gefunden)
+## 1. Sidebar: „Werkzeuge" → „Sonstiges"
 
-Sowohl im Mock-Backend (`rechnungStatusAuto`) als auch im optimistischen UI-Update (`berechneRechnungStatus` in `useApi.ts`) gibt es ganz oben diesen Frühausstieg:
+**`src/components/layout/AppSidebar.tsx`** (Zeile 62) — nur das Label, Icon (`Wrench`) und Route (`/werkzeuge`) bleiben unverändert.
 
 ```ts
-if (r.status === "storniert" || r.status === "entwurf") return r.status;
+{ title: "Sonstiges", url: "/werkzeuge", icon: Wrench },
 ```
 
-Wenn die Rechnung also noch im Status `entwurf` ist und du auf „Zahlung bestätigen" klickst, wird die Zahlung zwar gespeichert (Toast: „1.190,00 € als bezahlt eingetragen"), aber der Status bleibt `entwurf` — und damit liefert `istVollBezahlt(r)` `false`, der Button bleibt als blauer „Zahlung bestätigen"-Button stehen.
+Routen, Hub-Seite und URL bleiben gleich, damit nichts kaputt geht (interne Links + Bookmarks bleiben gültig).
 
-## Fix (3 kleine Änderungen, gleicher Ort)
+## 2. Protokolle landen automatisch in „Dokumente"
 
-In allen drei Funktionen wird die Prüfung „vollständig bezahlt" **vor** den Entwurf-Frühausstieg gezogen — Storniert bleibt unverändert geschützt.
+Heute werden PDFs aus „Übergabe-/Abnahmeprotokoll" und „Schlüsselübergabe" nur lokal heruntergeladen. Künftig wird zusätzlich ein Eintrag in der Dokumenten-Datenbank angelegt — mit Verknüpfung zu Kunde + Objekt und einem aussagekräftigen Titel/Dateinamen.
 
-**1. `src/lib/mock/backend.ts` (Zeile 334–342)** — Persistenter Status:
+### Gemeinsamer Helfer
+
+**Neu: `src/lib/dokumente/blobToDataUrl.ts`** — kleine Helper-Funktion, die ein PDF-Blob in eine `data:`-URL umwandelt (passt zum aktuellen Mock-Schema, wo `Dokument.url` eine Data-URL sein darf; im echten Pi-Backend wird der Mime-Type + Bytes vom Endpunkt entgegengenommen).
+
 ```ts
-function rechnungStatusAuto(r: Rechnung): RechnungStatus {
-  if (r.status === "storniert") return r.status;
-  const { brutto } = summenRechnung(r.positionen, r.rabattGesamt);
-  const bezahlt = r.zahlungen.reduce((s, z) => s + z.betrag, 0);
-  if (bezahlt >= brutto - 0.005 && bezahlt > 0) return "bezahlt";
-  if (r.status === "entwurf") return r.status;
-  if (bezahlt > 0) return "teilbezahlt";
-  if (new Date(r.faelligkeitsdatum) < new Date()) return "ueberfaellig";
-  return r.status;
+export function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
 }
 ```
 
-**2. `src/hooks/useApi.ts` (Zeile 405–420)** — Optimistisches Update (gleiche Logik, damit UI sofort umspringt, ohne auf Server-Roundtrip zu warten).
+### Hook nutzen
 
-**3. `src/routes/rechnungen.tsx` (Zeile 79–84)** — `istVollBezahlt(r)` darf nicht mehr `entwurf` blockieren:
+In beiden Werkzeug-Routen wird `useCreateDokument()` aus `@/hooks/useApi` importiert und im erfolgreichen `handleErstellen`-Pfad zusätzlich zum Download aufgerufen.
+
+**`src/routes/werkzeuge.uebergabeprotokoll.tsx`** — nach `downloadBlob(...)`:
+
 ```ts
-function istVollBezahlt(r: Rechnung) {
-  if (r.status === "bezahlt") return true;
-  if (r.status === "storniert") return false;
-  const offen = brutto(r) - bezahlt(r);
-  return offen <= 0.005 && bezahlt(r) > 0;
-}
+await createDokument.mutateAsync({
+  titel: `${artLabel(art)} – ${kundenAnzeige(kunde)} – ${formatDateDe(datum)}`,
+  typ: "protokoll",
+  kundeId: kunde.id,
+  objektId: objekt?.id,
+  dateiname: fname,
+  mimeType: "application/pdf",
+  groesseBytes: blob.size,
+  url: await blobToDataUrl(blob),
+  dokumentdatum: datum,
+  steuerrelevant: false,
+  hochgeladenAm: new Date().toISOString(),
+  quelle: "upload",
+});
+toast.success("Im Bereich „Dokumente" gespeichert");
 ```
 
-## Effekt
+`artLabel` lokal: `uebergabe → "Übergabeprotokoll"`, `abnahme → "Abnahmeprotokoll"`, `beides → "Übergabe- & Abnahmeprotokoll"`.
 
-- Klick auf „Zahlung bestätigen" → „Ja, voll bezahlt" → Dialog schließt → der Button wird **sofort** durch das grüne, nicht-klickbare „Bezahlt"-Badge ersetzt (in Liste, Mobil-Karte und Detailseite).
-- Status `bezahlt` wird korrekt im Backend gespeichert (im echten Pi-Backend muss diese Logik beim Implementieren ebenfalls so umgesetzt werden — bisher nur Mock).
-- Funktioniert auch bei Teilzahlung: Bei „Nein, nur ein Teil" mit < Bruttobetrag bleibt Status `entwurf` (richtig, da Entwurf noch nicht versendet ist) — Button bleibt klickbar für Restzahlung.
+**`src/routes/werkzeuge.schluesseluebergabe.tsx`** — analog mit Titel:
+
+```
+Schlüsselübergabe (Ausgabe|Rücknahme) – {Kundenname} – {Datum}
+```
+
+### Mock-Backend
+
+`src/lib/mock/backend.ts` (Zeile 941ff `POST /dokumente`) akzeptiert bereits `Partial<Dokument>` und persistiert mit `persist()`. Keine Änderung nötig — die Einträge erscheinen sofort in `/dokumente` (Dokumente-Liste filtert nach Typ/Kunde/Objekt).
+
+### Reihenfolge & Fehlerverhalten
+
+- Erst PDF erzeugen, dann Download, dann Dokument-Eintrag — schlägt der Datenbank-Eintrag fehl, kommt eine Warnung (`toast.warning`), das PDF ist aber bereits beim User.
+- Bei E-Mail-Variante (`PDF + per E-Mail senden`) gilt dasselbe Muster — kein automatischer Versand, nur Toast-Hinweis (Auto-Mail-Verbot bleibt unangetastet).
+
+## 3. Effekt für den User
+
+- Sidebar zeigt „Sonstiges" mit gleichem Schraubenschlüssel-Icon.
+- Jedes erstellte Übergabe-/Abnahme- oder Schlüsselprotokoll erscheint anschließend automatisch unter **Dokumente** (Typ „protokoll") und beim jeweiligen Kunden im Tab „Belege" — sauber verknüpft mit Kunde und Objekt.
 
 ## Risiko
 
-Minimal: Drei punktuelle Änderungen, keine Schemaänderung, kein Email-Versand betroffen, Storniert weiterhin geschützt.
+Klein. Keine Schema-Änderung, keine neuen Routen, kein Auto-Mail. Falls Speichern fehlschlägt, bleibt die bisherige Funktion (Download) erhalten.

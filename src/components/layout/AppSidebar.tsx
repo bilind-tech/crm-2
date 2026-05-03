@@ -59,7 +59,7 @@ export function AppSidebar() {
     { title: "Dokumente", url: "/dokumente", icon: FolderClosed },
     { title: "Steuern", url: "/steuern", icon: Calculator },
     { title: "Stundenzettel", url: "/stundenzettel", icon: Clock },
-    { title: "Werkzeuge", url: "/werkzeuge", icon: Wrench },
+    { title: "Sonstiges", url: "/werkzeuge", icon: Wrench },
   ];
   const system: NavItem[] = [
     { title: "Einstellungen", url: "/einstellungen", icon: Settings },
