@@ -49,6 +49,10 @@ export function PdfViewerDialog({
     setViewerError(null);
     setNumPages(0);
   }, [pdfUrl]);
+
+  // Container-Breite messen für responsive PDF-Skalierung
+  useEffect(() => {
+    if (!open) return;
     const el = containerRef.current;
     if (!el) return;
     const measure = () => setContainerWidth(el.clientWidth);
