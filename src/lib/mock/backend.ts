@@ -1362,6 +1362,19 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
         webViewLink: "https://drive.google.com/file/d/mock-test/view",
       };
     }
+  } else if (m === "GET" && match(path, "/drive/uploads")) {
+    result = mockDriveUploads();
+  } else if (m === "POST" && (path.match(/^\/drive\/uploads\/[^/]+\/retry$/) !== null)) {
+    const id = path.split("/")[3];
+    const list = mockDriveUploads();
+    const u = list.find((x) => x.id === id);
+    if (u) {
+      u.status = "pending";
+      u.naechsterVersuchAt = now();
+      u.fehlerText = null;
+      u.geaendertAm = now();
+    }
+    result = { ok: true };
   } else if (m === "GET" && match(path, "/einstellungen/sitzungen")) {
     result = d.sitzungen ?? [];
   } else if (m === "POST" && match(path, "/einstellungen/sitzungen/alle-beenden")) {
