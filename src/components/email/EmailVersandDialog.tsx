@@ -140,6 +140,7 @@ export function EmailVersandDialog({
   const [mode, setMode] = useState<EditorMode>("visuell");
   const [zeigeCcBcc, setZeigeCcBcc] = useState(false);
   const [phase, setPhase] = useState<SendPhase>("idle");
+  const [mahnConfirm, setMahnConfirm] = useState(false);
   const visuellRef = useRef<HTMLDivElement>(null);
 
   const ctx: PlaceholderContext = useMemo(
