@@ -256,10 +256,7 @@ function defaultIntroRechnung(_r: ApiRechnung, intro?: string): string {
   if (intro) return intro;
   return `hiermit übersenden wir Ihnen die Rechnung für folgende Leistungen:`;
 }
-function defaultOutroRechnung(_r: ApiRechnung, outro?: string): string {
-  if (outro) return outro;
-  return "Vielen Dank für Ihren Auftrag.";
-}
+
 
 function signaturFromFirma(f: FirmaForPdf): string[] {
   const lines: string[] = [];
