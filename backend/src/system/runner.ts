@@ -499,20 +499,53 @@ function readPreviousTarget(): string | null {
 
 function cleanupOldVersions(): void {
   try {
-    const dirs = readdirSync(versionsDir());
     const cur = readCurrentTarget();
     const prev = readPreviousTarget();
-    for (const d of dirs) {
-      const full = path.join(versionsDir(), d);
-      if (full === cur || full === prev) continue;
-      // broken-* immer löschen wenn älter 7 Tage
+    const dirs = readdirSync(versionsDir())
+      .map((d) => ({ name: d, full: path.join(versionsDir(), d) }))
+      .filter((x) => x.full !== cur && x.full !== prev);
+
+    // Eine zusätzliche, jüngste "Notnagel"-Version (kein broken-) behalten
+    const notnagel = dirs
+      .filter((x) => !x.name.startsWith("broken-"))
+      .sort((a, b) => b.name.localeCompare(a.name))[0]?.full;
+
+    for (const x of dirs) {
+      if (x.full === notnagel) continue;
       try {
-        const age = Date.now() - statSync(full).mtimeMs;
-        if (d.startsWith("broken-") && age < 7 * 86_400_000) continue;
-        rmSync(full, { recursive: true, force: true });
+        const age = Date.now() - statSync(x.full).mtimeMs;
+        if (x.name.startsWith("broken-") && age < 7 * 86_400_000) continue;
+        safeRm(x.full);
       } catch { /* ignore */ }
     }
   } catch { /* ignore */ }
+}
+
+/** Staging-Reste älter als maxAgeMs aufräumen. */
+export function cleanupStaleStaging(maxAgeMs = 60 * 60_000): number {
+  let removed = 0;
+  try {
+    const root = path.join(appRoot(), "staging");
+    if (!existsSync(root)) return 0;
+    for (const d of readdirSync(root)) {
+      if (d === ".install.lock") continue;
+      const full = path.join(root, d);
+      try {
+        const age = Date.now() - statSync(full).mtimeMs;
+        if (age > maxAgeMs) {
+          safeRm(full);
+          removed++;
+        }
+      } catch { /* ignore */ }
+    }
+  } catch { /* ignore */ }
+  return removed;
+}
+
+/** Stamp (versions/<stamp>) der aktuellen Vorgänger-Version oder null. */
+export function getPreviousVersionStamp(): string | null {
+  const t = readPreviousTarget();
+  return t ? path.basename(t) : null;
 }
 
 async function healthcheckLoop(): Promise<boolean> {
