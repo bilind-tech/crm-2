@@ -26,6 +26,7 @@ import { Route as WerkzeugeUebergabeprotokollRouteImport } from './routes/werkze
 import { Route as WerkzeugeSchluesseluebergabeRouteImport } from './routes/werkzeuge.schluesseluebergabe'
 import { Route as RechnungenNeuRouteImport } from './routes/rechnungen.neu'
 import { Route as RechnungenIdRouteImport } from './routes/rechnungen.$id'
+import { Route as ProtokolleIdRouteImport } from './routes/protokolle.$id'
 import { Route as ObjekteNeuRouteImport } from './routes/objekte.neu'
 import { Route as ObjekteIdRouteImport } from './routes/objekte.$id'
 import { Route as KundenNeuRouteImport } from './routes/kunden.neu'
@@ -123,6 +124,11 @@ const RechnungenIdRoute = RechnungenIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => RechnungenRoute,
 } as any)
+const ProtokolleIdRoute = ProtokolleIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ProtokolleRoute,
+} as any)
 const ObjekteNeuRoute = ObjekteNeuRouteImport.update({
   id: '/neu',
   path: '/neu',
@@ -177,7 +183,7 @@ export interface FileRoutesByFullPath {
   '/einstellungen': typeof EinstellungenRoute
   '/kunden': typeof KundenRouteWithChildren
   '/objekte': typeof ObjekteRouteWithChildren
-  '/protokolle': typeof ProtokolleRoute
+  '/protokolle': typeof ProtokolleRouteWithChildren
   '/rechnungen': typeof RechnungenRouteWithChildren
   '/steuern': typeof SteuernRoute
   '/stundenzettel': typeof StundenzettelRoute
@@ -188,6 +194,7 @@ export interface FileRoutesByFullPath {
   '/kunden/neu': typeof KundenNeuRoute
   '/objekte/$id': typeof ObjekteIdRoute
   '/objekte/neu': typeof ObjekteNeuRoute
+  '/protokolle/$id': typeof ProtokolleIdRoute
   '/rechnungen/$id': typeof RechnungenIdRouteWithChildren
   '/rechnungen/neu': typeof RechnungenNeuRoute
   '/werkzeuge/schluesseluebergabe': typeof WerkzeugeSchluesseluebergabeRoute
@@ -205,7 +212,7 @@ export interface FileRoutesByTo {
   '/einstellungen': typeof EinstellungenRoute
   '/kunden': typeof KundenRouteWithChildren
   '/objekte': typeof ObjekteRouteWithChildren
-  '/protokolle': typeof ProtokolleRoute
+  '/protokolle': typeof ProtokolleRouteWithChildren
   '/rechnungen': typeof RechnungenRouteWithChildren
   '/steuern': typeof SteuernRoute
   '/stundenzettel': typeof StundenzettelRoute
@@ -215,6 +222,7 @@ export interface FileRoutesByTo {
   '/kunden/neu': typeof KundenNeuRoute
   '/objekte/$id': typeof ObjekteIdRoute
   '/objekte/neu': typeof ObjekteNeuRoute
+  '/protokolle/$id': typeof ProtokolleIdRoute
   '/rechnungen/$id': typeof RechnungenIdRouteWithChildren
   '/rechnungen/neu': typeof RechnungenNeuRoute
   '/werkzeuge/schluesseluebergabe': typeof WerkzeugeSchluesseluebergabeRoute
@@ -233,7 +241,7 @@ export interface FileRoutesById {
   '/einstellungen': typeof EinstellungenRoute
   '/kunden': typeof KundenRouteWithChildren
   '/objekte': typeof ObjekteRouteWithChildren
-  '/protokolle': typeof ProtokolleRoute
+  '/protokolle': typeof ProtokolleRouteWithChildren
   '/rechnungen': typeof RechnungenRouteWithChildren
   '/steuern': typeof SteuernRoute
   '/stundenzettel': typeof StundenzettelRoute
@@ -244,6 +252,7 @@ export interface FileRoutesById {
   '/kunden/neu': typeof KundenNeuRoute
   '/objekte/$id': typeof ObjekteIdRoute
   '/objekte/neu': typeof ObjekteNeuRoute
+  '/protokolle/$id': typeof ProtokolleIdRoute
   '/rechnungen/$id': typeof RechnungenIdRouteWithChildren
   '/rechnungen/neu': typeof RechnungenNeuRoute
   '/werkzeuge/schluesseluebergabe': typeof WerkzeugeSchluesseluebergabeRoute
@@ -274,6 +283,7 @@ export interface FileRouteTypes {
     | '/kunden/neu'
     | '/objekte/$id'
     | '/objekte/neu'
+    | '/protokolle/$id'
     | '/rechnungen/$id'
     | '/rechnungen/neu'
     | '/werkzeuge/schluesseluebergabe'
@@ -301,6 +311,7 @@ export interface FileRouteTypes {
     | '/kunden/neu'
     | '/objekte/$id'
     | '/objekte/neu'
+    | '/protokolle/$id'
     | '/rechnungen/$id'
     | '/rechnungen/neu'
     | '/werkzeuge/schluesseluebergabe'
@@ -329,6 +340,7 @@ export interface FileRouteTypes {
     | '/kunden/neu'
     | '/objekte/$id'
     | '/objekte/neu'
+    | '/protokolle/$id'
     | '/rechnungen/$id'
     | '/rechnungen/neu'
     | '/werkzeuge/schluesseluebergabe'
@@ -347,7 +359,7 @@ export interface RootRouteChildren {
   EinstellungenRoute: typeof EinstellungenRoute
   KundenRoute: typeof KundenRouteWithChildren
   ObjekteRoute: typeof ObjekteRouteWithChildren
-  ProtokolleRoute: typeof ProtokolleRoute
+  ProtokolleRoute: typeof ProtokolleRouteWithChildren
   RechnungenRoute: typeof RechnungenRouteWithChildren
   SteuernRoute: typeof SteuernRoute
   StundenzettelRoute: typeof StundenzettelRoute
@@ -476,6 +488,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RechnungenIdRouteImport
       parentRoute: typeof RechnungenRoute
     }
+    '/protokolle/$id': {
+      id: '/protokolle/$id'
+      path: '/$id'
+      fullPath: '/protokolle/$id'
+      preLoaderRoute: typeof ProtokolleIdRouteImport
+      parentRoute: typeof ProtokolleRoute
+    }
     '/objekte/neu': {
       id: '/objekte/neu'
       path: '/neu'
@@ -594,6 +613,18 @@ const ObjekteRouteChildren: ObjekteRouteChildren = {
 const ObjekteRouteWithChildren =
   ObjekteRoute._addFileChildren(ObjekteRouteChildren)
 
+interface ProtokolleRouteChildren {
+  ProtokolleIdRoute: typeof ProtokolleIdRoute
+}
+
+const ProtokolleRouteChildren: ProtokolleRouteChildren = {
+  ProtokolleIdRoute: ProtokolleIdRoute,
+}
+
+const ProtokolleRouteWithChildren = ProtokolleRoute._addFileChildren(
+  ProtokolleRouteChildren,
+)
+
 interface RechnungenIdRouteChildren {
   RechnungenIdBearbeitenRoute: typeof RechnungenIdBearbeitenRoute
 }
@@ -644,7 +675,7 @@ const rootRouteChildren: RootRouteChildren = {
   EinstellungenRoute: EinstellungenRoute,
   KundenRoute: KundenRouteWithChildren,
   ObjekteRoute: ObjekteRouteWithChildren,
-  ProtokolleRoute: ProtokolleRoute,
+  ProtokolleRoute: ProtokolleRouteWithChildren,
   RechnungenRoute: RechnungenRouteWithChildren,
   SteuernRoute: SteuernRoute,
   StundenzettelRoute: StundenzettelRoute,
