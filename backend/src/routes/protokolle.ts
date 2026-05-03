@@ -8,8 +8,8 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../auth/middleware.js";
 import {
-  abschliessenProtokoll, createProtokoll, deleteProtokoll, getProtokoll, listProtokolle,
-  updateProtokoll, type CreateInput, type ProtokollKind,
+  abschliessenProtokoll, createProtokoll, deleteProtokoll, getProtokoll, getProtokollByDokumentId,
+  listProtokolle, updateProtokoll, type CreateInput, type ProtokollKind,
 } from "../protokolle/repo.js";
 
 const KINDS: ProtokollKind[] = ["uebergabe", "schluessel"];
@@ -35,6 +35,16 @@ export async function protokolleRoutes(app: FastifyInstance): Promise<void> {
         return;
       }
       return createProtokoll(body);
+    },
+  );
+
+  app.get<{ Params: { dokumentId: string } }>(
+    "/protokolle/by-dokument/:dokumentId",
+    { preHandler: requireAuth },
+    async (req, reply) => {
+      const p = getProtokollByDokumentId(req.params.dokumentId);
+      if (!p) { reply.status(404).send({ error: "not found" }); return; }
+      return p;
     },
   );
 

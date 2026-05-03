@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { Download, Pencil, FileText, ExternalLink, Loader2 } from "lucide-react";
+import { Download, Pencil, FileText, ExternalLink, Loader2, FileCheck2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useKunde, useObjekt } from "@/hooks/useApi";
+import { useKunde, useObjekt, useProtokollByDokumentId } from "@/hooks/useApi";
 import { useDokumentBlobUrl } from "@/hooks/useDokumentBlobUrl";
 import { PrintButton } from "@/components/pdf/PrintButton";
 import type { Dokument } from "@/lib/api/types";
@@ -19,6 +19,8 @@ export function DokumentViewer({ dokument, open, onOpenChange, onEdit }: Props) 
   const { data: kunde } = useKunde(dokument?.kundeId ?? "");
   const { data: objekt } = useObjekt(dokument?.objektId ?? "");
   const { url: dateiUrl, loading } = useDokumentBlobUrl(dokument);
+  const isProtokoll = dokument?.typ === "protokoll" || /^(PR|SU)\d/.test(dokument?.dateiname ?? "");
+  const { data: protokoll } = useProtokollByDokumentId(isProtokoll ? dokument?.id : null);
 
   if (!dokument) return null;
 
@@ -59,6 +61,30 @@ export function DokumentViewer({ dokument, open, onOpenChange, onEdit }: Props) 
           </Button>
           {(isImage || isPdf) && (
             <PrintButton url={dateiUrl || null} variant="outline" size="sm" className="h-9 px-2 sm:px-3" />
+          )}
+          {protokoll && protokoll.status !== "abgeschlossen" && (
+            <Button variant="outline" size="sm" asChild className="rounded-lg" aria-label="Im Editor öffnen">
+              <Link
+                to="/protokolle/$id/bearbeiten"
+                params={{ id: protokoll.id }}
+                onClick={() => onOpenChange(false)}
+              >
+                <FileCheck2 className="h-4 w-4 sm:mr-1.5" />
+                <span className="hidden sm:inline">Im Editor öffnen</span>
+              </Link>
+            </Button>
+          )}
+          {protokoll && protokoll.status === "abgeschlossen" && (
+            <Button variant="outline" size="sm" asChild className="rounded-lg" aria-label="Zum Protokoll">
+              <Link
+                to="/protokolle/$id"
+                params={{ id: protokoll.id }}
+                onClick={() => onOpenChange(false)}
+              >
+                <FileCheck2 className="h-4 w-4 sm:mr-1.5" />
+                <span className="hidden sm:inline">Zum Protokoll</span>
+              </Link>
+            </Button>
           )}
           <Button
             variant="outline"
