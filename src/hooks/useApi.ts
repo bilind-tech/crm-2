@@ -1362,7 +1362,20 @@ export const useProtokoll = (id: string) =>
     enabled: !!id,
   });
 
-export const useCreateProtokoll = () => {
+export const useProtokollByDokumentId = (dokumentId: string | null | undefined) =>
+  useQuery({
+    queryKey: ["protokoll-by-dokument", dokumentId],
+    queryFn: async () => {
+      try {
+        return await api.get<Protokoll>(`/protokolle/by-dokument/${dokumentId}`);
+      } catch (e) {
+        const status = (e as { status?: number }).status;
+        if (status === 404) return null;
+        throw e;
+      }
+    },
+    enabled: !!dokumentId,
+  });
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: Partial<Protokoll> & { kind: ProtokollKind }) =>
