@@ -227,6 +227,15 @@ async function main(): Promise<void> {
   const stagingRm = cleanupStaleStaging();
   if (stagingRm > 0) app.log.info({ stagingRm }, "Update-Staging Reste entfernt");
 
+  // Belegnummer-Zähler aus realen Belegen nachziehen (idempotent).
+  try {
+    const { importScanZaehler } = await import("./belege/belegnummer.js");
+    const scan = importScanZaehler();
+    app.log.info({ scan }, "Belegnummer-Zähler synchronisiert");
+  } catch (e) {
+    app.log.error({ err: e }, "Belegnummer-Importscan fehlgeschlagen");
+  }
+
   // Backup-Scheduler starten (täglicher Snapshot)
   startScheduler();
   // Täglicher Reconcile-Cron (DB ↔ Disk-Konsistenz)

@@ -89,21 +89,26 @@ export function createAngebot(data: AngebotWrite): ApiAngebot {
   const db = getDatabase();
   const id = crypto.randomUUID();
   let result!: ApiAngebot;
+  // Bezugsdatum: gueltigBis als Hint, sonst heute. Wichtig für Periode (MMYY).
+  const bezugsdatum = data.gueltigBis
+    ? new Date(data.gueltigBis + "T00:00:00Z")
+    : new Date();
   const tx = db.transaction(() => {
-    const nummer = vergebeBelegnummer(data.kundeId, "angebot");
+    const { nummer, periode } = vergebeBelegnummer(data.kundeId, "angebot", bezugsdatum);
     db.prepare(
       `INSERT INTO angebot (
-         id, nummer, kunde_id, objekt_id, ansprechpartner_id, titel,
+         id, nummer, nummer_periode, nummer_quelle, kunde_id, objekt_id, ansprechpartner_id, titel,
          intro_text, outro_text, rabatt_gesamt, steuersatz, gueltig_bis,
          notizen, status, archiviert, optionen
        ) VALUES (
-         @id, @nummer, @kunde_id, @objekt_id, @ansprechpartner_id, @titel,
+         @id, @nummer, @nummer_periode, 'auto', @kunde_id, @objekt_id, @ansprechpartner_id, @titel,
          @intro_text, @outro_text, @rabatt_gesamt, @steuersatz, @gueltig_bis,
          @notizen, 'entwurf', 0, @optionen
        )`,
     ).run({
       id,
       nummer,
+      nummer_periode: periode,
       kunde_id: data.kundeId,
       objekt_id: data.objektId ?? null,
       ansprechpartner_id: data.ansprechpartnerId ?? null,

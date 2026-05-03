@@ -1,38 +1,70 @@
 ---
 name: Belegnummern
-description: Format {KÜRZEL}{MM}{YY}/{NN} pro Kunde+Monat, atomare Vergabe in Transaktion
+description: Format {KÜRZEL}{MMYY}/{NN} pro Kunde+Monat+Belegart, atomare Vergabe + Reservierung + Retry + Import-Scan
 type: feature
 ---
 
-# Belegnummern
+# Belegnummern v2
 
 ## Format
-`{KÜRZEL}{MM}{YY}/{NN}` — Beispiel: `GFU0526/01`
-- KÜRZEL: 3-Letter-Kürzel des Kunden, systemweit unique (siehe `kuerzel-eindeutigkeit`)
-- MM: zweistelliger Monat
-- YY: zweistelliges Jahr
-- NN: zweistelliger Zähler ab 01, **pro Kunde + Monat + Belegart** (Rechnung/Angebot getrennt)
+`{PREFIX}{MMYY}/{NN}` — Beispiel: `GFU0526/01`
 
-## Datenmodell (Step 3)
+- **PREFIX** = Kunden-Kürzel (z. B. `GFU`) wenn vorhanden
+- Ohne Kürzel: Fallback `AN-K001` / `RE-K001` (aus Kundennummer abgeleitet) — eindeutig pro Kunde, keine Kollisionen mehr.
+- **MMYY** = zweistelliger Monat + zweistelliges Jahr (richtige Reihenfolge!)
+- **NN** = laufender Zähler ab 01, **pro (Kunde, Belegart, Periode) getrennt**.
+
+Single Source of Truth: `backend/src/belege/nummer-format.ts` (`parseBelegnummer`, `formatBelegnummer`, `fallbackPrefix`, `periodeMMYY`).
+
+## Datenmodell (Migration 019)
+
 ```sql
-CREATE TABLE kunden_zaehler (
-  kunde_id    TEXT NOT NULL REFERENCES kunden(id) ON DELETE CASCADE,
-  belegart    TEXT NOT NULL CHECK (belegart IN ('rechnung','angebot')),
-  jahr_monat  TEXT NOT NULL,           -- 'YYMM'
-  letzter_nn  INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (kunde_id, belegart, jahr_monat)
+CREATE TABLE belegnummer_zaehler (
+  kunde_id        TEXT NOT NULL,
+  belegart        TEXT NOT NULL CHECK (belegart IN ('angebot','rechnung')),
+  periode         TEXT NOT NULL,            -- MMYY
+  naechster_start INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (kunde_id, belegart, periode)
 );
+
+CREATE TABLE belegnummer_reserviert (
+  nummer       TEXT NOT NULL,
+  art          TEXT NOT NULL CHECK (art IN ('angebot','rechnung')),
+  kunde_id     TEXT,
+  grund        TEXT,
+  erstellt_am  TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (art, nummer)
+);
+
+-- angebot/rechnung bekamen: nummer_periode TEXT, nummer_quelle TEXT (auto|import|manuell)
 ```
 
-## Vergabe (atomar in Transaktion)
-```ts
-db.transaction((kundeId, art, ym) => {
-  const row = upsertAndIncrement(kundeId, art, ym);
-  return formatNummer(kuerzel, ym, row.letzter_nn);
-});
-```
+## Vergabe (`backend/src/belege/belegnummer.ts`)
+
+1. `vergebeBelegnummer(kundeId, art, bezugsdatum)` läuft IN derselben SQLite-Transaktion wie der Beleg-INSERT.
+2. UPSERT + RETURNING in `belegnummer_zaehler` (atomar). Bei parallelen Schreibern serialisiert WAL + busy_timeout.
+3. Skip-Schleife (max 50): wenn formatierte Nummer in `belegnummer_reserviert` ODER `angebot/rechnung` schon existiert → NN +1.
+4. `mitBelegnummerRetry()`: bei `SQLITE_CONSTRAINT_UNIQUE: <tabelle>.nummer` → bis zu 5× neu vergeben (deckt seltene Races nach Import ab).
+
+## Import-Scan
+- `importScanZaehler()` parst alle bestehenden `nummer` aus `angebot`/`rechnung`, hebt jeden Zähler per `bumpBelegNummerMindestens` auf `MAX(nn)+1`. Idempotent.
+- Wird automatisch beim Backend-Boot ausgeführt (`server.ts`, nach Migration). Endpoint `POST /belege/nummer/import-scan` für manuelles Re-Triggern.
+
+## Reservierung
+- `POST /belege/nummer/reservieren { art, nummer, kundeId?, grund? }` — Format-Check + Kollisions-Check, Insert in `belegnummer_reserviert`.
+- 409 bei Kollision mit existierendem Beleg, 422 bei Format-Fehler.
+
+## Vorschau
+- `GET /kunden/:id/zaehler?art=angebot|rechnung` → `{ periode, art, naechsterStart, formatted }` mit echtem Anzeige-String (verwendet dieselbe Format-Logik wie die Vergabe → kein Drift).
 
 ## Edge Cases
-- Monatswechsel mitten im Erstellen → Belegnummer wird beim Speichern (nicht beim Öffnen) endgültig vergeben
-- Storno einer Rechnung → Nummer bleibt belegt, kein Reuse
-- Nummer-Format ist konfigurierbar (Tabelle `nummernkreise`), aber Default wie oben
+- Monatswechsel: Nummer wird beim Speichern (nicht beim Öffnen) endgültig vergeben. Bezugsdatum für Angebot = `gueltigBis ?? today`, für Rechnung = `rechnungsdatum`.
+- Storno / Archivierung: Nummer bleibt belegt, kein Reuse — UNIQUE-Constraint auf `angebot.nummer` / `rechnung.nummer` schützt dauerhaft.
+- Manuelle Korrektur: wer eine spezifische Nummer braucht, reserviert sie vorher → Auto-Vergabe überspringt sie zuverlässig.
+
+## Bugs gefixt (Migration 019)
+- B1: Angebot/Rechnung teilten Zähler → jetzt getrennt
+- B3: Fallback-Präfix war nicht kunden-eindeutig → jetzt mit Kundennummer
+- B4: Importierte Belege kollidierten mit Auto-Vergabe → Boot-Scan + Reservierung
+- B5: Keine Retry-Schicht → `mitBelegnummerRetry`
+- B7: Peek lieferte nur Zahl → jetzt fertig formatierter String

@@ -139,20 +139,21 @@ export function createRechnung(data: RechnungWrite): ApiRechnung {
 
   const tx = db.transaction(() => {
     const bezugsdatum = new Date(rechnungsdatum + "T00:00:00Z");
-    const nummer = vergebeBelegnummer(data.kundeId, "rechnung", bezugsdatum);
+    const { nummer, periode } = vergebeBelegnummer(data.kundeId, "rechnung", bezugsdatum);
     db.prepare(
       `INSERT INTO rechnung (
-         id, nummer, kunde_id, objekt_id, ansprechpartner_id, quell_angebot_id,
+         id, nummer, nummer_periode, nummer_quelle, kunde_id, objekt_id, ansprechpartner_id, quell_angebot_id,
          titel, intro_text, outro_text, rabatt_gesamt, steuersatz,
          rechnungsdatum, faelligkeitsdatum, notizen, status, archiviert, optionen
        ) VALUES (
-         @id, @nummer, @kunde_id, @objekt_id, @ansprechpartner_id, @quell_angebot_id,
+         @id, @nummer, @nummer_periode, 'auto', @kunde_id, @objekt_id, @ansprechpartner_id, @quell_angebot_id,
          @titel, @intro_text, @outro_text, @rabatt_gesamt, @steuersatz,
          @rechnungsdatum, @faelligkeitsdatum, @notizen, 'entwurf', 0, @optionen
        )`,
     ).run({
       id,
       nummer,
+      nummer_periode: periode,
       kunde_id: data.kundeId,
       objekt_id: data.objektId ?? null,
       ansprechpartner_id: data.ansprechpartnerId ?? null,

@@ -67,14 +67,25 @@ export async function stammdatenRoutes(app: FastifyInstance): Promise<void> {
       };
     });
 
-    scoped.get<{ Params: { id: string } }>("/kunden/:id/zaehler", async (req, reply) => {
-      if (!getKunde(req.params.id)) {
-        reply.status(404);
-        return { error: "not-found" };
-      }
-      const periode = periodeMMYY();
-      return { periode, naechsterStart: peekBelegNummer(req.params.id, periode) };
-    });
+    scoped.get<{ Params: { id: string }; Querystring: { art?: string } }>(
+      "/kunden/:id/zaehler",
+      async (req, reply) => {
+        const k = getKunde(req.params.id);
+        if (!k) {
+          reply.status(404);
+          return { error: "not-found" };
+        }
+        const periode = periodeMMYY();
+        const art = req.query?.art === "angebot" ? "angebot" : "rechnung";
+        const nn = peekBelegNummer(req.params.id, art, periode);
+        // Vorschau-String mit derselben Logik wie die Vergabe.
+        const prefix = k.kuerzel?.trim()
+          ? k.kuerzel.trim().toUpperCase()
+          : (await import("../belege/nummer-format.js")).fallbackPrefix(art, k.nummer);
+        const formatted = `${prefix}${periode}/${String(nn).padStart(2, "0")}`;
+        return { periode, art, naechsterStart: nn, formatted };
+      },
+    );
 
     scoped.post("/kunden", async (req, reply) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
