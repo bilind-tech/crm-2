@@ -40,6 +40,7 @@ export function LivePdfPreview(props: Props) {
   const [numPages, setNumPages] = useState(0);
   const [rendering, setRendering] = useState(false);
   const [buildError, setBuildError] = useState<string | null>(null);
+  const [viewerError, setViewerError] = useState<string | null>(null);
   const [openHotspotId, setOpenHotspotId] = useState<string | null>(null);
 
   // Container-Breite messen
