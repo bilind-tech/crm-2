@@ -782,7 +782,26 @@ export interface InstallierteVersion {
   rollbackVerfuegbar: boolean;
 }
 
-/** Aktive Sitzung / Gerät im LAN. Pi-Backend liefert echte Daten. */
+/** Status der GitHub-Update-Quelle (Pi → eigenes Repo). */
+export interface GithubUpdateStatus {
+  repo: string;
+  branch: string;
+  autoCheck: boolean;
+  tokenIsSet: boolean;
+  installedVersion: string;
+  installedCommit: string | null;
+  remoteCommit: string | null;
+  remoteCommitDate: ISODateTime | null;
+  remoteCommitMessage: string | null;
+  letzteSynchronisation: ISODateTime | null;
+  letzterFehler: string | null;
+  updateVerfuegbar: boolean;
+}
+
+export interface GithubInstallResult extends UpdatePackageInfo {
+  sha: string;
+  lauf: UpdateLauf | null;
+}
 export interface SitzungEintrag {
   id: ID;
   hostname: string;
