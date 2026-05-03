@@ -39,6 +39,7 @@ import {
   useCreateBackup,
   useBackupHistorie,
   useBackupInArbeit,
+  useBackupHealth,
   useRestoreStatus,
   useRestoreBackup,
   useUploadBackup,
@@ -88,6 +89,7 @@ export function BackupTab() {
   const { data: historie = [] } = useBackupHistorie();
   const { data: laufendeBackups = [] } = useBackupInArbeit();
   const { data: restoreState } = useRestoreStatus();
+  const { data: health } = useBackupHealth();
   const update = useUpdateBackup();
   const create = useCreateBackup();
   const restore = useRestoreBackup();
