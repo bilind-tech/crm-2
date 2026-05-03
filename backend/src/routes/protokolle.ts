@@ -8,8 +8,8 @@
 import type { FastifyInstance } from "fastify";
 import { requireAuth } from "../auth/middleware.js";
 import {
-  abschliessenProtokoll, createProtokoll, deleteProtokoll, getProtokoll, listProtokolle,
-  updateProtokoll, type CreateInput, type ProtokollKind,
+  abschliessenProtokoll, createProtokoll, deleteProtokoll, getProtokoll, getProtokollByDokumentId,
+  listProtokolle, updateProtokoll, type CreateInput, type ProtokollKind,
 } from "../protokolle/repo.js";
 
 const KINDS: ProtokollKind[] = ["uebergabe", "schluessel"];
