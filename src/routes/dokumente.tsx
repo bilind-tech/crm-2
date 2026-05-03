@@ -1,6 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { zodValidator, fallback } from "@tanstack/zod-adapter";
-import { z } from "zod";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { Smartphone, Receipt, AlertTriangle, X, Upload } from "lucide-react";
 import { useDokumente, useKunden, useObjekte } from "@/hooks/useApi";
