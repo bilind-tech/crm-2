@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Download, Loader2, AlertCircle, Pencil, ExternalLink } from "lucide-react";
 import { DriveStatusBadge } from "./DriveStatusBadge";
 import { PdfCanvasViewer } from "./PdfCanvasViewer";
+import { PrintButton } from "./PrintButton";
 import type { DriveSyncInfo } from "@/lib/api/types";
 
 interface Props {
@@ -77,6 +78,7 @@ export function PdfViewerDialog({
                 <span className="hidden sm:inline">Öffnen</span>
               </a>
             )}
+            <PrintButton url={pdfUrl} variant="outline" size="sm" className="h-9 px-2 sm:px-3" />
             {pdfUrl ? (
               <a
                 href={pdfUrl}
