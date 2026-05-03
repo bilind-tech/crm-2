@@ -33,7 +33,18 @@ export interface DriveSettings extends GoogleDriveSettings {
 
 export function loadDriveSettings(): DriveSettings {
   const base = (getSetting<GoogleDriveSettings>("googleDrive") ?? {
-    clientId: "", rootFolderName: "mycleancenter.cm",
+    clientId: "",
+    rootFolderName: "mycleancenter.cm",
+    unterordnerSchema: {
+      rechnungen: "Rechnungen/{YYYY}/{MM}",
+      angebote: "Angebote/{YYYY}/{MM}",
+      dokumente: "Dokumente/{YYYY}/{MM}",
+    },
+    dateinameSchema: {
+      rechnung: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
+      angebot: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
+    },
+    autoUpload: true,
   }) as GoogleDriveSettings;
   const status = getSetting<{
     kontoEmail?: string; rootOrdnerId?: string;
