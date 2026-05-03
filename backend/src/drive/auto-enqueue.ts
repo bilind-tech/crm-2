@@ -7,8 +7,6 @@ import { getAngebot } from "../belege/angebote-repo.js";
 import { getRechnung } from "../belege/rechnungen-repo.js";
 import { enqueue } from "./upload-repo.js";
 import { loadDriveSettings } from "./oauth.js";
-import { getSetting } from "../settings/store.js";
-import type { BackupPlanSettings } from "../settings/schemas.js";
 
 let wired = false;
 
@@ -17,10 +15,8 @@ export function wireDriveAutoEnqueue(): void {
   wired = true;
   onBelegMutated(async (art, id) => {
     try {
-      // Toggle prüfen
-      const backup = getSetting<BackupPlanSettings>("backup");
-      if (backup && backup.driveUploadEnabled === false) return;
       const settings = loadDriveSettings();
+      if (settings.autoUpload === false) return;
       if (!settings.refreshTokenIsSet || !settings.clientSecretIsSet) return;
 
       const beleg = art === "angebot" ? getAngebot(id) : getRechnung(id);
