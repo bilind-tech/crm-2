@@ -197,6 +197,29 @@ export function BackupTab() {
         autoBackup={form.autoBackup}
       />
 
+      {/* ─── Health-Warnung (Backend liefert warn=true wenn > 36 h alt) ─ */}
+      {health?.warn && form.autoBackup && (
+        <div className="rounded-2xl border border-destructive/40 bg-destructive/5 p-4">
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-destructive">
+                Backup-Warnung: kein aktuelles Backup vorhanden
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {health.alterStunden != null
+                  ? `Letztes erfolgreiches Backup vor ${health.alterStunden} Stunden.`
+                  : "Es liegt noch kein erfolgreiches Backup vor."}{" "}
+                Bitte prüfe Zeitplan und USB-SSD.
+              </p>
+            </div>
+            <Button size="sm" variant="outline" onClick={startManuell} disabled={create.isPending || hatLaufendes}>
+              Jetzt sichern
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* ─── Restore-Banner (Wartungsmodus) ───────────────────────────── */}
       {(maintenanceActive || (restoreState?.restore && restoreState.restore.phase !== "done")) && restoreState?.restore && (
         <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4">
