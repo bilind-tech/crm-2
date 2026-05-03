@@ -143,7 +143,13 @@ export function HotspotInlineEditor({ fieldId, draft, kind, set, onOpenAdvanced,
           {Header}
           <Textarea
             ref={firstRef as React.RefObject<HTMLTextAreaElement>}
-            value={draft.optionen?.eigenesIntro ?? draft.introText ?? ""}
+            value={
+              draft.optionen?.eigenesIntro ??
+              draft.introText ??
+              (kind === "angebot"
+                ? defaultIntroAngebot(draft as Angebot)
+                : defaultIntroRechnung(draft as Rechnung))
+            }
             onChange={(e) => {
               const v = e.target.value;
               const opt = draft.optionen ?? {
