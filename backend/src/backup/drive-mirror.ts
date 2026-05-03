@@ -64,6 +64,28 @@ function backupTargetFolder(date: Date): string {
   return `Backups/${yyyy}/${mm}`;
 }
 
+/**
+ * Erzeugt eine schlüssel-freie Kopie des Backups für den Drive-Upload.
+ * Master-Key bleibt NUR auf dem Pi. Wer aus Drive restored, muss SMTP-Passwort
+ * und Google-Drive-Token einmalig neu eingeben — Restore-UI erklärt das.
+ */
+async function buildKeyfreeArchive(srcArchive: string, backupId: string): Promise<string> {
+  const tmpDir = path.join(config.backupsTmpDir, `drive-${backupId}`);
+  if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true, force: true });
+  mkdirSync(tmpDir, { recursive: true, mode: 0o700 });
+  await tar.extract({ file: srcArchive, cwd: tmpDir });
+  // Master-Key entfernen
+  const keysDir = path.join(tmpDir, "keys");
+  if (existsSync(keysDir)) rmSync(keysDir, { recursive: true, force: true });
+  const out = path.join(config.backupsTmpDir, `drive-${backupId}.tar.gz`);
+  await tar.create(
+    { gzip: { level: 6 }, file: out, cwd: tmpDir, portable: true },
+    ["manifest.json", "db", "uploads"].filter((p) => existsSync(path.join(tmpDir, p))),
+  );
+  rmSync(tmpDir, { recursive: true, force: true });
+  return out;
+}
+
 /** Stößt einen Drive-Mirror an (async, ohne await im Aufrufer). */
 export async function mirrorBackupToDrive(
   backupId: string,
