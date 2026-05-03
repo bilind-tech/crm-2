@@ -104,6 +104,22 @@ export async function uploadFile(opts: {
   return { id: res.data.id ?? "", webViewLink: res.data.webViewLink ?? undefined };
 }
 
+/** Stream-Variante für sehr große Dateien (Backups). */
+export async function uploadStream(opts: {
+  parentFolderId: string;
+  name: string;
+  stream: NodeJS.ReadableStream;
+  mimeType?: string;
+}): Promise<{ id: string; webViewLink?: string }> {
+  const drive = getClient();
+  const res = await drive.files.create({
+    requestBody: { name: opts.name, parents: [opts.parentFolderId] },
+    media: { mimeType: opts.mimeType ?? "application/gzip", body: opts.stream },
+    fields: "id, webViewLink",
+  });
+  return { id: res.data.id ?? "", webViewLink: res.data.webViewLink ?? undefined };
+}
+
 export async function createTextFile(opts: { parentFolderId: string; name: string; content: string }): Promise<{ id: string; webViewLink?: string }> {
   const drive = getClient();
   const { Readable } = await import("node:stream");
