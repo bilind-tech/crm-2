@@ -318,10 +318,10 @@ function defaultIntroRechnung(_r: Rechnung, opts: BuildOptions) {
   if (opts.intro) return opts.intro;
   return `hiermit übersenden wir Ihnen die Rechnung für folgende Leistungen:`;
 }
-function defaultOutroRechnung(r: Rechnung, opts: BuildOptions) {
+function defaultOutroRechnung(_r: Rechnung, opts: BuildOptions) {
   if (opts.outro) return opts.outro;
   const teile = [
-    `Wir möchten Sie bitten, den Rechnungsbetrag innerhalb von ${ziel(r)} Tagen nach Rechnungszustellung auf unser unten genanntes Bankkonto zu überweisen.`,
+    "Vielen Dank für Ihren Auftrag.",
     opts.materialBereitgestellt
       ? "Zugunsten der Reinigung werden Reinigungswerkzeuge und Reinigungsmittel von uns zur Verfügung gestellt."
       : null,
@@ -355,11 +355,18 @@ function mergeFirma(firma: Firmendaten, override?: Partial<Firmendaten>): Firmen
   return merged;
 }
 
+async function resolveLogo(firma: Firmendaten, override: string | null): Promise<string | null> {
+  if (override) return override;
+  if (firma.logoUrl && firma.logoUrl.trim()) return firma.logoUrl;
+  return await logoDataUrl();
+}
+
 async function buildDoc(
   ctx: PdfContext,
   titel: string,
   meta: { label: string; wert: string }[],
   metaVariant: "box" | "plain",
+  metaNote: string | undefined,
   beleg: { positionen: Position[]; rabattGesamt: number; steuersatz: number },
   intro: string,
   outro: string,
@@ -368,13 +375,13 @@ async function buildDoc(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   pageBreakBefore?: (currentNode: any) => boolean,
 ) {
-  const logo = logoOverride ?? (await logoDataUrl());
+  const logo = await resolveLogo(ctx.firma, logoOverride);
   const t = totals(beleg.positionen, beleg.rabattGesamt, beleg.steuersatz);
   return {
     pageSize: "A4" as const,
     pageMargins: [55, 110, 55, 130] as [number, number, number, number],
     defaultStyle: { font: "Roboto", fontSize: 10, color: COLOR_TEXT, lineHeight: 1.25 },
-    header: header(absenderzeile(ctx.firma), logo),
+    header: header(ctx.firma, logo),
     footer: footer(ctx.firma),
     pageBreakBefore,
     content: [
@@ -390,7 +397,7 @@ async function buildDoc(
               bold: i === 0,
             })),
           },
-          metaBox(meta, metaVariant),
+          metaBox(meta, metaVariant, metaNote),
         ],
         columnGap: 20,
       },
