@@ -10,7 +10,6 @@ import {
   Wrench,
   Settings,
   Lock,
-  LogOut,
 } from "lucide-react";
 import {
   Sidebar,
