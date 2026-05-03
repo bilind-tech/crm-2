@@ -72,9 +72,15 @@ export interface EnqueueInput {
   vorlageId?: string;
   signaturId?: string;
   idempotenzKey: string;
+  /** ABSOLUTE Schutzschicht: nur 'manuell' ist erlaubt — d. h. ein direkter
+   *  User-Klick aus dem EmailVersandDialog. Jede andere Quelle wirft. */
+  quelle: "manuell";
 }
 
 export function enqueueVersand(input: EnqueueInput): { row: EmailVersand; created: boolean } {
+  if (input.quelle !== "manuell") {
+    throw new Error("enqueueVersand: nur quelle='manuell' erlaubt — keine Auto-Mails.");
+  }
   const db = getDatabase();
   const existing = db.prepare(`SELECT * FROM email_versand WHERE idempotenz_key = ?`)
     .get(input.idempotenzKey) as Row | undefined;
