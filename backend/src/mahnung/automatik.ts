@@ -1,15 +1,12 @@
 // Mahn-Automatik: Hauptjob, der alle offenen Rechnungen prüft und je nach Modus
 // Vorschläge / Auto-Versand / Benachrichtigungen erzeugt.
-import { listRechnungen, updateRechnung, getRechnung } from "../belege/rechnungen-repo.js";
-import { getKunde } from "../kunden/repo.js";
+import { listRechnungen } from "../belege/rechnungen-repo.js";
 import {
   bestimmeMahnZustand,
-  berechneNeueFrist,
   defaultStufen,
   type MahnEinstellungenBackend,
   type MahnStufe,
   type MahnStufeConfig,
-  type MahnVorgang,
 } from "./regeln.js";
 import {
   appendEintrag,
@@ -19,11 +16,10 @@ import {
   type MahnLaufQuelle,
 } from "./repo.js";
 import { getSetting } from "../settings/store.js";
-import { MahnungSchema, FirmaSchema } from "../settings/schemas.js";
-import { enqueueVersand } from "../email/versand-repo.js";
-import { getStandardVorlage, getVorlage } from "../email/templates.js";
+import { MahnungSchema } from "../settings/schemas.js";
 import { record } from "../aktivitaet/repo.js";
 import { emit } from "../events/bus.js";
+
 
 export interface AutomatikResult {
   laufId: string;
