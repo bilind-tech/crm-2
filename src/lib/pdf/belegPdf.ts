@@ -239,11 +239,11 @@ function leistungstabelle(positionen: Position[], totalsT: { netto: number; steu
 
 // ───────── Meta-Box ────────────────────────────────────────────────────────
 
-function metaBox(meta: { label: string; wert: string }[], variant: "box" | "plain") {
+function metaBox(meta: { label: string; wert: string }[], variant: "box" | "plain", note?: string) {
   if (variant === "plain") {
     return {
       id: "meta",
-      width: 200,
+      width: 210,
       stack: meta.map((m) => ({
         text: `${m.label}: ${m.wert}`,
         fontSize: 10,
@@ -252,23 +252,38 @@ function metaBox(meta: { label: string; wert: string }[], variant: "box" | "plai
       })),
     };
   }
+  const dataRows = meta.map((m) => [
+    { text: m.label, fontSize: 10, border: [false, false, false, false], margin: [0, 1, 8, 1] },
+    { text: m.wert, fontSize: 10, alignment: "right", border: [false, false, false, false], margin: [0, 1, 0, 1] },
+  ]);
+  const noteRows = note
+    ? [[
+        {
+          text: note,
+          fontSize: 9,
+          colSpan: 2,
+          margin: [0, 6, 0, 0],
+          border: [false, true, false, false],
+        },
+        {},
+      ]]
+    : [];
+  const body = [...dataRows, ...noteRows];
+  const totalRows = body.length;
   return {
     id: "meta",
-    width: 230,
+    width: 245,
     table: {
       widths: ["auto", "*"],
-      body: meta.map((m) => [
-        { text: m.label, fontSize: 10, border: [false, false, false, false], margin: [0, 1, 8, 1] },
-        { text: m.wert, fontSize: 10, alignment: "right", border: [false, false, false, false], margin: [0, 1, 0, 1] },
-      ]),
+      body,
     },
     layout: {
-      hLineWidth: (i: number, node: { table: { body: unknown[] } }) => (i === 0 || i === node.table.body.length ? 0.7 : 0),
+      hLineWidth: (i: number) => (i === 0 || i === totalRows ? 0.7 : 0),
       vLineWidth: (i: number, node: { table: { widths: unknown[] } }) => (i === 0 || i === node.table.widths.length ? 0.7 : 0),
       hLineColor: () => COLOR_TEXT,
       vLineColor: () => COLOR_TEXT,
-      paddingTop: () => 6,
-      paddingBottom: () => 6,
+      paddingTop: () => 5,
+      paddingBottom: () => 5,
       paddingLeft: () => 8,
       paddingRight: () => 8,
     },
