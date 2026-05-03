@@ -112,7 +112,7 @@ export async function buildSteuerExport(input: ExportInput): Promise<Blob> {
       return {
         Datum: d.dokumentdatum,
         Titel: d.titel,
-        Lieferant: d.lieferant ?? "",
+        Lieferant: d.beschreibung ?? "",
         "Brutto EUR": brutto.toFixed(2),
         "USt-Satz %": (d.ustSatz ?? 19).toString(),
         "Vorsteuer EUR": vorsteuer.toFixed(2),
