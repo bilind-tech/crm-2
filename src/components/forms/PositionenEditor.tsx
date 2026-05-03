@@ -1,4 +1,4 @@
-import { Trash2, Plus, FileText, Receipt, ChevronUp, ChevronDown } from "lucide-react";
+import { Trash2, Plus, FileText, Receipt, Clock, ChevronUp, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,13 +43,13 @@ const EINHEITEN: { value: Einheit; label: string }[] = [
   { value: "monat", label: "Monat" },
 ];
 
-export function emptyPosition(steuersatz = 19, modus: PositionModus = "einzel"): PositionDraft {
+export function emptyPosition(steuersatz = 19, modus: PositionModus = "pauschal"): PositionDraft {
   return {
     id: crypto.randomUUID(),
     modus,
     beschreibung: "",
-    menge: modus === "einzel" ? 1 : 1,
-    einheit: modus === "pauschal" ? "pauschal" : "stk",
+    menge: 1,
+    einheit: modus === "pauschal" ? "pauschal" : modus === "stunden" ? "h" : "stk",
     einzelpreisNetto: 0,
     pauschalpreisNetto: 0,
     ausfuehrung: "",
@@ -119,11 +119,14 @@ export function PositionenEditor({
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-muted/20 px-3 py-3">
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => add("einzel")} className="rounded-full">
-            <Plus className="mr-1 h-3.5 w-3.5" /> Einzelposition
+          <Button size="sm" onClick={() => add("pauschal")} className="rounded-full">
+            <Plus className="mr-1 h-3.5 w-3.5" /> Pauschal
           </Button>
-          <Button variant="outline" size="sm" onClick={() => add("pauschal")} className="rounded-full">
-            <Receipt className="mr-1 h-3.5 w-3.5" /> Pauschal-Block
+          <Button variant="outline" size="sm" onClick={() => add("stunden")} className="rounded-full">
+            <Clock className="mr-1 h-3.5 w-3.5" /> Stunden
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => add("einzel")} className="rounded-full">
+            <FileText className="mr-1 h-3.5 w-3.5" /> Einzel
           </Button>
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs sm:text-sm">
@@ -151,14 +154,23 @@ interface CardProps {
 
 function PositionCard({ index, position: p, onChange, onRemove }: CardProps) {
   const istPauschal = p.modus === "pauschal";
+  const istStunden = p.modus === "stunden";
 
   return (
     <div className="rounded-xl border border-border bg-background p-3 shadow-sm">
-      {/* Kopf: Index + Modus-Switch + Löschen */}
       <div className="mb-3 flex items-center justify-between gap-3">
         <span className="text-xs font-semibold text-muted-foreground">Position {index + 1}</span>
         <div className="flex items-center gap-2">
-          <ModusSwitch value={p.modus} onChange={(m) => onChange({ modus: m })} />
+          <ModusSwitch
+            value={p.modus}
+            onChange={(m) => {
+              const patch: Partial<PositionDraft> = { modus: m };
+              if (m === "stunden") patch.einheit = "h";
+              else if (m === "pauschal") patch.einheit = "pauschal";
+              else patch.einheit = "stk";
+              onChange(patch);
+            }}
+          />
           <button
             onClick={onRemove}
             className="rounded-md p-1.5 text-destructive hover:bg-destructive/10"
@@ -172,7 +184,6 @@ function PositionCard({ index, position: p, onChange, onRemove }: CardProps) {
 
       {istPauschal ? (
         <div className="space-y-3">
-          {/* Ausführung */}
           <div>
             <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
               Ausführung (optional, z. B. „Mo–Fr · 5× wöchentlich")
@@ -185,7 +196,6 @@ function PositionCard({ index, position: p, onChange, onRemove }: CardProps) {
             />
           </div>
 
-          {/* Große Beschreibung */}
           <div>
             <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
               Leistungsbeschreibung
@@ -206,7 +216,6 @@ function PositionCard({ index, position: p, onChange, onRemove }: CardProps) {
             </p>
           </div>
 
-          {/* Pauschalpreis + MwSt */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
@@ -227,9 +236,57 @@ function PositionCard({ index, position: p, onChange, onRemove }: CardProps) {
             </div>
           </div>
         </div>
+      ) : istStunden ? (
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+              Leistungsbeschreibung
+            </label>
+            <LeistungsBeschreibung
+              value={p.beschreibung}
+              onChange={(v) => onChange({ beschreibung: v })}
+              placeholder="z. B. Sonderreinigung nach Aufwand"
+              minRows={2}
+              maxRows={10}
+              withToolbar
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+                Stunden
+              </label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.25"
+                value={p.menge || ""}
+                onChange={(e) => onChange({ menge: Number(e.target.value) || 0 })}
+                className="h-11 text-base font-semibold"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
+                Stundensatz (netto) €
+              </label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                value={p.einzelpreisNetto || ""}
+                onChange={(e) => onChange({ einzelpreisNetto: Number(e.target.value) || 0 })}
+                className="h-11 text-base font-semibold"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] font-medium text-muted-foreground">MwSt</label>
+              <MwStStepper value={p.steuersatz} onChange={(v) => onChange({ steuersatz: v })} />
+            </div>
+          </div>
+        </div>
       ) : (
         <div className="space-y-3">
-          {/* Beschreibung — Auto-Resize-Textarea */}
           <div>
             <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
               Leistungsbeschreibung
@@ -244,7 +301,6 @@ function PositionCard({ index, position: p, onChange, onRemove }: CardProps) {
             />
           </div>
 
-          {/* Preis + MwSt (50/50) */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-[11px] font-medium text-muted-foreground">
@@ -277,34 +333,29 @@ function ModusSwitch({
   value: PositionModus;
   onChange: (m: PositionModus) => void;
 }) {
+  const opts: { v: PositionModus; label: string; Icon: typeof Receipt }[] = [
+    { v: "pauschal", label: "Pauschal", Icon: Receipt },
+    { v: "stunden", label: "Stunden", Icon: Clock },
+    { v: "einzel", label: "Einzel", Icon: FileText },
+  ];
   return (
     <div className="inline-flex rounded-lg border border-border bg-muted p-0.5 text-xs">
-      <button
-        type="button"
-        onClick={() => onChange("einzel")}
-        className={cn(
-          "flex items-center gap-1 rounded-md px-2 py-1 font-medium transition",
-          value === "einzel"
-            ? "bg-background text-foreground shadow-sm"
-            : "text-muted-foreground hover:text-foreground",
-        )}
-      >
-        <FileText className="h-3 w-3" />
-        Einzel
-      </button>
-      <button
-        type="button"
-        onClick={() => onChange("pauschal")}
-        className={cn(
-          "flex items-center gap-1 rounded-md px-2 py-1 font-medium transition",
-          value === "pauschal"
-            ? "bg-background text-foreground shadow-sm"
-            : "text-muted-foreground hover:text-foreground",
-        )}
-      >
-        <Receipt className="h-3 w-3" />
-        Pauschal
-      </button>
+      {opts.map(({ v, label, Icon }) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => onChange(v)}
+          className={cn(
+            "flex items-center gap-1 rounded-md px-2 py-1 font-medium transition",
+            value === v
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Icon className="h-3 w-3" />
+          {label}
+        </button>
+      ))}
     </div>
   );
 }

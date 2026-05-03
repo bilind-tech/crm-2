@@ -34,7 +34,7 @@ const positionSchema = z.object({
   einzelpreisNetto: z.number().optional(),
   steuersatz: z.number().min(0).max(100).optional(),
   rabatt: z.number().min(0).max(100).optional(),
-  modus: z.enum(["einzel", "pauschal"]).optional(),
+  modus: z.enum(["einzel", "pauschal", "stunden"]).optional(),
   pauschalpreisNetto: z.number().optional(),
   ausfuehrung: z.string().max(200).optional(),
 });

@@ -12,7 +12,7 @@ export interface PositionInput {
   einzelpreisNetto?: number;
   steuersatz?: number;
   rabatt?: number;
-  modus?: "einzel" | "pauschal";
+  modus?: "einzel" | "pauschal" | "stunden";
   pauschalpreisNetto?: number;
   ausfuehrung?: string;
 }
@@ -54,7 +54,7 @@ export function replacePositionen(
       einzelpreis_netto_ct: euroToCt(p.einzelpreisNetto ?? 0),
       steuersatz: p.steuersatz ?? 19,
       rabatt: p.rabatt ?? 0,
-      modus: p.modus === "pauschal" ? "pauschal" : "einzel",
+      modus: p.modus === "pauschal" ? "pauschal" : p.modus === "stunden" ? "stunden" : "einzel",
       pauschalpreis_netto_ct: p.pauschalpreisNetto != null ? euroToCt(p.pauschalpreisNetto) : null,
       ausfuehrung: p.ausfuehrung ?? null,
     });
