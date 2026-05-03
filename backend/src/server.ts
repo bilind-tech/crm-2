@@ -220,8 +220,10 @@ async function main(): Promise<void> {
   const staleLock = reapStaleLock();
   if (staleLock) app.log.warn("Stale System-Update Lock aufgeräumt");
 
-  // Backup-Scheduler starten
+  // Backup-Scheduler starten (täglicher Snapshot)
   startScheduler();
+  // Täglicher Reconcile-Cron (DB ↔ Disk-Konsistenz)
+  startBackupReconcileCron();
   // Belege-Scheduler (überfällig-Markierung) starten
   startBelegeScheduler();
   // Drive-Upload Worker (Cron-basiert, jede Minute)
