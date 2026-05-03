@@ -1327,34 +1327,39 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     void _strip;
     result = safe;
   } else if (m === "POST" && match(path, "/einstellungen/smtp/test")) {
-    // Schneller TCP-/Konfig-Check (kein echter Versand).
-    if (!d.smtp.passwortGesetzt || !d.smtp.server || !d.smtp.benutzer) {
-      result = { erfolg: false, nachricht: "Bitte zuerst alle Felder inkl. Passwort speichern." };
-    } else {
-      result = { erfolg: true, nachricht: "Konfiguration plausibel (Mock)." };
-    }
+    // Demo-Modus: kein echter SMTP-Test im Browser möglich.
+    result = {
+      erfolg: false,
+      demo: true,
+      nachricht:
+        "Demo-Modus — SMTP wird erst auf dem Pi-Backend tatsächlich geprüft. Im Browser kann keine echte Verbindung aufgebaut werden.",
+    };
   } else if (m === "POST" && match(path, "/email/verify")) {
-    // Vollständige SMTP-Verbindungsprüfung (verify) — Mock simuliert Latenz + Fehlercodes.
-    await new Promise((r) => setTimeout(r, 600));
-    if (!d.smtp.passwortGesetzt || !d.smtp.server || !d.smtp.benutzer) {
-      result = { ok: false, errorCode: "EAUTH", error: "Zugangsdaten unvollständig — bitte Server, Benutzer und Passwort speichern." };
-    } else {
-      result = { ok: true, latencyMs: 240 + Math.floor(Math.random() * 180) };
-    }
+    // Demo-Modus: ehrliche Antwort statt Fake-Erfolg.
+    await new Promise((r) => setTimeout(r, 400));
+    result = {
+      ok: false,
+      demo: true,
+      errorCode: "EDEMO",
+      error:
+        "Demo-Modus — eine echte SMTP-Verbindung ist erst nach Pi-Deployment möglich. Eingaben werden lokal gespeichert.",
+    };
   } else if (m === "POST" && match(path, "/email/test")) {
-    // Mock: simuliert eine echte Test-Mail. Erfordert vollständige SMTP-Konfig.
-    await new Promise((r) => setTimeout(r, 500));
+    // Demo-Modus: KEINE Fake-Erfolg-Mail mehr — sonst denkt der User, es ginge raus.
+    await new Promise((r) => setTimeout(r, 400));
     const an = (body as { an?: string } | undefined)?.an?.trim();
     if (!an) {
       result = { ok: false, errorCode: "EINPUT", error: "Empfängeradresse fehlt." };
-    } else if (!d.smtp.passwortGesetzt || !d.smtp.server || !d.smtp.benutzer) {
-      result = { ok: false, errorCode: "ECONFIG", error: "SMTP nicht konfiguriert — bitte Server, Benutzer und Passwort speichern." };
-    } else if (!d.smtp.absenderEmail) {
-      result = { ok: false, errorCode: "ECONFIG", error: "Absender-E-Mail fehlt." };
     } else {
-      logAktivitaet("einstellung_geaendert", `Test-Mail an ${an} (Mock — kein realer Versand)`);
-      result = { ok: true, messageId: `mock-${Date.now()}@local` };
+      result = {
+        ok: false,
+        demo: true,
+        errorCode: "EDEMO",
+        error:
+          "Demo-Modus — Test-Mails werden im Browser NICHT real versendet. Aktiv erst nach Pi-Deployment.",
+      };
     }
+
   } else if (m === "GET" && match(path, "/einstellungen/nummernkreise")) {
     result = d.nummernkreise;
   } else if (m === "PATCH" && match(path, "/einstellungen/nummernkreise")) {
