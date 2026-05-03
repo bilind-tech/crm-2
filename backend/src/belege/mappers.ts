@@ -43,7 +43,7 @@ export interface ApiPosition {
   einzelpreisNetto: number;
   steuersatz: number;
   rabatt: number;
-  modus: "einzel" | "pauschal";
+  modus: "einzel" | "pauschal" | "stunden";
   pauschalpreisNetto?: number;
   ausfuehrung?: string;
 }
