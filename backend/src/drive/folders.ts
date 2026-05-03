@@ -62,19 +62,30 @@ export async function ensureRootFolder(): Promise<string> {
 export async function ensureMonthFolder(art: "angebot" | "rechnung", jahr: number, monat: number): Promise<string> {
   const top = art === "angebot" ? "Angebote" : "Rechnungen";
   const mm = String(monat).padStart(2, "0");
-  const path = `${top}/${jahr}/${mm}`;
-  const cache = loadCache();
-  if (cache.subs[path]) return cache.subs[path];
+  return ensureFolderPath(`${top}/${jahr}/${mm}`);
+}
 
+/** Erstellt rekursiv die Ordnerkette unter dem Root. Pfad wie "Rechnungen/2026/05". */
+export async function ensureFolderPath(relPath: string): Promise<string> {
+  const segments = relPath.split("/").map((s) => s.trim()).filter((s) => s.length > 0);
+  if (segments.length === 0) return ensureRootFolder();
+  const cache = loadCache();
   const root = await ensureRootFolder();
-  const topId = cache.subs[top] ?? await findOrCreateFolder(top, root);
-  cache.subs[top] = topId;
-  const yearId = cache.subs[`${top}/${jahr}`] ?? await findOrCreateFolder(String(jahr), topId);
-  cache.subs[`${top}/${jahr}`] = yearId;
-  const monthId = await findOrCreateFolder(mm, yearId);
-  cache.subs[path] = monthId;
+  let parentId = root;
+  let acc = "";
+  for (const seg of segments) {
+    acc = acc ? `${acc}/${seg}` : seg;
+    const cached = cache.subs[acc];
+    if (cached) {
+      parentId = cached;
+      continue;
+    }
+    const id = await findOrCreateFolder(seg, parentId);
+    cache.subs[acc] = id;
+    parentId = id;
+  }
   saveCache(cache);
-  return monthId;
+  return parentId;
 }
 
 export async function uploadFile(opts: {
