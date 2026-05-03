@@ -51,6 +51,12 @@ export function brandingDir(): string {
 
 /** Liefert das Firmen-Logo als data-URL oder null, wenn keine Datei vorhanden. */
 export function loadLogoDataUrl(): string | null {
+  // 1) Aus Settings (Frontend → Einstellungen → Firmendaten → Logo hochladen)
+  const f = getSetting<FirmaSettings & { logoUrl?: string }>("firma");
+  if (f?.logoUrl && typeof f.logoUrl === "string" && f.logoUrl.startsWith("data:")) {
+    return f.logoUrl;
+  }
+  // 2) Fallback: Datei im Branding-Ordner
   for (const ext of ["png", "jpg", "jpeg"] as const) {
     const p = path.join(brandingDir(), `logo.${ext}`);
     if (existsSync(p)) {
