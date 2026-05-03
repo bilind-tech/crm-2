@@ -1,56 +1,64 @@
+## Ziel
 
-# Live-Editor: Speichern-Spam fixen + magisches Live-Gefühl + PDF-Feinschliff
+Drei konkrete Probleme im Live-Editor & PDF-Layout fixen:
 
-Drei separate, kleine Fixes — alle ohne Daten- oder API-Änderung.
+1. **Inline-Editor Intro/Outro/Titel zeigt leeres Feld.** Beim Klick auf „Sehr geehrte Damen und Herren / Einleitungstext" soll der **tatsächlich im PDF angezeigte Text** im Textarea stehen — auch wenn es der automatisch erzeugte Standardtext ist. So kann der User direkt feinjustieren, statt von Null abzutippen.
+2. **Meta-Box oben rechts (Rechnungsnummer / Datum / Fällig am).** Zeilen sind zu locker, der „Bei Zahlung bitte Rechnungs-Nr. angeben"-Block hat zu viel Abstand, und der Rahmen wirkt unsauber. Soll ein dezenter, sauberer Rahmen werden — clean, eng, professionell.
+3. **Live-Preview flackert.** Bei jeder Eingabe verschwindet die PDF kurz und kommt wieder. Soll stehen bleiben, bis die neue Version fertig ist und dann nahtlos austauschen — und schneller reagieren.
 
-## 1. Toast-Spam „Gespeichert" beseitigen
+## Änderungen
 
-Aktuell feuert `useBelegEditor` bei **jedem** Autosave (alle 1,5 s) einen Erfolgs-Toast. Das ist beim Live-Tippen unerträglich.
+### A) Inline-Editor mit Default-Text vorbefüllen
 
-In `src/hooks/useBelegEditor.ts`:
-- `save(opts?: { silent?: boolean })` — Toast nur, wenn nicht silent.
-- Autosave (Timer-Pfad) ruft `save({ silent: true })`. Status zeigt der Header bereits via „Speichere…" / „Alles gespeichert".
-- Manuelles Klicken auf den „Speichern"-Button bleibt mit Toast.
-- Autosave-Debounce von **1500 ms → 3000 ms**, damit beim Tippen nicht ständig gespeichert wird.
-- Fehler-Toast (`toast.error`) bleibt unverändert, damit Probleme sichtbar werden.
+Datei: `src/components/pdf-editor/HotspotInlineEditor.tsx`
 
-## 2. „Magisches" Live-Gefühl — keine Reset-Welle, kein Flicker
+- Neue Helper `defaultIntroFor(draft, kind)` / `defaultOutroFor(draft, kind)` aus `src/lib/pdf/belegPdf.ts` exportieren (die bereits existierenden `defaultIntroAngebot`, `defaultOutroAngebot`, `defaultIntroRechnung`, `defaultOutroRechnung`).
+- Im Editor:
+  - **Intro:** `value = draft.optionen?.eigenesIntro ?? draft.introText ?? defaultIntroFor(draft, kind)`
+  - **Outro:** analog mit `eigenesOutro / outroText / defaultOutroFor`
+  - **Titel:** bleibt wie bisher (`draft.titel`), aber `placeholder` beibehalten.
+- `kind` (`"angebot" | "rechnung"`) als zusätzliches Prop an `HotspotInlineEditor` durchreichen (von `PdfEditorLayout` → `renderEditor`).
+- Beim ersten Tippen wird der Default automatisch zu „eigenem" Text — kein Magic-Save nötig, einfach `set("optionen", { ...opt, eigenesIntro: e.target.value })` wie bisher.
 
-Heute passiert nach einem Save: Server liefert das aktualisierte Objekt, der `useEffect` in `useBelegEditor` sieht „neuen Beleg" und ruft `setDraft(beleg)` — der ganze Draft wird ersetzt → Inputs verlieren Fokus, Live-Preview baut neu, fühlt sich „kurz weg" an.
+### B) Meta-Box (oben rechts) kompakt & sauber gerahmt
 
-Fix in `useBelegEditor.ts`:
-- Hilfsfunktion `stableStringify(obj)` schließt **volatile** Server-Felder aus dem Vergleich aus: `aktualisiertAm`, `updatedAt`, `erstelltAm`, `createdAt` (Timestamps, die der Server bei jedem Patch neu setzt).
-- Eintreffender Beleg wird nur dann in den Draft gespiegelt, wenn:
-  - er sich semantisch (ohne Timestamps) vom letzten gespeicherten Stand unterscheidet **und**
-  - der lokale Draft nicht „dirty" ist (User-Eingaben gehen sonst verloren).
-- Andernfalls nur `lastSavedRef` aktualisieren — kein `setDraft`, kein React-Tree-Reset.
+Dateien: `src/lib/pdf/belegPdf.ts` **und** `backend/src/pdf/layout.ts` (Parität!)
 
-In `src/components/pdf-editor/LivePdfPreview.tsx`:
-- PDF-Build-Debounce **300 ms → 600 ms** und nur wenn sich `stableStringify(draft)` wirklich geändert hat (Memo-Key statt direkter Referenz).
-- Alte PDF-URL bleibt sichtbar, bis die neue Page geladen ist (ist heute schon so, aber Loader-Pille „aktualisiert …" wird kleiner/dezenter und erscheint erst nach 400 ms Build-Zeit, damit kurze Builds nicht aufblitzen).
+In `metaBox(...)`:
+- `paddingTop`/`paddingBottom` von `4` → `2`.
+- Header-Note („Bei Zahlung bitte Rechnungs-Nr. angeben"): zwischen `noteLines` `margin` `[0, 0, 0, 1]`, und insgesamt `margin: [0, 0, 0, 3]` zur Trennlinie.
+- Rahmen: alle Außenlinien (`hLine` an `i===0` und `i===body.length`, `vLine` an `i===0` und `i===widths.length`) auf einheitlich `0.6` in `COLOR_TEXT`.
+- Trennlinie zwischen Note-Block und Daten: `0.4` statt `0.5` (dezenter).
+- Datenzeilen-`margin` von `[0, 2, x, 2]` → `[0, 1, x, 1]`.
+- Header-Note Zeilen: `lineHeight: 1.15`, Datenzeilen: `lineHeight: 1.2`.
+- Box-Breite minimal anpassen, falls nötig (`width: 235`).
 
-Ergebnis: Beim Tippen passiert für den User nichts „Lautes" — die rechte Live-Vorschau aktualisiert sich nach kurzer Pause **ohne** dass der ganze Editor zurückspringt.
+Ergebnis: kompakter „Kasten" mit gleichmäßiger 0.6pt-Border rundherum, klarer dünner Trennlinie, deutlich engerem Zeilenabstand.
 
-## 3. PDF-Feinschliff (Frontend + Backend identisch)
+### C) Live-Preview ohne Flacker, schneller
 
-In `src/lib/pdf/belegPdf.ts` und `backend/src/pdf/layout.ts` (gespiegelt):
+Datei: `src/components/pdf-editor/LivePdfPreview.tsx`
 
-- **Logo noch größer**: `width: 230 / fit: [230, 100]` → `width: 270 / fit: [270, 120]`.
-- **Mehr Abstand Logo ↔ Text darunter**: `pageMargins.top` von `130` → `155`. So beginnt der Adress-/Meta-Block deutlich tiefer und „atmet".
-- **Footer wirklich ganz unten**: `footer()`-Wrapper-Margin `[55, 0, 55, 25]` → `[55, 0, 55, 12]`, und `pageMargins.bottom` von `130` → `100`. Damit sitzt der Footer ~12pt vom Seitenende — wie auf der Vorlage.
-- **Header-Margin** `[55, 30, 55, 0]` bleibt; nur das Logo wird größer und der Absender-Text-Top-Margin nachgezogen (`35` → `50`), damit die unterstrichene Zeile nicht direkt unterm Logo klebt.
+- `DEBOUNCE_MS` von `600` → `300`. (Schneller reagierend.)
+- **Wichtigster Fix gegen Flackern:** PDF-Build-`useEffect` darf bei Änderungen NICHT die alte `pdfUrl` zerstören. Aktuell bleibt `pdfUrl` zwar formal stehen, aber `<Document file={pdfUrl}>` rendert beim Wechsel der URL kurz nichts. Lösung:
+  - Statt direkt `setPdfUrl(newUrl)` ein neues Pattern: vorab ein verstecktes `<Document file={nextUrl} onLoadSuccess={...}>` „pre-rendern". Erst wenn das `onLoadSuccess`-Callback feuert, wird `pdfUrl = nextUrl` als sichtbar gesetzt und alte URL revoked.
+  - Konkret: zusätzliches State-Feld `pendingUrl`. Im sichtbaren Bereich bleibt `pdfUrl` so lange unverändert, bis `pendingUrl` geladen ist; dann atomarer Swap.
+- Loader-Pille bleibt, aber `LOADER_DELAY_MS` von `400` → `250`, damit bei längeren Builds dezent sichtbar.
+- Page-Re-Render-Glitch: `<Page>` bekommt `key={pdfUrl + '-' + pageNum}` damit beim Swap konsistent neu gemountet wird (aber erst nach dem Atomic Swap → kein Blank-Frame mehr).
 
-Keine weiteren Layout-Änderungen — Tabelle, Meta-Box, Outro bleiben wie zuletzt freigegeben.
+Datei: `src/hooks/useBelegEditor.ts` (klein):
+- Autosave-Debounce von `3000` ms → `1500` ms (User erwartet „live", nicht „nach 3s").
+- An der Volatile-Logik nichts ändern.
 
-## Betroffene Dateien
+## Technische Notizen
 
-- `src/hooks/useBelegEditor.ts` — silent autosave, stableStringify, dirty-aware sync, debounce 3s
-- `src/components/pdf-editor/LivePdfPreview.tsx` — debounce 600ms, Build-Trigger nur bei semantischem Diff, dezente Loader-Pille
-- `src/lib/pdf/belegPdf.ts` — Header-Logo + Margins
-- `backend/src/pdf/layout.ts` — gleiche Header-Logo + Margins
+- Defaults aus `belegPdf.ts` exportieren als named exports, ohne die Aufrufstellen in `buildAngebotDoc`/`buildRechnungDoc` zu verändern.
+- `HotspotInlineEditor` Prop-Signatur erweitern; `PdfEditorLayout`'s `renderEditor` (im `LivePdfPreview` Render-Prop) gibt `kind` mit.
+- Backend-`layout.ts` muss exakt dieselben Padding-/Linien-Werte bekommen (sonst weicht der gespeicherte PDF vom Live-Preview ab).
+- Keine API-Änderungen, keine Migrations, keine neuen Dependencies.
 
-## Verifikation
+## Ergebnis
 
-1. Im Live-Editor Titel ändern → kein Toast-Spam, Header-Indikator wechselt nur dezent.
-2. Schnelles Tippen → Editor-Feld behält Fokus, kein „kurz weg" der Vorschau.
-3. PDF-Vorschau (Auge / Inline / Editor): Logo sichtbar größer, mehr Luft zwischen Logo und Absenderzeile, Footer am unteren Seitenrand.
+- Klick auf „Sehr geehrte Damen und Herren …" → Textarea zeigt den vollen Text inkl. „gerne unterbreiten wir Ihnen …" / „hiermit übersenden wir …", direkt editierbar.
+- Meta-Box rechts oben: klarer, gleichmäßiger schmaler Rahmen, enge Zeilen, professionell.
+- Tippen im Editor → Preview bleibt stehen, ~300 ms später ersetzt sie sich nahtlos durch die neue Version, ohne Weiß-Blink.
