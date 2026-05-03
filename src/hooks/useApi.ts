@@ -609,6 +609,19 @@ export const useUpdateSmtp = () => {
 export const useTestSmtp = () =>
   useMutation({ mutationFn: () => api.post<{ erfolg: boolean; nachricht: string }>("/einstellungen/smtp/test") });
 
+/** SMTP-Verbindungstest (verify, kein Versand) — synchron, klare Fehler-Klartexte. */
+export const useVerifySmtp = () =>
+  useMutation({
+    mutationFn: () => api.post<{ ok: boolean; latencyMs?: number; error?: string; errorCode?: string }>("/email/verify"),
+  });
+
+/** Echte Test-Mail an eine eingegebene Adresse senden (genau eine Mail, per User-Klick). */
+export const useSendTestMail = () =>
+  useMutation({
+    mutationFn: (an: string) =>
+      api.post<{ ok: boolean; messageId?: string; error?: string; errorCode?: string }>("/email/test", { an }),
+  });
+
 export const useNummernkreise = () =>
   useQuery({ queryKey: qk.einstellungen.nummernkreise, queryFn: () => api.get<Nummernkreise>("/einstellungen/nummernkreise") });
 export const useUpdateNummernkreise = () => {
