@@ -75,10 +75,11 @@ export function ManuellerPostenDialog({ open, onOpenChange, editPosten }: Props)
         zeitraum: { jahr: new Date(faelligAm).getFullYear() },
         faelligAm,
         geschaetzterBetrag: betrag,
-      status: "offen",
-      notiz: notiz.trim() || undefined,
-    });
-    toast.success("Steuer-Termin angelegt");
+        status: "offen",
+        notiz: notiz.trim() || undefined,
+      });
+      toast.success("Steuer-Termin angelegt");
+    }
     reset();
     onOpenChange(false);
   }
