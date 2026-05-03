@@ -1,5 +1,6 @@
-// Tab "Google Drive": Verbindung + Ordner-/Dateinamen-Schemata + Auto-Upload.
-import { useEffect, useState } from "react";
+// Tab "Google Drive": Verbindung + Ordner-/Dateinamen-Schemata + Auto-Upload
+// + Synchronisations-Status (Upload-Queue mit Retry).
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Cloud,
@@ -9,6 +10,10 @@ import {
   Loader2,
   Link as LinkIcon,
   RefreshCw,
+  Copy,
+  ExternalLink,
+  RotateCcw,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,11 +32,16 @@ import {
   useConnectGoogleDrive,
   useDisconnectGoogleDrive,
   useTestGoogleDrive,
+  useDriveUploads,
+  useRetryDriveUpload,
+  type DriveUpload,
 } from "@/hooks/useApi";
 import type { GoogleDriveEinstellungen } from "@/lib/api/types";
 import { Field, Section, StickySaveBar } from "./_shared";
 import { LoadingPlaceholder } from "@/components/layout/LoadingPlaceholder";
 import { useConfirm } from "@/hooks/useConfirm";
+import { getBackendUrl } from "@/lib/api/backendUrl";
+import { cn } from "@/lib/utils";
 
 const PFAD_PLATZHALTER = ["{YYYY}", "{MM}"];
 const DATEI_PLATZHALTER = ["{nummer}", "{kunde}", "{leistung}", "{MM}", "{YYYY}", "{datum}"];
@@ -68,6 +78,13 @@ export function GoogleDriveTab() {
   useEffect(() => {
     if (data) setForm(data);
   }, [data]);
+
+  // Wenn nach OAuth zurückgekehrt wird (verbunden==true), Connect-Dialog
+  // automatisch schließen.
+  useEffect(() => {
+    if (form?.verbunden && connectOpen) setConnectOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form?.verbunden]);
 
   if (isLoading || !form || !data) return <LoadingPlaceholder />;
 
@@ -184,6 +201,9 @@ export function GoogleDriveTab() {
           </div>
         )}
       </Section>
+
+      {/* Synchronisation: Upload-Queue mit Retry */}
+      {form.verbunden && <SynchronisationSection />}
 
       {/* Ordnerstruktur */}
       <Section
@@ -336,51 +356,283 @@ function PlatzhalterChips({ items }: { items: string[] }) {
 }
 
 function ConnectDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { data } = useGoogleDrive();
+  const update = useUpdateGoogleDrive();
   const connect = useConnectGoogleDrive();
-  const [email, setEmail] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [waitingForOauth, setWaitingForOauth] = useState(false);
+
+  // Felder beim Öffnen vorbelegen, falls schon hinterlegt.
+  useEffect(() => {
+    if (open && data) setClientId(data.clientId ?? "");
+    if (!open) {
+      setClientSecret("");
+      setWaitingForOauth(false);
+    }
+  }, [open, data]);
+
+  const redirectUri = `${getBackendUrl()}/einstellungen/google-drive/callback`;
+  const secretSchonHinterlegt = data?.clientSecretIsSet ?? false;
+  const canSubmit =
+    clientId.trim().length > 8 &&
+    (clientSecret.trim().length > 0 || secretSchonHinterlegt) &&
+    !connect.isPending &&
+    !update.isPending;
+
+  const copyRedirectUri = async () => {
+    try {
+      await navigator.clipboard.writeText(redirectUri);
+      toast.success("Redirect-URI kopiert");
+    } catch {
+      toast.error("Konnte nicht kopieren — bitte manuell markieren");
+    }
+  };
+
+  const handleConnect = async () => {
+    try {
+      // 1) Client-ID/Secret speichern (Secret nur wenn neu eingegeben).
+      const patch: Record<string, unknown> = { clientId: clientId.trim() };
+      if (clientSecret.trim().length > 0) patch.clientSecret = clientSecret.trim();
+      await update.mutateAsync(patch as Partial<GoogleDriveEinstellungen>);
+      // 2) Authorize-URL holen + im neuen Tab öffnen.
+      const { authorizeUrl } = await connect.mutateAsync();
+      const win = window.open(authorizeUrl, "_blank", "noopener,noreferrer");
+      if (!win) {
+        toast.error("Bitte Pop-ups für diese Seite erlauben.");
+        return;
+      }
+      setWaitingForOauth(true);
+    } catch (e) {
+      toast.error((e as Error).message ?? "Verbinden fehlgeschlagen");
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md bg-background">
+      <DialogContent className="max-w-lg bg-background">
         <DialogHeader>
-          <DialogTitle>Mit Google verbinden</DialogTitle>
+          <DialogTitle>Mit Google Drive verbinden</DialogTitle>
           <DialogDescription>
-            Auf dem Pi öffnet sich der Google-Login. Hier im Mock-Modus reicht die Konto-Mail.
+            Einmalig OAuth-Zugangsdaten hinterlegen. Sie werden verschlüsselt auf dem Pi gespeichert
+            und gelten für alle Geräte im LAN.
           </DialogDescription>
         </DialogHeader>
-        <Field label="Konto-Mail" required>
-          <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="buero@mycleancenter.cm"
-            autoFocus
-          />
-        </Field>
+
+        <div className="space-y-4">
+          {/* Schritt-für-Schritt-Hinweis */}
+          <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+            <p className="mb-2 font-medium text-foreground">So holst du dir Client-ID & Secret:</p>
+            <ol className="list-decimal space-y-1 pl-4">
+              <li>
+                In der{" "}
+                <a
+                  href="https://console.cloud.google.com/apis/credentials"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline"
+                >
+                  Google Cloud Console
+                </a>{" "}
+                einen OAuth-2.0-Client (Typ „Web") anlegen.
+              </li>
+              <li>Drive-API aktivieren und Scope „drive.file" zulassen.</li>
+              <li>Folgende Redirect-URI im Client eintragen:</li>
+            </ol>
+            <div className="mt-2 flex items-center gap-1.5">
+              <code className="flex-1 truncate rounded-md bg-background px-2 py-1.5 font-mono text-[11px] text-foreground">
+                {redirectUri}
+              </code>
+              <Button variant="outline" size="sm" onClick={copyRedirectUri} className="h-8 px-2">
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+
+          <Field label="OAuth Client-ID" required>
+            <Input
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              placeholder="123456789-abcdef.apps.googleusercontent.com"
+              autoFocus
+              className="font-mono text-xs"
+            />
+          </Field>
+          <Field
+            label="Client Secret"
+            required={!secretSchonHinterlegt}
+            hint={
+              secretSchonHinterlegt
+                ? "Bereits hinterlegt — leer lassen, um es nicht zu ändern."
+                : undefined
+            }
+          >
+            <Input
+              type="password"
+              value={clientSecret}
+              onChange={(e) => setClientSecret(e.target.value)}
+              placeholder={secretSchonHinterlegt ? "•••••••• (unverändert)" : "GOCSPX-…"}
+              className="font-mono text-xs"
+            />
+          </Field>
+
+          {waitingForOauth && (
+            <div className="flex items-start gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3 text-xs">
+              <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-primary" />
+              <p>
+                Google-Login im neuen Tab abschließen. Dieses Fenster schließt sich automatisch,
+                sobald die Verbindung steht.
+              </p>
+            </div>
+          )}
+        </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             Abbrechen
           </Button>
-          <Button
-            onClick={() =>
-              connect.mutate(
-                { kontoEmail: email },
-                {
-                  onSuccess: () => {
-                    toast.success("Google Drive verbunden");
-                    onClose();
-                    setEmail("");
-                  },
-                },
-              )
-            }
-            disabled={!email.includes("@") || connect.isPending}
-          >
-            {connect.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-            Verbinden
+          <Button onClick={handleConnect} disabled={!canSubmit}>
+            {(connect.isPending || update.isPending) && (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            )}
+            <LinkIcon className="mr-1.5 h-4 w-4" />
+            Mit Google verbinden
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// =============================================================================
+// Synchronisations-Sektion: Counter + Liste fehlgeschlagener Uploads + Retry
+// =============================================================================
+function SynchronisationSection() {
+  const { data: uploads = [], isLoading } = useDriveUploads();
+  const retry = useRetryDriveUpload();
+  const [showAll, setShowAll] = useState(false);
+
+  const counts = useMemo(() => {
+    const c = { pending: 0, running: 0, erfolg: 0, fehler: 0, manuell: 0 };
+    for (const u of uploads) c[u.status]++;
+    return c;
+  }, [uploads]);
+
+  const probleme = uploads.filter((u) => u.status === "fehler" || u.status === "manuell");
+  const visibleProbleme = showAll ? probleme : probleme.slice(0, 5);
+
+  const handleRetry = (u: DriveUpload) => {
+    retry.mutate(u.id, {
+      onSuccess: () => toast.info(`„${u.dateiName}" wird erneut versucht`),
+      onError: (e) => toast.error((e as Error).message),
+    });
+  };
+
+  return (
+    <Section
+      title="Synchronisation"
+      description="Status aller PDF-Uploads ins Drive. Fehlgeschlagene Uploads kannst du manuell wiederholen."
+    >
+      {isLoading ? (
+        <div className="py-3 text-center text-xs text-muted-foreground">
+          <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+        </div>
+      ) : (
+        <>
+          {/* Counter-Zeile */}
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-2.5 text-xs">
+            <CounterPill icon={<Loader2 className="h-3 w-3" />} label="läuft" value={counts.running} tone="primary" />
+            <CounterPill label="in Warteschlange" value={counts.pending} />
+            <CounterPill label="erfolgreich" value={counts.erfolg} tone="success" />
+            <CounterPill label="manuell" value={counts.manuell} tone="warn" />
+            {counts.fehler > 0 && <CounterPill label="Fehler" value={counts.fehler} tone="error" />}
+          </div>
+
+          {/* Problem-Liste oder Alles-OK */}
+          {probleme.length === 0 ? (
+            <div className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-muted/30 px-4 py-2.5 text-xs text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-success" />
+              Alles synchron — keine offenen Probleme.
+            </div>
+          ) : (
+            <ul className="mt-3 divide-y divide-border rounded-xl border border-border bg-card">
+              {visibleProbleme.map((u) => (
+                <li key={u.id} className="flex items-start gap-3 px-3 py-2.5">
+                  <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-mono text-xs">{u.dateiName}</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      <span className="rounded bg-muted px-1.5 py-0.5 font-medium">{u.belegArt}</span>{" "}
+                      · Versuche: {u.versuche}
+                      {u.status === "manuell" && " · gibt jetzt nur noch manuell weiter"}
+                    </p>
+                    {u.fehlerText && (
+                      <p className="mt-1 line-clamp-2 text-[11px] text-destructive">{u.fehlerText}</p>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 gap-1">
+                    {u.driveWebLink && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        title="In Drive öffnen"
+                        onClick={() => window.open(u.driveWebLink!, "_blank", "noopener,noreferrer")}
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 text-xs"
+                      onClick={() => handleRetry(u)}
+                      disabled={retry.isPending}
+                    >
+                      <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                      Erneut
+                    </Button>
+                  </div>
+                </li>
+              ))}
+              {probleme.length > 5 && !showAll && (
+                <li className="px-3 py-2 text-center">
+                  <Button variant="link" size="sm" onClick={() => setShowAll(true)}>
+                    Alle {probleme.length} anzeigen
+                  </Button>
+                </li>
+              )}
+            </ul>
+          )}
+        </>
+      )}
+    </Section>
+  );
+}
+
+function CounterPill({
+  icon,
+  label,
+  value,
+  tone = "default",
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  value: number;
+  tone?: "default" | "primary" | "success" | "warn" | "error";
+}) {
+  const toneClass = {
+    default: "text-muted-foreground",
+    primary: "text-primary",
+    success: "text-success",
+    warn: "text-amber-600 dark:text-amber-400",
+    error: "text-destructive",
+  }[tone];
+  return (
+    <span className={cn("inline-flex items-center gap-1", toneClass)}>
+      {icon}
+      <span className="font-semibold tabular-nums">{value}</span>
+      <span className="text-muted-foreground">{label}</span>
+    </span>
   );
 }

@@ -617,6 +617,14 @@ export interface GoogleDriveEinstellungen {
   letzteSynchronisation?: ISODateTime;
   /** Letzte Fehlermeldung — leer wenn alles ok. */
   letzterFehler?: string;
+  /** OAuth-Client-ID (Web-Client). Wird im Connect-Dialog vorbelegt. */
+  clientId?: string;
+  /** True, wenn Client-Secret im Backend hinterlegt ist (Wert wird nie ausgegeben). */
+  clientSecretIsSet?: boolean;
+  /** True, wenn ein Refresh-Token vorliegt (= dauerhaft verbunden). */
+  refreshTokenIsSet?: boolean;
+  /** True, wenn Client-ID gesetzt ist. */
+  clientIdIsSet?: boolean;
 }
 
 export type BackupKategorie =

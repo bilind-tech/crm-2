@@ -49,7 +49,7 @@ function open(): void {
     "benachrichtigung:neu", "benachrichtigung:gelesen", "benachrichtigung:weg",
     "beleg:mutated", "zahlung:erfasst",
     "email:gesendet", "email:fehler",
-    "drive:hochgeladen", "drive:fehler",
+    "drive:hochgeladen", "drive:fehler", "drive:upload-changed",
     "auth:login", "auth:logout",
     "backup:erstellt", "backup:fehler",
     "einstellung:geaendert",
