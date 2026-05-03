@@ -228,6 +228,7 @@ function Page() {
       </div>
 
       <div className="sticky bottom-4 flex flex-wrap items-center justify-end gap-2 rounded-2xl border bg-background/95 p-3 shadow-lg backdrop-blur">
+        <PrintButton getBlob={buildBlob} variant="outline" size="default" disabled={!kunde} />
         <Button
           variant="outline"
           onClick={() => handleErstellen(false)}
