@@ -49,6 +49,8 @@ export function useLiveEvents(enabled: boolean): void {
             qc.invalidateQueries({ queryKey: ["angebote"] });
             if (d.id) qc.invalidateQueries({ queryKey: ["angebote", d.id] });
           }
+          // PDF-Cache verwerfen → nächste Vorschau holt neue Version.
+          if (d?.art && d?.id) qc.invalidateQueries({ queryKey: ["pdf", d.art, d.id] });
           qc.invalidateQueries({ queryKey: ["dashboard", "kennzahlen"] });
           break;
         }

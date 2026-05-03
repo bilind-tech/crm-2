@@ -45,9 +45,9 @@ export function PdfPreviewCard({
         <div className="min-w-0 flex-1 space-y-1">
           <div className="font-semibold">{title}</div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            {status === "loading" && <span>PDF wird erzeugt …</span>}
+            {status === "loading" && <span>PDF wird erstellt …</span>}
             {status === "error" && (
-              <span className="text-destructive">{errorMessage || "PDF konnte nicht erzeugt werden"}</span>
+              <span className="text-destructive">{errorMessage || "PDF konnte nicht erstellt werden"}</span>
             )}
             {status === "ready" && <span>Vorschau bereit</span>}
             <DriveStatusBadge drive={drive} />
@@ -69,10 +69,10 @@ export function PdfPreviewCard({
           <div className="flex h-[40vh] items-center justify-center text-sm text-muted-foreground">
             {status === "loading" ? (
               <span className="inline-flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" /> PDF wird erzeugt …
+                <Loader2 className="h-4 w-4 animate-spin" /> PDF wird erstellt …
               </span>
             ) : status === "error" ? (
-              <span className="text-destructive">{errorMessage || "PDF konnte nicht erzeugt werden"}</span>
+              <span className="text-destructive">{errorMessage || "PDF konnte nicht erstellt werden"}</span>
             ) : (
               <span>Noch keine Vorschau</span>
             )}

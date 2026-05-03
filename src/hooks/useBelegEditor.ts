@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useUpdateAngebot, useUpdateRechnung } from "@/hooks/useApi";
+import { useInvalidateBelegPdf } from "@/hooks/useBelegPdf";
 import type { Angebot, Rechnung } from "@/lib/api/types";
 
 type BelegKind = "angebot" | "rechnung";
@@ -48,6 +49,7 @@ export function useBelegEditor<T extends Angebot | Rechnung>(
 
   const updateAngebot = useUpdateAngebot(kind === "angebot" ? draft.id : "");
   const updateRechnung = useUpdateRechnung(kind === "rechnung" ? draft.id : "");
+  const invalidatePdf = useInvalidateBelegPdf();
 
   const set = useCallback(<K extends keyof T>(key: K, value: T[K]) => {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -83,11 +85,13 @@ export function useBelegEditor<T extends Angebot | Rechnung>(
         await updateRechnung.mutateAsync(payload as Partial<Rechnung>);
       }
       lastSavedRef.current = stableStringify(draft);
+      // PDF-Cache (React Query) verwerfen → Detailseite holt neue Version.
+      invalidatePdf(kind, draft.id);
       if (!opts?.silent) toast.success("Gespeichert", { duration: 1500 });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Speichern fehlgeschlagen");
     }
-  }, [draft, isDirty, kind, updateAngebot, updateRechnung]);
+  }, [draft, isDirty, kind, updateAngebot, updateRechnung, invalidatePdf]);
 
   // Autosave nach 1.5s ohne Änderung — silent (kein Toast).
   useEffect(() => {
