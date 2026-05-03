@@ -88,7 +88,7 @@ export function ManuellerPostenDialog({ open, onOpenChange, editPosten }: Props)
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) reset(); }}>
       <DialogContent className="sm:max-w-md bg-background">
         <DialogHeader>
-          <DialogTitle>Steuer-Termin anlegen</DialogTitle>
+          <DialogTitle>{editPosten ? "Steuer-Termin bearbeiten" : "Steuer-Termin anlegen"}</DialogTitle>
           <DialogDescription>
             Für alles, was nicht automatisch berechnet wird (Grundsteuer, Kfz, IHK, Berufsgenossenschaft, Rundfunk …).
           </DialogDescription>
