@@ -154,7 +154,7 @@ export function BackendVerbindungTab() {
         </p>
       </div>
 
-      <MockDataResetCard />
+      
     </div>
   );
 }
