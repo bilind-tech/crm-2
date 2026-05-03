@@ -352,6 +352,29 @@ export function GoogleDriveTab() {
               </span>
             </p>
           </Field>
+          <Field label="Protokoll (Übergabe / Schlüssel)" required>
+            <Input
+              value={form.dateinameSchema.protokoll ?? "{nummer} {kunde} {leistung} {DD}-{MM}-{YYYY}"}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  dateinameSchema: { ...form.dateinameSchema, protokoll: e.target.value },
+                })
+              }
+              className="font-mono"
+              disabled={!form.verbunden}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Vorschau:{" "}
+              <span className="font-mono text-foreground">
+                {dateiVorschau(form.dateinameSchema.protokoll ?? "{nummer} {kunde} {leistung} {DD}-{MM}-{YYYY}", "protokoll")}
+              </span>
+              <br />
+              <span className="text-[11px]">
+                <code className="font-mono">{"{leistung}"}</code> wird beim Protokoll mit dem Objekt-Namen befüllt.
+              </span>
+            </p>
+          </Field>
           <PlatzhalterChips items={DATEI_PLATZHALTER} />
         </div>
       </Section>
