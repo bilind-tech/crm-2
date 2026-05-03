@@ -48,6 +48,30 @@ import {
   setStepStatus,
 } from "./repo.js";
 import type { UpdateStepId } from "./types.js";
+import { assertNotInDataDir } from "./data-guard.js";
+
+// --- Daten-Schutz: jede FS-Mutation läuft durch diese Wrapper ---
+function safeRename(src: string, dst: string): void {
+  assertNotInDataDir(src, "rename:src");
+  assertNotInDataDir(dst, "rename:dst");
+  renameSync(src, dst);
+}
+function safeUnlink(p: string): void {
+  assertNotInDataDir(p, "unlink");
+  unlinkSync(p);
+}
+function safeRm(p: string): void {
+  assertNotInDataDir(p, "rm");
+  rmSync(p, { recursive: true, force: true });
+}
+function safeMkdir(p: string): void {
+  assertNotInDataDir(p, "mkdir");
+  mkdirSync(p, { recursive: true });
+}
+function safeSymlink(target: string, link: string): void {
+  assertNotInDataDir(link, "symlink");
+  symlinkSync(target, link);
+}
 
 const execFileP = promisify(execFile);
 
