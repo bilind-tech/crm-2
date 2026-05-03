@@ -163,8 +163,7 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
     });
 
     // ---- Verbindungstest (kein Versand!) ----
-    scoped.post("/email/verify", async (reply) => {
-      void reply;
+    scoped.post("/email/verify", async () => {
       if (!loadSmtpRuntime()) return { ok: false, error: "SMTP nicht konfiguriert", errorCode: "NOT_CONFIGURED" };
       try {
         const r = await verifyTransport();
