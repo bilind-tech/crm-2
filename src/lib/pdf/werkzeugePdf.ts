@@ -548,13 +548,20 @@ export async function generateProtokollPdf(
   });
 }
 
-export function protokollDateiname(p: Protokoll, kunde?: KundeT): string {
+export function protokollDateiname(p: Protokoll, kunde?: KundeT, objekt?: ObjektT): string {
   const kn = safeFilename(kunde ? (kunde.firmenname || [kunde.vorname, kunde.nachname].filter(Boolean).join(" ") || kunde.nummer) : "Kunde");
-  if (p.kind === "schluessel") {
-    return `Schluesseluebergabe_${p.nummer.replace("/", "-")}_${kn}.pdf`;
-  }
-  const prefix = p.art === "abnahme" ? "Abnahmeprotokoll" : p.art === "beides" ? "Protokoll" : "Uebergabeprotokoll";
-  return `${prefix}_${p.nummer.replace("/", "-")}_${kn}.pdf`;
+  const obj = objekt?.bezeichnung ? safeFilename(objekt.bezeichnung) : "";
+  const d = p.datum ? new Date(p.datum) : new Date();
+  const ddmmyyyy = isNaN(d.getTime())
+    ? ""
+    : `${String(d.getUTCDate()).padStart(2, "0")}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${d.getUTCFullYear()}`;
+  const prefix = p.kind === "schluessel"
+    ? "Schluesseluebergabe"
+    : p.art === "abnahme" ? "Abnahmeprotokoll" : p.art === "beides" ? "Protokoll" : "Uebergabeprotokoll";
+  const teile = [`${prefix} ${p.nummer.replace("/", "-")}`, kn];
+  if (obj) teile.push(`– ${obj}`);
+  if (ddmmyyyy) teile.push(`(${ddmmyyyy})`);
+  return `${teile.join(" ")}.pdf`.replace(/\s+/g, " ");
 }
 
 export function protokollTitel(p: Protokoll): string {
