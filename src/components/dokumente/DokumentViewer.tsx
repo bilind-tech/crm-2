@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { Download, Pencil, FileText, ExternalLink, Loader2 } from "lucide-react";
+import { Download, Pencil, FileText, ExternalLink, Loader2, FileCheck2 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useKunde, useObjekt } from "@/hooks/useApi";
+import { useKunde, useObjekt, useProtokollByDokumentId } from "@/hooks/useApi";
 import { useDokumentBlobUrl } from "@/hooks/useDokumentBlobUrl";
 import { PrintButton } from "@/components/pdf/PrintButton";
 import type { Dokument } from "@/lib/api/types";
