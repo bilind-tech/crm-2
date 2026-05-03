@@ -652,11 +652,15 @@ export interface GoogleDriveEinstellungen {
   unterordnerSchema: {
     rechnungen: string; // z. B. "Rechnungen/{YYYY}/{MM}"
     angebote: string;   // z. B. "Angebote/{YYYY}/{MM}"
+    dokumente?: string; // z. B. "Dokumente/{YYYY}/{MM}"
+    protokollUebergabe?: string; // z. B. "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}"
+    protokollSchluessel?: string; // z. B. "Protokolle/Schlüsselübergabe/{YYYY}/{MM}"
   };
   /** Templates für die Dateinamen ohne Endung. */
   dateinameSchema: {
     rechnung: string; // "{nummer} {kunde} {leistung} {MM}-{YYYY}"
     angebot: string;
+    protokoll?: string; // "{nummer} {kunde} {leistung} {DD}-{MM}-{YYYY}"
   };
   /** Wenn true, läuft der Upload automatisch ohne User-Klick. */
   autoUpload: boolean;
