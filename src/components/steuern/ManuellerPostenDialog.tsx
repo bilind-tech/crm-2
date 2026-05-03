@@ -144,7 +144,7 @@ export function ManuellerPostenDialog({ open, onOpenChange, editPosten }: Props)
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Abbrechen
           </Button>
-          <Button onClick={handleSpeichern}>Anlegen</Button>
+          <Button onClick={handleSpeichern}>{editPosten ? "Speichern" : "Anlegen"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
