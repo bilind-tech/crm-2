@@ -44,7 +44,7 @@ import { getBackendUrl } from "@/lib/api/backendUrl";
 import { cn } from "@/lib/utils";
 
 const PFAD_PLATZHALTER = ["{YYYY}", "{MM}"];
-const DATEI_PLATZHALTER = ["{nummer}", "{kunde}", "{leistung}", "{MM}", "{YYYY}", "{datum}"];
+const DATEI_PLATZHALTER = ["{nummer}", "{kunde}", "{leistung}", "{DD}", "{MM}", "{YYYY}", "{datum}"];
 
 function pfadVorschau(template: string): string {
   const now = new Date();
@@ -53,16 +53,25 @@ function pfadVorschau(template: string): string {
     .replace(/\{MM\}/g, String(now.getMonth() + 1).padStart(2, "0"));
 }
 
-function dateiVorschau(template: string, beleg: "rechnung" | "angebot"): string {
+function dateiVorschau(template: string, beleg: "rechnung" | "angebot" | "protokoll"): string {
   const now = new Date();
+  const dd = String(now.getDate()).padStart(2, "0");
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const yyyy = String(now.getFullYear());
+  const beispiel = {
+    rechnung: { nummer: "RE-2026-0042", leistung: "Buero-Reinigung" },
+    angebot: { nummer: "AN-2026-0042", leistung: "Buero-Reinigung" },
+    protokoll: { nummer: "PR0526-01", leistung: "Goethestrasse 12" },
+  }[beleg];
   return (
     template
-      .replace(/\{nummer\}/g, beleg === "rechnung" ? "RE-2026-0042" : "AN-2026-0042")
+      .replace(/\{nummer\}/g, beispiel.nummer)
       .replace(/\{kunde\}/g, "Mustermann GmbH")
-      .replace(/\{leistung\}/g, "Buero-Reinigung")
-      .replace(/\{MM\}/g, String(now.getMonth() + 1).padStart(2, "0"))
-      .replace(/\{YYYY\}/g, String(now.getFullYear()))
-      .replace(/\{datum\}/g, now.toISOString().slice(0, 10)) + ".pdf"
+      .replace(/\{leistung\}/g, beispiel.leistung)
+      .replace(/\{DD\}/g, dd)
+      .replace(/\{MM\}/g, mm)
+      .replace(/\{YYYY\}/g, yyyy)
+      .replace(/\{datum\}/g, `${yyyy}-${mm}-${dd}`) + ".pdf"
   );
 }
 
@@ -257,6 +266,44 @@ export function GoogleDriveTab() {
               </span>
             </p>
           </Field>
+          <Field label="Unterordner für Übergabe-/Abnahmeprotokolle" required>
+            <Input
+              value={form.unterordnerSchema.protokollUebergabe ?? "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}"}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  unterordnerSchema: { ...form.unterordnerSchema, protokollUebergabe: e.target.value },
+                })
+              }
+              className="font-mono"
+              disabled={!form.verbunden}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Beispiel:{" "}
+              <span className="font-mono text-foreground">
+                {form.rootOrdnerName}/{pfadVorschau(form.unterordnerSchema.protokollUebergabe ?? "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}")}/
+              </span>
+            </p>
+          </Field>
+          <Field label="Unterordner für Schlüsselübergaben" required>
+            <Input
+              value={form.unterordnerSchema.protokollSchluessel ?? "Protokolle/Schlüsselübergabe/{YYYY}/{MM}"}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  unterordnerSchema: { ...form.unterordnerSchema, protokollSchluessel: e.target.value },
+                })
+              }
+              className="font-mono"
+              disabled={!form.verbunden}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Beispiel:{" "}
+              <span className="font-mono text-foreground">
+                {form.rootOrdnerName}/{pfadVorschau(form.unterordnerSchema.protokollSchluessel ?? "Protokolle/Schlüsselübergabe/{YYYY}/{MM}")}/
+              </span>
+            </p>
+          </Field>
           <PlatzhalterChips items={PFAD_PLATZHALTER} />
         </div>
       </Section>
@@ -302,6 +349,29 @@ export function GoogleDriveTab() {
               Vorschau:{" "}
               <span className="font-mono text-foreground">
                 {dateiVorschau(form.dateinameSchema.angebot, "angebot")}
+              </span>
+            </p>
+          </Field>
+          <Field label="Protokoll (Übergabe / Schlüssel)" required>
+            <Input
+              value={form.dateinameSchema.protokoll ?? "{nummer} {kunde} {leistung} {DD}-{MM}-{YYYY}"}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  dateinameSchema: { ...form.dateinameSchema, protokoll: e.target.value },
+                })
+              }
+              className="font-mono"
+              disabled={!form.verbunden}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Vorschau:{" "}
+              <span className="font-mono text-foreground">
+                {dateiVorschau(form.dateinameSchema.protokoll ?? "{nummer} {kunde} {leistung} {DD}-{MM}-{YYYY}", "protokoll")}
+              </span>
+              <br />
+              <span className="text-[11px]">
+                <code className="font-mono">{"{leistung}"}</code> wird beim Protokoll mit dem Objekt-Namen befüllt.
               </span>
             </p>
           </Field>

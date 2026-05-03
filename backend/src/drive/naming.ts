@@ -47,6 +47,7 @@ export function applyFileNameTemplate(template: string, ctx: NamingContext): str
     .replace(/\{kunde\}/g, ctx.kunde ?? "")
     .replace(/\{leistung\}/g, ctx.leistung ?? "")
     .replace(/\{datum\}/g, datum)
+    .replace(/\{DD\}/g, dd)
     .replace(/\{MM\}/g, mm)
     .replace(/\{YYYY\}/g, yyyy);
   return sanitizeSegment(out);
