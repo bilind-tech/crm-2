@@ -55,15 +55,34 @@ function Page() {
         subtitle="Übergabe-/Abnahmeprotokolle und Schlüsselübergaben."
         actions={
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => neu("uebergabe")} disabled={create.isPending}>
+            <Button variant="outline" size="sm" onClick={() => setOpenForm("uebergabe")}>
               <Plus className="mr-1.5 h-4 w-4" />Übergabe
             </Button>
-            <Button variant="outline" size="sm" onClick={() => neu("schluessel")} disabled={create.isPending}>
+            <Button variant="outline" size="sm" onClick={() => setOpenForm("schluessel")}>
               <Plus className="mr-1.5 h-4 w-4" />Schlüssel
             </Button>
           </div>
         }
       />
+
+      <SlideOver
+        open={openForm === "uebergabe"}
+        onOpenChange={(o) => { if (!o) setOpenForm(null); }}
+        title="Neues Übergabe-/Abnahmeprotokoll"
+        description="Kunde, Objekt und Eckdaten erfassen — danach öffnet sich der Live-Editor."
+      >
+        {openForm === "uebergabe" && <UebergabeProtokollForm onClose={() => setOpenForm(null)} />}
+      </SlideOver>
+
+      <SlideOver
+        open={openForm === "schluessel"}
+        onOpenChange={(o) => { if (!o) setOpenForm(null); }}
+        title="Neue Schlüsselübergabe"
+        description="Kunde, Schlüssel und Pfand erfassen — danach öffnet sich der Live-Editor."
+      >
+        {openForm === "schluessel" && <SchluesselProtokollForm onClose={() => setOpenForm(null)} />}
+      </SlideOver>
+
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative max-w-sm flex-1">
