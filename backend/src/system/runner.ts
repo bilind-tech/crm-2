@@ -352,18 +352,18 @@ async function runRollbackToPrevious(laufId: string, userId: string | null): Pro
   emit("system:update:phase", {
     laufId, stepId: "rollback", status: "laeuft", label: "Auto-Rollback",
   });
-  // Defekte aktuelle in broken-* sichern
+  // Defekte aktuelle in broken-* sichern (nicht löschen!)
   const cur = readCurrentTarget();
-  if (cur) {
+  if (cur && cur !== prev) {
     const broken = brokenDir(nowStamp());
-    try { renameSync(cur, broken); } catch { /* ignore */ }
+    try { safeRename(cur, broken); } catch { /* ignore */ }
   }
   // current → previous
   const tmpLink = currentLink() + ".tmp";
-  try { unlinkSync(tmpLink); } catch { /* ignore */ }
-  symlinkSync(prev, tmpLink);
-  try { unlinkSync(currentLink()); } catch { /* ignore */ }
-  renameSync(tmpLink, currentLink());
+  try { safeUnlink(tmpLink); } catch { /* ignore */ }
+  safeSymlink(prev, tmpLink);
+  try { safeUnlink(currentLink()); } catch { /* ignore */ }
+  safeRename(tmpLink, currentLink());
 
   setStepStatus(laufId, "rollback", "ok", "Symlink wieder auf vorherige Version");
   setLaufStatus(laufId, "rollback", { aktuellerStep: "rollback" });
