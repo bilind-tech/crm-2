@@ -1650,7 +1650,9 @@ export async function mockBackend<T>(method: string, path: string, body?: unknow
     if (!erfolgreich) {
       throw new ApiError(eintrag.fehlerGrund ?? "Versand fehlgeschlagen", 502, eintrag);
     }
+    (eintrag as EmailVersand & { idempotenzKey?: string }).idempotenzKey = v.idempotenzKey;
     result = eintrag;
+    } // end if (!result)
   }
 
   // ---- Mahnwesen ----
