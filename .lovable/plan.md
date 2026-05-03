@@ -1,68 +1,101 @@
-# Plan 4 — Restpolitur vor Pi-Auslieferung
+# Plan 5 — Werkzeuge-Seite (Übergabe-/Abnahmeprotokoll + Schlüsselübergabe)
 
-Die großen Brocken (PDF-Vorschau, Mock-Ehrlichkeit, Scheduler-Logging, CI, Drive-Badge) sind durch. Übrig bleiben die kleineren Punkte aus dem ursprünglichen Review (Punkte 5, 7 und die Nice-to-haves). Alles defensiv, kein Eingriff in Versand/Backup/Daten.
+Neue Sammelseite in der Sidebar (unter „Stundenzettel"), die als Hub für **kleine PDF-Werkzeuge** dient. Heute zwei Funktionen, später beliebig erweiterbar (FAQ-Aushang, Auftrag, Reinigungsnachweis, …). Reines Frontend für jetzt — die echten Vorlagen-Layouts und der finale Mail-Anhang-Pfad kommen, sobald du mir die Vorlagen schickst.
 
-## A. `/health` final absichern (Punkt 5 aus Review)
+## A. Sidebar + Route
 
-Heute liefert `GET /health` ohne Auth: `version`, `schemaVersion`, `db.path`, `masterKey.present`, `maintenance`, `uptimeSec`. Davon ist `db.path` (absoluter Dateipfad zur SQLite) und `masterKey.present` Information, die ein nicht-eingeloggter Aufrufer im LAN nicht sehen muss.
+- Neuer Sidebar-Eintrag „Werkzeuge" mit Icon `Wrench`, direkt **unter** „Stundenzettel" in der Gruppe „Vertrieb & Abrechnung". Naming-Vorschlag: **„Werkzeuge"** (alternativ „Vorlagen & Tools"). Sag Bescheid, falls ein anderer Name besser passt.
+- Neue Route `src/routes/werkzeuge.tsx` für die Hub-Seite.
+- Neue Routen für die einzelnen Werkzeuge:
+  - `src/routes/werkzeuge.uebergabeprotokoll.tsx`
+  - `src/routes/werkzeuge.schluesseluebergabe.tsx`
 
-Änderungen in `backend/src/routes/health.ts`:
-- Public-`/health` reduziert auf: `status`, `version`, `uptimeSec`, `maintenance`. Reicht für jeden Healthcheck (auch den internen Smoketest in `system/runner.ts`, der nur HTTP-200 prüft).
-- Alles andere (`schemaVersion`, `db.*`, `masterKey.*`) wandert nach `/health/detail` (bleibt `requireAuth`).
-- Smoketest in `backend/src/system/runner.ts` braucht keine Anpassung — er prüft nur Status-Code.
+## B. Hub-Seite `/werkzeuge`
 
-## B. Stundenzettel-URL serverseitig validieren (Punkt 7)
+Bewusst **ohne** die 4 KPI-Kacheln, die die Belege-Listen oben tragen — du willst hier keine Zähler. Stattdessen:
 
-`StundenzettelSchema.externeUrl` akzeptiert heute jeden String bis 500 Zeichen. Frontend rendert die URL als `<iframe src=>` und in einem „In neuem Tab"-Link. Auch wenn nur der Single-User selbst speichern kann, ist eine echte URL-Validierung sauberer.
+- Klassischer `PageHeader` „Werkzeuge" + kurzer Untertitel („PDF-Werkzeuge und schnelle Helfer für den Alltag").
+- Suchfeld („Werkzeug suchen …") — wirkt clientseitig auf die Karten, nützlich sobald 5+ Tools drin sind.
+- Gruppierte Karten-Sektionen (extensible). Start-Sektionen:
+  - **„PDF-Vorlagen"** → Karten: *Übergabe-/Abnahmeprotokoll*, *Schlüsselübergabe*
+  - **„Mehr folgt"** → leere Sektion mit gestricheltem Platzhalter („Hier kommen weitere Werkzeuge."). Sobald wir was Neues haben, fällt der Platzhalter raus.
+- Jede Werkzeug-Karte: Icon (`FileSignature` / `KeyRound`), Titel, 1–2-Zeilen-Beschreibung, Button „Öffnen" → Route. Konsistent mit dem bestehenden Card-Stil (`rounded-2xl border bg-card shadow-sm`, kein Gradient, keine Sparkles).
 
-Änderungen in `backend/src/settings/schemas.ts`:
-- `externeUrl`: leer erlaubt, sonst `z.string().url()` mit Schema-Whitelist (`http:` / `https:`). Ablehnen: `javascript:`, `data:`, `file:`.
-- Beibehalten: `.trim().max(500)`.
+Datenmodell intern als Liste von `WerkzeugDefinition { id, gruppe, titel, beschreibung, icon, route }` — neue Werkzeuge sind dann ein 5-Zeilen-Eintrag plus Route. Keine Backend-Tabelle nötig.
 
-Frontend (`StundenzettelTab.tsx`): bei Backend-Fehler 400 die Nachricht inline anzeigen (heute generischer Toast).
+## C. Übergabe-/Abnahmeprotokoll `/werkzeuge/uebergabeprotokoll`
 
-## C. „Demo-Daten löschen"-Knopf in Einstellungen (Nice-to-have)
+Schlankes Formular auf einer Seite (kein Wizard):
 
-Wenn die App vom Mock-Modus auf das echte Pi-Backend wechselt, bleiben alte Mock-Daten unter `mcc_mock_db_v7` (und Hilfs-Keys wie `mcc.stundenzettel.url`, `mcc_stundenzettel_migrated_v1`) im LocalStorage liegen. Harmlos, aber unsauber.
+1. **Kunde** auswählen (Combobox aus `useKunden()`, mit Suche). Optional: Objekt aus `useObjekte()` — falls der gewählte Kunde mehrere hat, gefiltert.
+2. **Art** (Radio): „Übergabe" / „Abnahme" / „Übergabe & Abnahme".
+3. **Datum** (Default: heute), **Uhrzeit** (Default: jetzt).
+4. **Anwesende Personen** (zwei Felder: Auftraggeber-Vertreter, Auftragnehmer-Vertreter). Vorausgefüllt aus Kunde-Hauptkontakt + Firmendaten.
+5. **Leistungsumfang** (Textarea, vorausgefüllt mit „Endreinigung / Unterhaltsreinigung / …" — frei änderbar).
+6. **Mängel / Bemerkungen** (Textarea, leer).
+7. **Akzeptiert** (Checkbox „Abnahme erfolgt ohne Vorbehalt").
+8. **Unterschriften** — zwei Felder „Name in Druckbuchstaben" für jetzt; echte Touch-Unterschriften setzen wir später drauf, wenn du das willst.
 
-Neue Mini-Komponente in `src/components/einstellungen/MockDataResetCard.tsx`:
-- Wird **nur** gerendert, wenn `!isBackendUrlExplicit()` (Demo-Modus aktiv) oder wenn LocalStorage einen Key mit Prefix `mcc_mock_` / `mcc.` enthält.
-- Button „Demo-Daten in diesem Browser löschen" → Bestätigungs-Mini-Dialog (gleicher Stil wie Zahlungs-Dialog) → leert alle `mcc_mock_*`- und `mcc.*`-Keys + `localStorage.removeItem("mcc_mock_db_v7")` → Hard-Reload.
-- Eingebunden im Tab „Allgemein" oder „Datenschutz" der Einstellungen — wo es organisch passt, prüfe ich beim Implementieren.
+Sticky Action-Bar unten:
+- **„PDF erstellen"** (primary) — generiert das PDF (siehe E unten).
+- **„PDF + per E-Mail senden"** — öffnet den bestehenden `EmailVersandDialog` mit Kontext `allgemein` und dem PDF als Anhang. Kunde, Empfänger und Absenderfirma sind vorausgefüllt; du kannst Vorlage/Signatur wählen wie gewohnt.
 
-Kein Backend-Aufruf. Wirkt nur auf den aktuellen Browser.
+## D. Schlüsselübergabe `/werkzeuge/schluesseluebergabe`
 
-## D. Release-Doku auffrischen
+Gleiches Layout-Muster:
 
-Vor Tag X kurz durchsehen und konsistent mit aktuellem Stand machen:
-- `RELEASE_NOTES.md`: aktuelle Version + die seit Plan 1–3 gemachten Änderungen (PDF-Refactor, Mock-Hinweise, Scheduler-Logging, CI, Drive-Badge) als „Unreleased"-Block.
-- `BACKEND_INTEGRATION.md`: prüfen, ob neue/geänderte Endpoints (z. B. `/einstellungen/stundenzettel`, geänderter `/health`-Body) korrekt dokumentiert sind.
+1. **Kunde** + (optional) Objekt.
+2. **Datum / Uhrzeit**.
+3. **Richtung**: Radio „Ausgabe an Kunden" / „Rücknahme von Kunden".
+4. **Schlüsselliste** — dynamische Tabelle mit Spalten: *Bezeichnung*, *Anzahl*, *Schlüssel-Nr.*, *Bemerkung*. Buttons „+ Schlüssel hinzufügen" / Zeile löschen. Mindestens eine Zeile vorgegeben.
+5. **Pfand** (optional, EUR-Feld).
+6. **Empfangsbestätigung** (Checkbox + zwei Namensfelder Auftraggeber/Auftragnehmer).
 
-Reine Doku-Edits, kein Code.
+Sticky Action-Bar wie oben (PDF / PDF + Mail).
+
+## E. PDF-Generierung — Plan, nicht Implementierung
+
+Layout wartet auf deine Vorlagen. **Sobald du mir die zwei Vorlagen schickst** (am liebsten als PDF oder Foto), baue ich:
+- Pro Werkzeug ein React-PDF-Template in `src/lib/pdf/werkzeuge/uebergabeprotokoll.tsx` und `…/schluesseluebergabe.tsx` mit `@react-pdf/renderer` (gleicher Stack wie die Beleg-PDFs in `src/lib/pdf/`).
+- Felder werden 1:1 aus dem Formular eingesetzt (Kunde, Datum, Tabellen, etc.).
+- Header mit Firmendaten/Logo aus `useFirmendaten()` — also automatisch konsistent mit Rechnungs-/Angebots-Look.
+- Dateiname-Schema: `Uebergabeprotokoll_{Kunde}_{YYYY-MM-DD}.pdf` bzw. `Schluesseluebergabe_{Kunde}_{YYYY-MM-DD}.pdf`.
+
+In **diesem** Plan baue ich zunächst das **Frontend-Gerüst** (Hub + beide Formulare + lokales PDF-Stub mit Platzhalter-Layout, Download funktioniert sofort). Echte Vorlagen-Treue folgt im nächsten Schritt nach deiner Vorlage.
+
+## F. Speicherung / Historie — bewusst rausgelassen
+
+Du hattest nichts dazu gesagt. Mein Vorschlag: für jetzt **kein** Backend-Speicher — das PDF wird erzeugt, runtergeladen und (optional) per Mail verschickt. Kein neuer DB-Tabellen-Wildwuchs vor Pi-Auslieferung. Sobald du sagst „die sollen auch in Dokumenten auftauchen", erweitern wir's auf die `dokumente`-Tabelle (gleicher Drive-Sync-Pfad wie Rechnung/Angebot).
+
+## G. E-Mail-Anhang — kleiner Vorbehalt
+
+Der bestehende `EmailVersandDialog`-Pfad erwartet, dass das PDF beim Backend liegt (Beleg-PDF). Für ein frei generiertes PDF braucht der Versand-Endpunkt einen kleinen Erweiterungspunkt (PDF blob → upload → versand). **Im aktuellen Plan**: Button „PDF + per E-Mail senden" lädt das PDF zuerst herunter, öffnet dann den Mail-Dialog mit Hinweis „PDF bitte anhängen (Download lief gerade)". Sobald der Backend-Adapter steht (kleiner Folge-Plan), wird der Anhang automatisch.
 
 ## Geänderte / neue Dateien
 
 | Datei | Änderung |
 |---|---|
-| `backend/src/routes/health.ts` | Public-Body schlanker, Details bleiben in `/health/detail` |
-| `backend/src/settings/schemas.ts` | `externeUrl`: echte URL-Validierung, http/https only |
-| `src/components/einstellungen/StundenzettelTab.tsx` | 400-Fehler inline anzeigen |
-| `src/components/einstellungen/MockDataResetCard.tsx` | **neu**, Demo-Daten-Reset |
-| `src/routes/einstellungen.tsx` | Reset-Karte einhängen (passender Tab) |
-| `RELEASE_NOTES.md` | Unreleased-Block aktualisieren |
-| `BACKEND_INTEGRATION.md` | `/health`- und `/einstellungen/stundenzettel`-Abschnitte prüfen/anpassen |
+| `src/components/layout/AppSidebar.tsx` | Eintrag „Werkzeuge" unter Stundenzettel |
+| `src/routes/werkzeuge.tsx` | **neu** — Hub-Seite, gruppierte Karten, Suche |
+| `src/routes/werkzeuge.uebergabeprotokoll.tsx` | **neu** — Formular |
+| `src/routes/werkzeuge.schluesseluebergabe.tsx` | **neu** — Formular |
+| `src/components/werkzeuge/WerkzeugCard.tsx` | **neu** — Karten-Komponente |
+| `src/components/werkzeuge/KundenObjektPicker.tsx` | **neu** — Combobox Kunde + Objekt |
+| `src/lib/werkzeuge/registry.ts` | **neu** — `WerkzeugDefinition[]` |
+| `src/lib/pdf/werkzeuge/uebergabeprotokoll.tsx` | **neu** — Stub-PDF (Platzhalter-Layout) |
+| `src/lib/pdf/werkzeuge/schluesseluebergabe.tsx` | **neu** — Stub-PDF (Platzhalter-Layout) |
 
 ## Akzeptanzkriterien
 
-1. `curl http://pi:PORT/health` ohne Login zeigt **keinen** DB-Pfad und **keinen** Master-Key-Status mehr.
-2. Stundenzettel-Tab lehnt `javascript:alert(1)` mit klarer Meldung ab; gültige `https://`-URL wird gespeichert.
-3. Im Demo-Modus erscheint der Reset-Knopf, leert nach Bestätigung alle Mock-Keys, lädt die App neu — danach ist alles leer.
-4. `RELEASE_NOTES.md` listet die Änderungen aus Plan 1–4 unter „Unreleased".
-5. Smoketest in `system/runner.ts` läuft unverändert grün (nur HTTP-200-Check).
-6. Keine Datenbank-Migration, kein Eingriff in Versand/Backup/Daten-Pfade.
+1. In der Sidebar erscheint **„Werkzeuge"** direkt unter „Stundenzettel".
+2. `/werkzeuge` zeigt zwei Karten ohne KPI-Kacheln-Header. Suche filtert die Karten clientseitig.
+3. „Übergabe-/Abnahmeprotokoll" und „Schlüsselübergabe" haben jeweils ein eigenes Formular mit Kunden-Auswahl (vorausgefüllter Hauptkontakt) und einer „PDF erstellen"-Aktion, die ein gültiges PDF herunterlädt.
+4. „PDF + per E-Mail senden" öffnet den vorhandenen E-Mail-Versand-Dialog mit Empfänger = Kunden-Hauptmail (für jetzt mit dem Hinweis aus G).
+5. Eine neue Werkzeug-Karte hinzufügen = Eintrag in `registry.ts` + neue Route, sonst nichts.
+6. Keine neuen Backend-Endpoints, keine Migrations, kein Auto-Mail-Trigger.
 
 ## Risiko
 
-Sehr niedrig. Drei kleine, unabhängige Änderungen + Doku. Kein Schema-Migrations-Bedarf (das `externeUrl`-Default `""` bleibt erlaubt, alle Bestandswerte sind bereits via Frontend-Form gesetzt und werden bei nächstem Save validiert).
+Niedrig. Reines Frontend, keine Daten-Mutationen außerhalb von „PDF runterladen". Bestehende Routen bleiben unangetastet.
 
-Sag „Go", dann setze ich Plan 4 um.
+Sag „Go" für die Frontend-Umsetzung. Sobald du mir die zwei Vorlagen schickst, mache ich daraus den passgenauen PDF-Layout-Plan (separat).

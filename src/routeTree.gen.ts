@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WerkzeugeRouteImport } from './routes/werkzeuge'
 import { Route as StundenzettelRouteImport } from './routes/stundenzettel'
 import { Route as SteuernRouteImport } from './routes/steuern'
 import { Route as RechnungenRouteImport } from './routes/rechnungen'
@@ -19,6 +20,8 @@ import { Route as DokumenteRouteImport } from './routes/dokumente'
 import { Route as AngeboteRouteImport } from './routes/angebote'
 import { Route as AktivitaetRouteImport } from './routes/aktivitaet'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WerkzeugeUebergabeprotokollRouteImport } from './routes/werkzeuge.uebergabeprotokoll'
+import { Route as WerkzeugeSchluesseluebergabeRouteImport } from './routes/werkzeuge.schluesseluebergabe'
 import { Route as RechnungenNeuRouteImport } from './routes/rechnungen.neu'
 import { Route as RechnungenIdRouteImport } from './routes/rechnungen.$id'
 import { Route as ObjekteNeuRouteImport } from './routes/objekte.neu'
@@ -31,6 +34,11 @@ import { Route as RechnungenIdBearbeitenRouteImport } from './routes/rechnungen.
 import { Route as MUploadSessionRouteImport } from './routes/m.upload.$session'
 import { Route as AngeboteIdBearbeitenRouteImport } from './routes/angebote.$id.bearbeiten'
 
+const WerkzeugeRoute = WerkzeugeRouteImport.update({
+  id: '/werkzeuge',
+  path: '/werkzeuge',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StundenzettelRoute = StundenzettelRouteImport.update({
   id: '/stundenzettel',
   path: '/stundenzettel',
@@ -81,6 +89,18 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WerkzeugeUebergabeprotokollRoute =
+  WerkzeugeUebergabeprotokollRouteImport.update({
+    id: '/uebergabeprotokoll',
+    path: '/uebergabeprotokoll',
+    getParentRoute: () => WerkzeugeRoute,
+  } as any)
+const WerkzeugeSchluesseluebergabeRoute =
+  WerkzeugeSchluesseluebergabeRouteImport.update({
+    id: '/schluesseluebergabe',
+    path: '/schluesseluebergabe',
+    getParentRoute: () => WerkzeugeRoute,
+  } as any)
 const RechnungenNeuRoute = RechnungenNeuRouteImport.update({
   id: '/neu',
   path: '/neu',
@@ -148,6 +168,7 @@ export interface FileRoutesByFullPath {
   '/rechnungen': typeof RechnungenRouteWithChildren
   '/steuern': typeof SteuernRoute
   '/stundenzettel': typeof StundenzettelRoute
+  '/werkzeuge': typeof WerkzeugeRouteWithChildren
   '/angebote/$id': typeof AngeboteIdRouteWithChildren
   '/angebote/neu': typeof AngeboteNeuRoute
   '/kunden/$id': typeof KundenIdRoute
@@ -156,6 +177,8 @@ export interface FileRoutesByFullPath {
   '/objekte/neu': typeof ObjekteNeuRoute
   '/rechnungen/$id': typeof RechnungenIdRouteWithChildren
   '/rechnungen/neu': typeof RechnungenNeuRoute
+  '/werkzeuge/schluesseluebergabe': typeof WerkzeugeSchluesseluebergabeRoute
+  '/werkzeuge/uebergabeprotokoll': typeof WerkzeugeUebergabeprotokollRoute
   '/angebote/$id/bearbeiten': typeof AngeboteIdBearbeitenRoute
   '/m/upload/$session': typeof MUploadSessionRoute
   '/rechnungen/$id/bearbeiten': typeof RechnungenIdBearbeitenRoute
@@ -171,6 +194,7 @@ export interface FileRoutesByTo {
   '/rechnungen': typeof RechnungenRouteWithChildren
   '/steuern': typeof SteuernRoute
   '/stundenzettel': typeof StundenzettelRoute
+  '/werkzeuge': typeof WerkzeugeRouteWithChildren
   '/angebote/$id': typeof AngeboteIdRouteWithChildren
   '/angebote/neu': typeof AngeboteNeuRoute
   '/kunden/$id': typeof KundenIdRoute
@@ -179,6 +203,8 @@ export interface FileRoutesByTo {
   '/objekte/neu': typeof ObjekteNeuRoute
   '/rechnungen/$id': typeof RechnungenIdRouteWithChildren
   '/rechnungen/neu': typeof RechnungenNeuRoute
+  '/werkzeuge/schluesseluebergabe': typeof WerkzeugeSchluesseluebergabeRoute
+  '/werkzeuge/uebergabeprotokoll': typeof WerkzeugeUebergabeprotokollRoute
   '/angebote/$id/bearbeiten': typeof AngeboteIdBearbeitenRoute
   '/m/upload/$session': typeof MUploadSessionRoute
   '/rechnungen/$id/bearbeiten': typeof RechnungenIdBearbeitenRoute
@@ -195,6 +221,7 @@ export interface FileRoutesById {
   '/rechnungen': typeof RechnungenRouteWithChildren
   '/steuern': typeof SteuernRoute
   '/stundenzettel': typeof StundenzettelRoute
+  '/werkzeuge': typeof WerkzeugeRouteWithChildren
   '/angebote/$id': typeof AngeboteIdRouteWithChildren
   '/angebote/neu': typeof AngeboteNeuRoute
   '/kunden/$id': typeof KundenIdRoute
@@ -203,6 +230,8 @@ export interface FileRoutesById {
   '/objekte/neu': typeof ObjekteNeuRoute
   '/rechnungen/$id': typeof RechnungenIdRouteWithChildren
   '/rechnungen/neu': typeof RechnungenNeuRoute
+  '/werkzeuge/schluesseluebergabe': typeof WerkzeugeSchluesseluebergabeRoute
+  '/werkzeuge/uebergabeprotokoll': typeof WerkzeugeUebergabeprotokollRoute
   '/angebote/$id/bearbeiten': typeof AngeboteIdBearbeitenRoute
   '/m/upload/$session': typeof MUploadSessionRoute
   '/rechnungen/$id/bearbeiten': typeof RechnungenIdBearbeitenRoute
@@ -220,6 +249,7 @@ export interface FileRouteTypes {
     | '/rechnungen'
     | '/steuern'
     | '/stundenzettel'
+    | '/werkzeuge'
     | '/angebote/$id'
     | '/angebote/neu'
     | '/kunden/$id'
@@ -228,6 +258,8 @@ export interface FileRouteTypes {
     | '/objekte/neu'
     | '/rechnungen/$id'
     | '/rechnungen/neu'
+    | '/werkzeuge/schluesseluebergabe'
+    | '/werkzeuge/uebergabeprotokoll'
     | '/angebote/$id/bearbeiten'
     | '/m/upload/$session'
     | '/rechnungen/$id/bearbeiten'
@@ -243,6 +275,7 @@ export interface FileRouteTypes {
     | '/rechnungen'
     | '/steuern'
     | '/stundenzettel'
+    | '/werkzeuge'
     | '/angebote/$id'
     | '/angebote/neu'
     | '/kunden/$id'
@@ -251,6 +284,8 @@ export interface FileRouteTypes {
     | '/objekte/neu'
     | '/rechnungen/$id'
     | '/rechnungen/neu'
+    | '/werkzeuge/schluesseluebergabe'
+    | '/werkzeuge/uebergabeprotokoll'
     | '/angebote/$id/bearbeiten'
     | '/m/upload/$session'
     | '/rechnungen/$id/bearbeiten'
@@ -266,6 +301,7 @@ export interface FileRouteTypes {
     | '/rechnungen'
     | '/steuern'
     | '/stundenzettel'
+    | '/werkzeuge'
     | '/angebote/$id'
     | '/angebote/neu'
     | '/kunden/$id'
@@ -274,6 +310,8 @@ export interface FileRouteTypes {
     | '/objekte/neu'
     | '/rechnungen/$id'
     | '/rechnungen/neu'
+    | '/werkzeuge/schluesseluebergabe'
+    | '/werkzeuge/uebergabeprotokoll'
     | '/angebote/$id/bearbeiten'
     | '/m/upload/$session'
     | '/rechnungen/$id/bearbeiten'
@@ -290,11 +328,19 @@ export interface RootRouteChildren {
   RechnungenRoute: typeof RechnungenRouteWithChildren
   SteuernRoute: typeof SteuernRoute
   StundenzettelRoute: typeof StundenzettelRoute
+  WerkzeugeRoute: typeof WerkzeugeRouteWithChildren
   MUploadSessionRoute: typeof MUploadSessionRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/werkzeuge': {
+      id: '/werkzeuge'
+      path: '/werkzeuge'
+      fullPath: '/werkzeuge'
+      preLoaderRoute: typeof WerkzeugeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/stundenzettel': {
       id: '/stundenzettel'
       path: '/stundenzettel'
@@ -364,6 +410,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/werkzeuge/uebergabeprotokoll': {
+      id: '/werkzeuge/uebergabeprotokoll'
+      path: '/uebergabeprotokoll'
+      fullPath: '/werkzeuge/uebergabeprotokoll'
+      preLoaderRoute: typeof WerkzeugeUebergabeprotokollRouteImport
+      parentRoute: typeof WerkzeugeRoute
+    }
+    '/werkzeuge/schluesseluebergabe': {
+      id: '/werkzeuge/schluesseluebergabe'
+      path: '/schluesseluebergabe'
+      fullPath: '/werkzeuge/schluesseluebergabe'
+      preLoaderRoute: typeof WerkzeugeSchluesseluebergabeRouteImport
+      parentRoute: typeof WerkzeugeRoute
     }
     '/rechnungen/neu': {
       id: '/rechnungen/neu'
@@ -523,6 +583,20 @@ const RechnungenRouteWithChildren = RechnungenRoute._addFileChildren(
   RechnungenRouteChildren,
 )
 
+interface WerkzeugeRouteChildren {
+  WerkzeugeSchluesseluebergabeRoute: typeof WerkzeugeSchluesseluebergabeRoute
+  WerkzeugeUebergabeprotokollRoute: typeof WerkzeugeUebergabeprotokollRoute
+}
+
+const WerkzeugeRouteChildren: WerkzeugeRouteChildren = {
+  WerkzeugeSchluesseluebergabeRoute: WerkzeugeSchluesseluebergabeRoute,
+  WerkzeugeUebergabeprotokollRoute: WerkzeugeUebergabeprotokollRoute,
+}
+
+const WerkzeugeRouteWithChildren = WerkzeugeRoute._addFileChildren(
+  WerkzeugeRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AktivitaetRoute: AktivitaetRoute,
@@ -534,6 +608,7 @@ const rootRouteChildren: RootRouteChildren = {
   RechnungenRoute: RechnungenRouteWithChildren,
   SteuernRoute: SteuernRoute,
   StundenzettelRoute: StundenzettelRoute,
+  WerkzeugeRoute: WerkzeugeRouteWithChildren,
   MUploadSessionRoute: MUploadSessionRoute,
 }
 export const routeTree = rootRouteImport
