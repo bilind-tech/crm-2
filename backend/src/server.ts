@@ -201,6 +201,9 @@ async function main(): Promise<void> {
   wirePdfCacheInvalidation();
   // Aktivitäts/Benachrichtigungs-Übersetzung der Bus-Events
   wireAktivitaet();
+  // Drive-Auto-Enqueue (Belege + Dokumente)
+  wireDriveAutoEnqueue();
+  wireDokumenteDriveAutoEnqueue();
 
   // Touch-Throttle aus DB warmladen → kein Update-Sturm nach Restart
   const warmed = warmTouchCacheFromDb();
