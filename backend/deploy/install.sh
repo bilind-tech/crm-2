@@ -241,13 +241,13 @@ start_service() {
         token="$(cat "$token_file" 2>/dev/null || true)"
         if [[ -n "$token" ]]; then
           echo ""
-          echo "  ╭─────────────────────────────────────────────────────────────╮"
-          echo "  │  ERSTEINRICHTUNG — diesen Link im Browser öffnen:           │"
-          echo "  │                                                             │"
-          echo "  │  http://${hostn}:8787/setup?token=${token}"
-          echo "  │                                                             │"
-          echo "  │  Token-Datei: $token_file"
-          echo "  ╰─────────────────────────────────────────────────────────────╯"
+          echo "  ════════════════════════════════════════════════════════════"
+          echo "  ERSTEINRICHTUNG — diesen Link im Browser öffnen:"
+          echo ""
+          echo "    http://${hostn}:8787/setup?token=${token}"
+          echo ""
+          echo "  Token-Datei: $token_file"
+          echo "  ════════════════════════════════════════════════════════════"
           echo ""
         fi
       fi
