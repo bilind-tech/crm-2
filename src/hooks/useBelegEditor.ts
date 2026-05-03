@@ -49,6 +49,7 @@ export function useBelegEditor<T extends Angebot | Rechnung>(
 
   const updateAngebot = useUpdateAngebot(kind === "angebot" ? draft.id : "");
   const updateRechnung = useUpdateRechnung(kind === "rechnung" ? draft.id : "");
+  const invalidatePdf = useInvalidateBelegPdf();
 
   const set = useCallback(<K extends keyof T>(key: K, value: T[K]) => {
     setDraft((prev) => ({ ...prev, [key]: value }));
