@@ -1,24 +1,25 @@
 // Liste aller Protokolle.
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Plus, FileText, KeyRound, Loader2, Search } from "lucide-react";
-import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { useProtokolle, useCreateProtokoll, useKunden } from "@/hooks/useApi";
+import { SlideOver } from "@/components/ui/slide-over";
+import { UebergabeProtokollForm } from "@/components/forms/UebergabeProtokollForm";
+import { SchluesselProtokollForm } from "@/components/forms/SchluesselProtokollForm";
+import { useProtokolle, useKunden } from "@/hooks/useApi";
 import type { Protokoll, ProtokollKind } from "@/lib/api/types";
 
 export const Route = createFileRoute("/protokolle")({ component: Page });
 
 function Page() {
-  const navigate = useNavigate();
   const [tab, setTab] = useState<"alle" | ProtokollKind>("alle");
   const [q, setQ] = useState("");
+  const [openForm, setOpenForm] = useState<null | ProtokollKind>(null);
   const list = useProtokolle();
   const kundenQ = useKunden();
-  const create = useCreateProtokoll();
 
   const kundenById = useMemo(() => {
     const m = new Map<string, string>();
@@ -38,14 +39,7 @@ function Page() {
     return arr;
   }, [list.data, tab, q, kundenById]);
 
-  const neu = async (kind: ProtokollKind) => {
-    try {
-      const p = await create.mutateAsync({ kind });
-      void navigate({ to: "/protokolle/$id/bearbeiten", params: { id: p.id } });
-    } catch (e) {
-      console.error(e); toast.error("Konnte nicht anlegen");
-    }
-  };
+
 
   return (
     <div className="space-y-6 pb-24">
@@ -54,15 +48,34 @@ function Page() {
         subtitle="Übergabe-/Abnahmeprotokolle und Schlüsselübergaben."
         actions={
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => neu("uebergabe")} disabled={create.isPending}>
+            <Button variant="outline" size="sm" onClick={() => setOpenForm("uebergabe")}>
               <Plus className="mr-1.5 h-4 w-4" />Übergabe
             </Button>
-            <Button variant="outline" size="sm" onClick={() => neu("schluessel")} disabled={create.isPending}>
+            <Button variant="outline" size="sm" onClick={() => setOpenForm("schluessel")}>
               <Plus className="mr-1.5 h-4 w-4" />Schlüssel
             </Button>
           </div>
         }
       />
+
+      <SlideOver
+        open={openForm === "uebergabe"}
+        onOpenChange={(o) => { if (!o) setOpenForm(null); }}
+        title="Neues Übergabe-/Abnahmeprotokoll"
+        description="Kunde, Objekt und Eckdaten erfassen — danach öffnet sich der Live-Editor."
+      >
+        {openForm === "uebergabe" && <UebergabeProtokollForm onClose={() => setOpenForm(null)} />}
+      </SlideOver>
+
+      <SlideOver
+        open={openForm === "schluessel"}
+        onOpenChange={(o) => { if (!o) setOpenForm(null); }}
+        title="Neue Schlüsselübergabe"
+        description="Kunde, Schlüssel und Pfand erfassen — danach öffnet sich der Live-Editor."
+      >
+        {openForm === "schluessel" && <SchluesselProtokollForm onClose={() => setOpenForm(null)} />}
+      </SlideOver>
+
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative max-w-sm flex-1">
