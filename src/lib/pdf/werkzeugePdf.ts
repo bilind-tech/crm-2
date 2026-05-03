@@ -508,3 +508,58 @@ export function safeFilename(s: string): string {
     .replace(/^_+|_+$/g, "")
     .slice(0, 80);
 }
+
+// ─── Adapter: Generierung direkt aus Protokoll-Datensätzen ─────────────────
+import type { Protokoll, UebergabeProtokoll, SchluesselProtokoll, Kunde as KundeT, Objekt as ObjektT, Firmendaten as FirmaT } from "@/lib/api/types";
+
+export async function generateProtokollPdf(
+  p: Protokoll,
+  kunde: KundeT | undefined,
+  objekt: ObjektT | undefined,
+  firma: FirmaT | undefined,
+): Promise<Blob> {
+  if (p.kind === "schluessel") {
+    const s = p as SchluesselProtokoll;
+    return generateSchluesseluebergabePdf({
+      richtung: s.richtung,
+      nummer: s.nummer,
+      datum: s.datum,
+      uhrzeit: s.uhrzeit,
+      schluessel: (s.schluessel ?? []).filter((z) => z.bezeichnung.trim() !== ""),
+      pfandEur: s.pfandEur,
+      vertreterAuftraggeber: s.vertreterAuftraggeber,
+      vertreterAuftragnehmer: s.vertreterAuftragnehmer,
+      bestaetigt: s.bestaetigt,
+      kunde, objekt, firma,
+    });
+  }
+  const u = p as UebergabeProtokoll;
+  return generateUebergabeprotokollPdf({
+    art: u.art,
+    nummer: u.nummer,
+    datum: u.datum,
+    uhrzeit: u.uhrzeit,
+    vertreterAuftraggeber: u.vertreterAuftraggeber,
+    vertreterAuftragnehmer: u.vertreterAuftragnehmer,
+    leistungsumfang: u.leistungsumfang,
+    bemerkungen: u.bemerkungen,
+    ohneVorbehalt: u.ohneVorbehalt,
+    kunde, objekt, firma,
+  });
+}
+
+export function protokollDateiname(p: Protokoll, kunde?: KundeT): string {
+  const kn = safeFilename(kunde ? (kunde.firmenname || [kunde.vorname, kunde.nachname].filter(Boolean).join(" ") || kunde.nummer) : "Kunde");
+  if (p.kind === "schluessel") {
+    return `Schluesseluebergabe_${p.nummer.replace("/", "-")}_${kn}.pdf`;
+  }
+  const prefix = p.art === "abnahme" ? "Abnahmeprotokoll" : p.art === "beides" ? "Protokoll" : "Uebergabeprotokoll";
+  return `${prefix}_${p.nummer.replace("/", "-")}_${kn}.pdf`;
+}
+
+export function protokollTitel(p: Protokoll): string {
+  if (p.kind === "schluessel") {
+    return p.richtung === "ausgabe" ? "Schlüsselübergabe — Ausgabe" : "Schlüsselübergabe — Rücknahme";
+  }
+  return p.art === "abnahme" ? "Abnahmeprotokoll" : p.art === "beides" ? "Übergabe- und Abnahmeprotokoll" : "Übergabeprotokoll";
+}
