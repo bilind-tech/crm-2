@@ -128,18 +128,55 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
       const p = VersandSchema.safeParse(req.body);
       if (!p.success) { reply.status(422); return { error: "validation", issues: p.error.issues }; }
 
+      // ---- Normalisierung: UI-Aliasse -> Repo-Schema ----
+      const d = p.data;
+      const toList = d.empfaenger ?? (d.empfaengerTo ? [d.empfaengerTo] : []);
+      if (toList.length === 0) {
+        reply.status(422); return { error: "validation", hint: "Empfänger fehlt." };
+      }
+      const empfaengerTo = toList.join(", ");
+      const empfaengerCc = d.cc?.length ? d.cc.join(", ") : (d.empfaengerCc || undefined);
+      const empfaengerBcc = d.bcc?.length ? d.bcc.join(", ") : (d.empfaengerBcc || undefined);
+      const bodyHtml = d.bodyHtml ?? d.koerperHtml ?? "";
+      if (!bodyHtml) { reply.status(422); return { error: "validation", hint: "Body fehlt." }; }
+      const belegArt: "angebot" | "rechnung" | undefined =
+        d.belegArt ?? (d.belegTyp === "angebot" || d.belegTyp === "rechnung" ? d.belegTyp : undefined);
+
+      // Idempotenz: explizit oder deterministisch aus Inhalt gehasht.
+      const idempotenzKey = d.idempotenzKey ?? (() => {
+        const h = crypto.createHash("sha256");
+        h.update([belegArt ?? "", d.belegId ?? "", empfaengerTo, d.betreff].join("|"));
+        return `auto-${h.digest("hex").slice(0, 32)}`;
+      })();
+
       // Anti-Flood: globaler Token-Bucket + per-Idempotenz-Key Cooldown.
       if (!sendBudget.tryTake()) {
         reply.status(429);
         return { error: "rate-limit", hint: "Maximal 30 E-Mails pro Minute." };
       }
-      if (!keyCooldown.tryTake(p.data.idempotenzKey)) {
+      if (!keyCooldown.tryTake(idempotenzKey)) {
         reply.status(429);
         return { error: "rate-limit", hint: "Bitte kurz warten — gleicher Versand wurde gerade ausgelöst." };
       }
 
       // Idempotenz-Eintrag (oder bestehende Zeile) holen.
-      const { row, created } = enqueueVersand({ ...p.data, quelle: "manuell" });
+      let row, created;
+      try {
+        ({ row, created } = enqueueVersand({
+          empfaengerTo, empfaengerCc, empfaengerBcc,
+          betreff: d.betreff, bodyHtml,
+          belegArt, belegId: d.belegId,
+          vorlageId: d.vorlageId, signaturId: d.signaturId,
+          mahnStufe: d.mahnStufe,
+          idempotenzKey,
+          quelle: "manuell",
+        }));
+      } catch (e) {
+        // Verstoß gegen Manual-Only-Garantie wäre der einzige Pfad hierhin.
+        audit({ userId: req.user?.id, action: "email.send.blocked", ip: req.ip, detail: { error: (e as Error).message } });
+        reply.status(403);
+        return { error: "auto-mail-blockiert", hint: (e as Error).message };
+      }
 
       // Bereits gesendet? Dann existierende Zeile zurückgeben (Doppelklick-Schutz).
       if (!created && (row.status === "gesendet" || row.status === "sending")) {
@@ -150,6 +187,24 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
       // SYNCHRON senden — der User wartet auf das Ergebnis. Kein Hintergrund-Worker.
       const result = await sendNow(row);
       const after = getById(row.id);
+
+      // Audit-Trail: Pflicht. Jede Mail ist nachweisbar User-getriggert.
+      audit({
+        userId: req.user?.id,
+        ip: req.ip,
+        action: result.ok ? "email.send" : "email.send.fehler",
+        detail: {
+          quelle: "manuell",
+          versandId: row.id,
+          belegArt: belegArt ?? null,
+          belegId: d.belegId ?? null,
+          mahnStufe: d.mahnStufe ?? null,
+          an: toList,
+          messageId: result.messageId ?? null,
+          errorCode: result.ok ? null : result.errorCode ?? null,
+        },
+      });
+
       reply.status(result.ok ? 201 : 502);
       return {
         ...(after ?? row),
