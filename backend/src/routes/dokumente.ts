@@ -20,7 +20,7 @@ import { requireAuth } from "../auth/middleware.js";
 import { audit } from "../auth/audit.js";
 import { emit } from "../events/bus.js";
 import {
-  createDokument, deleteFile as _unused, // typecheck
+  createDokument,
   endSession, getDokument, getDokumentRaw, getSessionById, getSessionByToken,
   isSessionUploadable, listDokumente, refsForSha, softDeleteDokument, updateDokument,
   createSession,
