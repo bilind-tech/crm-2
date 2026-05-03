@@ -17,6 +17,7 @@ export interface EmailVersand {
   belegId?: string | null;
   vorlageId?: string | null;
   signaturId?: string | null;
+  mahnStufe?: number | null;
   idempotenzKey: string;
   status: EmailVersandStatus;
   versuche: number;
