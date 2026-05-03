@@ -983,14 +983,12 @@ export const useUpdateGoogleDrive = () => {
   });
 };
 
-export const useConnectGoogleDrive = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { kontoEmail: string }) =>
-      api.post<GoogleDriveEinstellungen>("/einstellungen/google-drive/connect", data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.einstellungen.googleDrive }),
+/** Liefert die Google-OAuth-Authorize-URL. Frontend öffnet sie in neuem Tab. */
+export const useConnectGoogleDrive = () =>
+  useMutation({
+    mutationFn: () =>
+      api.post<{ authorizeUrl: string }>("/einstellungen/google-drive/connect"),
   });
-};
 
 export const useDisconnectGoogleDrive = () => {
   const qc = useQueryClient();
@@ -1007,6 +1005,60 @@ export const useTestGoogleDrive = () =>
         "/einstellungen/google-drive/test",
       ),
   });
+
+// ---------- Drive-Upload-Queue ----------
+export type DriveUploadStatus = "pending" | "running" | "erfolg" | "fehler" | "manuell";
+export type DriveBelegArt = "angebot" | "rechnung" | "dokument";
+
+export interface DriveUpload {
+  id: string;
+  belegArt: DriveBelegArt;
+  belegId: string;
+  dateiName: string;
+  pdfSha256: string;
+  idempotenzKey: string;
+  status: DriveUploadStatus;
+  versuche: number;
+  naechsterVersuchAt?: string | null;
+  driveFileId?: string | null;
+  driveWebLink?: string | null;
+  fehlerText?: string | null;
+  abgeschlossenAm?: string | null;
+  erstelltAm: string;
+  geaendertAm: string;
+}
+
+export const qkDriveUploads = ["drive", "uploads"] as const;
+
+export const useDriveUploads = (filter?: {
+  status?: DriveUploadStatus;
+  belegArt?: DriveBelegArt;
+  limit?: number;
+}) =>
+  useQuery({
+    queryKey: [...qkDriveUploads, filter ?? {}] as const,
+    queryFn: () => {
+      const qs = new URLSearchParams();
+      if (filter?.status) qs.set("status", filter.status);
+      if (filter?.belegArt) qs.set("beleg_art", filter.belegArt);
+      if (filter?.limit) qs.set("limit", String(filter.limit));
+      const suffix = qs.toString() ? `?${qs.toString()}` : "";
+      return api.get<DriveUpload[]>(`/drive/uploads${suffix}`);
+    },
+    refetchInterval: (q) => {
+      const d = q.state.data;
+      if (!d) return false;
+      return d.some((u) => u.status === "pending" || u.status === "running") ? 4000 : false;
+    },
+  });
+
+export const useRetryDriveUpload = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post<{ ok: true }>(`/drive/uploads/${id}/retry`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qkDriveUploads }),
+  });
+};
 
 // ---------- Backup-Historie & Live-Status & Sitzungen ----------
 export const useBackupHistorie = () =>
