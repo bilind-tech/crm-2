@@ -1,9 +1,10 @@
-// nodemailer-Singleton. Baut Transport aus Settings.
-// reset() wird vom PUT /einstellungen/smtp aufgerufen, damit nach Konfig-Änderung
-// kein veralteter Transport rumliegt.
+// nodemailer-Singleton für Strato-SMTP. Konservative Defaults:
+//   pool=true, maxConnections=1, maxMessages=50 (Strato mag keine Bursts),
+//   strikte Timeouts, TLS ≥ 1.2.
 //
-// Im Test-Modus liefert getTestTransport() einen JSON-Transport zurück, der nichts
-// rauslässt — siehe email.spec.ts.
+// resetTransport() wird vom PUT /einstellungen/smtp aufgerufen, damit nach
+// Konfig-Änderung kein veralteter Transport rumliegt. Im Test-Modus liefert
+// setTestTransport() einen JSON-Transport zurück, der nichts rauslässt.
 
 import nodemailer, { type Transporter } from "nodemailer";
 import { getSetting } from "../settings/store.js";
@@ -20,6 +21,9 @@ export function setTestTransport(t: Transporter | null): void {
 }
 
 export function resetTransport(): void {
+  if (_transport) {
+    try { _transport.close(); } catch { /* ignore */ }
+  }
   _transport = null;
 }
 
@@ -52,20 +56,45 @@ export function loadSmtpRuntime(): SmtpRuntime | null {
   };
 }
 
-export function getTransport(): Transporter {
-  if (_testTransport) return _testTransport;
-  if (_transport) return _transport;
+function buildTransport(): Transporter {
   const rt = loadSmtpRuntime();
   if (!rt) throw new Error("SMTP nicht konfiguriert");
   const password = readSmtpPassword();
   if (!password) throw new Error("SMTP-Passwort nicht gesetzt");
-  _transport = nodemailer.createTransport({
+  return nodemailer.createTransport({
     host: rt.smtp.host,
     port: rt.smtp.port,
     secure: rt.smtp.secure,
     auth: { user: rt.smtp.user, pass: password },
+    pool: true,
+    maxConnections: 1,
+    maxMessages: 50,
+    connectionTimeout: 15_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 30_000,
+    tls: { minVersion: "TLSv1.2", servername: rt.smtp.host },
   });
+}
+
+export function getTransport(): Transporter {
+  if (_testTransport) return _testTransport;
+  if (_transport) return _transport;
+  _transport = buildTransport();
   return _transport;
+}
+
+/** Verbindungs-/Auth-Test ohne Versand. Wirft mit `code` bei Fehler. */
+export async function verifyTransport(): Promise<{ ok: true; latencyMs: number }> {
+  const transport = _testTransport ?? buildTransport();
+  const t0 = Date.now();
+  try {
+    await transport.verify();
+    return { ok: true, latencyMs: Date.now() - t0 };
+  } finally {
+    if (transport !== _testTransport) {
+      try { transport.close(); } catch { /* ignore */ }
+    }
+  }
 }
 
 export interface FromAddress {
