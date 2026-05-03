@@ -1,5 +1,5 @@
-// Liste aller Protokolle.
-import { createFileRoute, Link } from "@tanstack/react-router";
+// Liste aller Protokolle (Layout-Route mit Outlet für /protokolle/:id und /:id/bearbeiten).
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Plus, FileText, KeyRound, Loader2, Search } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -12,7 +12,14 @@ import { SchluesselProtokollForm } from "@/components/forms/SchluesselProtokollF
 import { useProtokolle, useKunden } from "@/hooks/useApi";
 import type { Protokoll, ProtokollKind } from "@/lib/api/types";
 
-export const Route = createFileRoute("/protokolle")({ component: Page });
+export const Route = createFileRoute("/protokolle")({ component: Layout });
+
+function Layout() {
+  const path = useRouterState({ select: (r) => r.location.pathname });
+  // Alles unterhalb /protokolle (Detail, Editor) rendert die Kindroute.
+  if (path !== "/protokolle" && path !== "/protokolle/") return <Outlet />;
+  return <Page />;
+}
 
 function Page() {
   const [tab, setTab] = useState<"alle" | ProtokollKind>("alle");
