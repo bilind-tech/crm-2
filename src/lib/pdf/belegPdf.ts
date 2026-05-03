@@ -328,13 +328,6 @@ function defaultOutroRechnung(_r: Rechnung, opts: BuildOptions) {
   ].filter(Boolean);
   return teile.join("\n\n");
 }
-function ziel(r: Rechnung): number {
-  if (!r.rechnungsdatum || !r.faelligkeitsdatum) return 14;
-  const a = new Date(r.rechnungsdatum).getTime();
-  const b = new Date(r.faelligkeitsdatum).getTime();
-  const d = Math.round((b - a) / 86400000);
-  return d > 0 ? d : 14;
-}
 
 interface PdfContext {
   firma: Firmendaten;
