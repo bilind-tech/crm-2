@@ -115,7 +115,14 @@ function footer(f: FirmaForPdf) {
   };
 }
 
-function pauschalTabelle(positionen: ApiPosition[], totalsT: { netto: number; steuer: number; brutto: number }, steuersatz: number) {
+function ausfuehrungText(p: ApiPosition): string {
+  if (p.ausfuehrung && p.ausfuehrung.trim()) return p.ausfuehrung;
+  if (p.modus === "pauschal") return "Pauschal";
+  const menge = p.menge.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  return `${menge} ${p.einheit}\n(à ${eur(p.einzelpreisNetto)})`;
+}
+
+function leistungstabelle(positionen: ApiPosition[], totalsT: { netto: number; steuer: number; brutto: number }, steuersatz: number) {
   const headerRow = [
     { text: "Ausführung", bold: true, fontSize: 10, color: COLOR_TEXT, margin: [0, 4, 0, 4] },
     { text: "Leistung", bold: true, fontSize: 10, color: COLOR_TEXT, margin: [0, 4, 0, 4] },
@@ -123,20 +130,24 @@ function pauschalTabelle(positionen: ApiPosition[], totalsT: { netto: number; st
   ];
   const body: unknown[][] = [headerRow];
   positionen.forEach((p) => {
-    const ausf = p.ausfuehrung ?? (p.modus === "pauschal" ? "Pauschal" : `${p.menge.toLocaleString("de-DE")} ${p.einheit}`);
     body.push([
-      { text: ausf, fontSize: 10 },
+      { text: ausfuehrungText(p), fontSize: 10 },
       beschreibungBlock(p.beschreibung || ""),
       { text: eur(summe(p)), fontSize: 10, alignment: "right" },
     ]);
   });
   body.push([
-    { text: `Zzgl. Gesetzlicher Mehrwertsteuer ${steuersatz}%`, colSpan: 2, fontSize: 10 },
+    { text: "Zwischensumme (netto)", colSpan: 2, fontSize: 10, alignment: "right" },
+    {},
+    { text: eur(totalsT.netto), fontSize: 10, alignment: "right" },
+  ]);
+  body.push([
+    { text: `Zzgl. gesetzliche Mehrwertsteuer ${steuersatz}%`, colSpan: 2, fontSize: 10, alignment: "right" },
     {},
     { text: eur(totalsT.steuer), fontSize: 10, alignment: "right" },
   ]);
   body.push([
-    { text: "Gesamtbetrag inkl. MwSt.", colSpan: 2, fontSize: 10, bold: true },
+    { text: "Gesamtbetrag inkl. MwSt.", colSpan: 2, fontSize: 10, alignment: "right", bold: true },
     {},
     { text: eur(totalsT.brutto), fontSize: 10, alignment: "right", bold: true },
   ]);
@@ -146,16 +157,16 @@ function pauschalTabelle(positionen: ApiPosition[], totalsT: { netto: number; st
       headerRows: 1,
       keepWithHeaderRows: 1,
       dontBreakRows: true,
-      widths: [95, "*", 90],
+      widths: [110, "*", 90],
       body,
     },
     layout: {
       hLineWidth: (i: number) => (i === 0 || i === totalRows ? 0.7 : 0.4),
-      vLineWidth: () => 0.4,
+      vLineWidth: () => 0,
       hLineColor: () => COLOR_LINE,
       vLineColor: () => COLOR_LINE,
-      paddingTop: () => 8,
-      paddingBottom: () => 8,
+      paddingTop: () => 7,
+      paddingBottom: () => 7,
       paddingLeft: () => 6,
       paddingRight: () => 6,
     },
