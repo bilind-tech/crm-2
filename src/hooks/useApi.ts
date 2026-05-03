@@ -29,7 +29,7 @@ import type {
   Positionsvorlage,
   Rechnung,
   SicherheitsEinstellungen,
-  SitzungEintrag,
+  
   SmtpEinstellungen,
   SuchTreffer,
   SystemInfo,

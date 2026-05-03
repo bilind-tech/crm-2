@@ -12,14 +12,9 @@ import {
   getSettingMeta,
   setSetting,
 } from "../settings/store.js";
-import { requireAuth, getCookieToken } from "../auth/middleware.js";
+import { requireAuth } from "../auth/middleware.js";
 import { audit } from "../auth/audit.js";
 import { emit } from "../events/bus.js";
-import {
-  deleteAllSessionsForUser,
-  deleteSessionForUser,
-  listSessions,
-} from "../auth/sessions.js";
 import { createConnection } from "node:net";
 import { resetTransport } from "../email/transport.js";
 import { flachZuUi, uiPatchZuFlach } from "../mahnung/settings-adapter.js";

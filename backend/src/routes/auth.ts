@@ -8,9 +8,7 @@ import {
   createSession,
   deleteSession,
   resolveSession,
-  listSessions,
   deleteAllSessionsForUser,
-  deleteSessionForUser,
 } from "../auth/sessions.js";
 import { getStatus, recordFailure, recordSuccess } from "../auth/lockout.js";
 import { audit } from "../auth/audit.js";
