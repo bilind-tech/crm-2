@@ -494,9 +494,8 @@ export async function generateRechnungPdf(
   ansprechpartner?: Ansprechpartner,
 ): Promise<PdfBuildResult> {
   const meta = [
-    { label: "Rechnung-Nr.", wert: rechnung.nummer },
-    { label: "Rechnungsdatum", wert: dt(rechnung.rechnungsdatum) },
-    { label: "Fällig am", wert: dt(rechnung.faelligkeitsdatum) },
+    { label: "Rechnung-Nr.:", wert: rechnung.nummer },
+    { label: "Rechnungsdatum:", wert: dt(rechnung.rechnungsdatum) },
   ];
   const opts: BuildOptions = {
     intro: rechnung.optionen?.eigenesIntro || rechnung.introText,
@@ -505,16 +504,30 @@ export async function generateRechnungPdf(
   };
   const effFirma = mergeFirma(firma, rechnung.optionen?.firmaOverride);
   const tracker = createHotspotTracker(A4);
-  const note = `Bitte überweisen Sie den Rechnungsbetrag bis zum ${dt(rechnung.faelligkeitsdatum)} unter Angabe der Rechnungsnummer ${rechnung.nummer} auf unser unten angegebenes Konto.`;
+  const t = totals(rechnung.positionen, rechnung.rabattGesamt, rechnung.steuersatz);
+  // Tage zwischen Rechnungsdatum und Fälligkeit
+  let tage = 14;
+  if (rechnung.rechnungsdatum && rechnung.faelligkeitsdatum) {
+    const d1 = new Date(rechnung.rechnungsdatum).getTime();
+    const d2 = new Date(rechnung.faelligkeitsdatum).getTime();
+    const diff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+    if (diff > 0) tage = diff;
+  }
+  const zahlungsSatz = `Wir möchten Sie bitten, den Rechnungsbetrag in Höhe von ${eur(t.brutto)} innerhalb von ${tage} Tagen nach Rechnungszustellung auf unser unten genanntes Bankkonto zu überweisen.`;
+  const baseOutro = opts.outro ? opts.outro : zahlungsSatz;
+  const fullOutro = opts.outro
+    ? baseOutro
+    : [zahlungsSatz, opts.materialBereitgestellt ? "Zugunsten der Reinigung werden Reinigungswerkzeuge und Reinigungsmittel von uns zur Verfügung gestellt." : null].filter(Boolean).join("\n\n");
+  const headerNote = "Bei Zahlung bitte\ndie Rechnungs-Nr. angeben";
   const doc = await buildDoc(
     { firma: effFirma, kunde, ansprechpartner },
     "Rechnung",
     meta,
     "box",
-    note,
+    headerNote,
     { positionen: rechnung.positionen, rabattGesamt: rechnung.rabattGesamt, steuersatz: rechnung.steuersatz },
     defaultIntroRechnung(rechnung, opts),
-    defaultOutroRechnung(rechnung, opts),
+    fullOutro,
     signaturFromFirma(effFirma),
     rechnung.optionen?.logoOverride ?? null,
     tracker.pageBreakBefore,
