@@ -69,15 +69,20 @@ async function main(): Promise<void> {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
 
+  // DATEN-SCHUTZ-WALL: erste Aktion nach Verzeichnis-Setup.
+  // Bricht den Boot ab, wenn Code- und Daten-Verzeichnis sich überschneiden.
+  assertCodeAndDataSeparated();
+
   const keyStatus = ensureMasterKey(config.keyPath);
   openDatabase(config.dbPath);
 
   // Wartungsmodus von der Platte laden (z. B. nach abgebrochenem Restore)
   loadMaintenanceFlagFromDisk();
 
-  // Backup-Geister beerdigen + Disk/DB synchronisieren
+  // Backup-Geister beerdigen + Disk/DB synchronisieren + verwaiste Restore-tmp aufräumen
   const zombies = reapZombies();
   const orphans = reconcileDiskState();
+  const restoreTmpRemoved = cleanupOrphanRestoreTmp();
 
   // CORS-Härtung: in Production darf "*" nicht stehen, sonst Bootabbruch.
   if (config.nodeEnv === "production") {
