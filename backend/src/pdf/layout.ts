@@ -77,12 +77,12 @@ function header(f: FirmaForPdf, logoDataUrl: string | null) {
       {
         width: "*",
         stack: [
-          { text: absenderzeile(f), fontSize: 8, color: COLOR_TEXT, decoration: "underline", margin: [0, 35, 0, 0] },
+          { text: absenderzeile(f), fontSize: 8, color: COLOR_TEXT, decoration: "underline", margin: [0, 50, 0, 0] },
         ],
       },
       logoDataUrl
-        ? { width: 230, image: logoDataUrl, fit: [230, 100], alignment: "right" }
-        : { width: 230, text: f.firmenname.toUpperCase(), bold: true, fontSize: 18, color: COLOR_TEXT, alignment: "right" },
+        ? { width: 270, image: logoDataUrl, fit: [270, 120], alignment: "right" }
+        : { width: 270, text: f.firmenname.toUpperCase(), bold: true, fontSize: 20, color: COLOR_TEXT, alignment: "right" },
     ],
   };
 }
