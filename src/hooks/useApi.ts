@@ -1424,3 +1424,59 @@ export const useAbschliessenProtokoll = (id: string) => {
     },
   });
 };
+
+// ─── GitHub-Update (One-Click aus Pi) ──────────────────────────────────────
+
+export const qkGithub = {
+  status: ["system", "github", "status"] as const,
+};
+
+export const useGithubStatus = (autoPoll = true) =>
+  useQuery({
+    queryKey: qkGithub.status,
+    queryFn: () => piApi.get<GithubUpdateStatus>("/system/github/status"),
+    refetchInterval: autoPoll ? 30 * 60_000 : false,
+    refetchOnWindowFocus: false,
+  });
+
+export const useGithubVerbinden = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { repo: string; branch: string; autoCheck: boolean; token?: string }) =>
+      piApi.post<GithubUpdateStatus>("/system/github/verbinden", input),
+    onSuccess: (data) => {
+      qc.setQueryData(qkGithub.status, data);
+    },
+  });
+};
+
+export const useGithubTrennen = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => piApi.post<{ ok: boolean }>("/system/github/trennen"),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qkGithub.status });
+    },
+  });
+};
+
+export const useGithubPruefen = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => piApi.post<GithubUpdateStatus>("/system/github/pruefen"),
+    onSuccess: (data) => {
+      qc.setQueryData(qkGithub.status, data);
+    },
+  });
+};
+
+export const useGithubInstall = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => piApi.post<GithubInstallResult>("/system/github/install"),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qkGithub.status });
+      qc.invalidateQueries({ queryKey: ["system", "update"] });
+    },
+  });
+};
