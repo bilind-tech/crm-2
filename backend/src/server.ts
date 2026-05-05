@@ -189,37 +189,85 @@ async function main(): Promise<void> {
       wildcard: false,
       index: ["index.html"],
     });
-    // SPA-Fallback: alle nicht-API/ nicht-Asset-Pfade liefern index.html
-    const indexPath = path.join(config.frontendDir, "index.html");
-    if (existsSync(indexPath)) {
-      app.setNotFoundHandler((req, reply) => {
-        const url = req.raw.url ?? "/";
-        const isApi =
-          url.startsWith("/auth") ||
-          url.startsWith("/health") ||
-          url.startsWith("/einstellungen") ||
-          url.startsWith("/backup") ||
-          url.startsWith("/stammdaten") ||
-          url.startsWith("/kunden") ||
-          url.startsWith("/angebote") ||
-          url.startsWith("/rechnungen") ||
-          url.startsWith("/aktivitaet") ||
-          url.startsWith("/benachrichtigungen") ||
-          url.startsWith("/audit") ||
-          url.startsWith("/events") ||
-          url.startsWith("/system") ||
-          url.startsWith("/steuern") ||
-          url.startsWith("/dokumente") ||
-          url.startsWith("/protokolle") ||
-          url.startsWith("/mahnung") ||
-          url.startsWith("/api");
-        if (isApi || req.method !== "GET") {
-          return reply.status(404).send({ error: "Not found", statusCode: 404 });
+    // SPA/SSR-Fallback. TanStack Start liefert KEIN statisches index.html,
+    // sondern einen SSR-Worker unter dist/server/server.js. Wir mounten ihn,
+    // damit alle Nicht-API-GET-Requests serverseitig gerendert werden.
+    const ssrEntry = path.resolve(config.frontendDir, "..", "server", "server.js");
+    let ssrFetch:
+      | ((req: Request, env: unknown, ctx: unknown) => Promise<Response> | Response)
+      | null = null;
+    if (existsSync(ssrEntry)) {
+      try {
+        const mod: { default?: { fetch?: typeof ssrFetch } } = await import(
+          /* @vite-ignore */ ssrEntry
+        );
+        if (mod.default?.fetch) {
+          ssrFetch = mod.default.fetch.bind(mod.default);
+          app.log.info({ ssrEntry }, "SSR-Handler geladen");
         }
-        return reply.type("text/html").sendFile("index.html");
-      });
-      app.log.info({ frontendDir: config.frontendDir }, "Frontend-Statics aktiv");
+      } catch (e) {
+        app.log.error({ err: e, ssrEntry }, "SSR-Handler konnte nicht geladen werden");
+      }
+    } else {
+      app.log.warn({ ssrEntry }, "Kein SSR-Bundle gefunden — Frontend nicht erreichbar");
     }
+
+    const isBackendApi = (url: string): boolean =>
+      url.startsWith("/auth") ||
+      url.startsWith("/health") ||
+      url.startsWith("/einstellungen") ||
+      url.startsWith("/backup") ||
+      url.startsWith("/stammdaten") ||
+      url.startsWith("/kunden") ||
+      url.startsWith("/angebote") ||
+      url.startsWith("/rechnungen") ||
+      url.startsWith("/aktivitaet") ||
+      url.startsWith("/benachrichtigungen") ||
+      url.startsWith("/audit") ||
+      url.startsWith("/events") ||
+      url.startsWith("/system") ||
+      url.startsWith("/steuern") ||
+      url.startsWith("/dokumente") ||
+      url.startsWith("/protokolle") ||
+      url.startsWith("/mahnung");
+
+    app.setNotFoundHandler(async (req, reply) => {
+      const url = req.raw.url ?? "/";
+      if (isBackendApi(url)) {
+        return reply.status(404).send({ error: "Not found", statusCode: 404 });
+      }
+      if (!ssrFetch) {
+        return reply.status(503).send({ error: "Frontend nicht verfügbar", statusCode: 503 });
+      }
+      try {
+        const proto = (req.headers["x-forwarded-proto"] as string | undefined) ?? "http";
+        const host = req.headers.host ?? `localhost:${config.port}`;
+        const fullUrl = `${proto}://${host}${url}`;
+        const headers = new Headers();
+        for (const [k, v] of Object.entries(req.headers)) {
+          if (Array.isArray(v)) headers.set(k, v.join(","));
+          else if (typeof v === "string") headers.set(k, v);
+        }
+        const init: RequestInit = { method: req.method, headers };
+        if (req.method !== "GET" && req.method !== "HEAD" && req.body) {
+          init.body = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+        }
+        const ssrReq = new Request(fullUrl, init);
+        const ssrRes = await ssrFetch(ssrReq, {}, {});
+        ssrRes.headers.forEach((value, key) => {
+          reply.header(key, value);
+        });
+        reply.status(ssrRes.status);
+        const body = ssrRes.body
+          ? Buffer.from(await ssrRes.arrayBuffer())
+          : null;
+        return reply.send(body);
+      } catch (e) {
+        req.log.error({ err: e }, "SSR-Render fehlgeschlagen");
+        return reply.status(500).send({ error: "SSR error", statusCode: 500 });
+      }
+    });
+    app.log.info({ frontendDir: config.frontendDir }, "Frontend-Statics aktiv");
   } else {
     app.log.warn(
       { frontendDir: config.frontendDir },
