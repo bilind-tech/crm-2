@@ -1,0 +1,1 @@
+function u(t){return t.menge*t.einzelpreisNetto*(1-t.rabatt/100)}function f(t,o){const r=t.reduce((n,c)=>n+u(c),0)*(1-o/100);let e=0;for(const n of t)e+=u(n)*(n.steuersatz/100);e*=1-o/100;const s=r+e;return{netto:r,steuer:e,brutto:s}}export{f as s};
