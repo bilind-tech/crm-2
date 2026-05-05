@@ -110,6 +110,17 @@ ensure_node() {
   fi
 }
 
+ensure_build_tools() {
+  log "Installiere Systempakete für Build/Native-Module"
+  if [[ $CHECK_ONLY -eq 1 ]]; then
+    warn "[--check] apt-Pakete würden geprüft/installiert"
+    return
+  fi
+  apt-get update
+  apt-get install -y git curl ca-certificates unzip python3 make g++ build-essential npm
+  ok "Systempakete vorhanden"
+}
+
 install_systemd_unit() {
   if [[ ! -f "$SYSTEMD_UNIT" ]]; then
     err "systemd-Unit fehlt: $SYSTEMD_UNIT"
@@ -264,6 +275,7 @@ main() {
   ensure_user
   ensure_dirs
   ensure_node
+  ensure_build_tools
   install_systemd_unit
   install_sudoers
   install_logrotate
