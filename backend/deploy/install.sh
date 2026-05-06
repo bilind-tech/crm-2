@@ -13,9 +13,12 @@ readonly APP_GROUP="mycleancenter"
 readonly APP_DIR="/opt/mycleancenter"
 readonly DATA_DIR="/var/lib/mycleancenter"
 readonly SERVICE_NAME="mycleancenter"
+readonly STATIC_HOSTNAME="mycleancenter-pi"
+readonly PRETTY_HOSTNAME="My Clean Center Pi"
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SYSTEMD_UNIT="$SCRIPT_DIR/systemd/mycleancenter.service"
+readonly MDNS_ALIASES_UNIT="$SCRIPT_DIR/systemd/mycleancenter-mdns-aliases.service"
 readonly SUDOERS_FILE="$SCRIPT_DIR/sudoers.d/mycleancenter"
 readonly LOGROTATE_FILE="$SCRIPT_DIR/logrotate.conf"
 
@@ -123,8 +126,44 @@ ensure_build_tools() {
     return
   fi
   apt-get update
-  apt-get install -y git curl ca-certificates unzip python3 make g++ build-essential libsqlite3-dev
+  apt-get install -y git curl ca-certificates unzip python3 make g++ build-essential libsqlite3-dev avahi-daemon avahi-utils libnss-mdns
   ok "Systempakete vorhanden"
+}
+
+ensure_mdns() {
+  local current
+  current="$(hostnamectl --static 2>/dev/null || hostname)"
+
+  if [[ "$current" != "$STATIC_HOSTNAME" ]]; then
+    log "Setze Gerätenamen: $PRETTY_HOSTNAME ($STATIC_HOSTNAME.local)"
+    if [[ $CHECK_ONLY -eq 0 ]]; then
+      hostnamectl set-hostname "$STATIC_HOSTNAME"
+      hostnamectl set-hostname --pretty "$PRETTY_HOSTNAME" || true
+      if [[ -f /etc/hosts ]]; then
+        sed -i -E "s/\b${current}\b/${STATIC_HOSTNAME}/g" /etc/hosts || true
+        grep -qE "127\.0\.1\.1\s+${STATIC_HOSTNAME}\b" /etc/hosts || printf "127.0.1.1\t%s\n" "$STATIC_HOSTNAME" >> /etc/hosts
+      fi
+    fi
+  else
+    ok "Gerätename aktuell: $STATIC_HOSTNAME.local"
+  fi
+
+  if [[ $CHECK_ONLY -eq 1 ]]; then
+    warn "[--check] Avahi/mDNS würde aktiviert und Alias-Service geprüft"
+    return
+  fi
+
+  systemctl enable --now avahi-daemon
+  ok "mDNS aktiv: http://${STATIC_HOSTNAME}.local:8787"
+
+  if [[ -f "$MDNS_ALIASES_UNIT" ]]; then
+    install -m 0644 "$MDNS_ALIASES_UNIT" /etc/systemd/system/mycleancenter-mdns-aliases.service
+    systemctl daemon-reload
+    systemctl enable --now mycleancenter-mdns-aliases.service
+    ok "mDNS-Aliase aktiv: http://mycleancenter.local:8787 und http://timekeeper.local:<port>"
+  else
+    warn "mDNS-Alias-Unit fehlt: $MDNS_ALIASES_UNIT"
+  fi
 }
 
 install_systemd_unit() {
@@ -322,6 +361,7 @@ main() {
   ensure_user
   ensure_dirs
   ensure_build_tools
+  ensure_mdns
   ensure_node
   install_systemd_unit
   install_sudoers
