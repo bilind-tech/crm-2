@@ -30,7 +30,7 @@ log() { printf "\033[1;36m[bootstrap]\033[0m %s\n" "$*"; }
 
 log "Systempakete"
 apt-get update
-apt-get install -y curl ca-certificates unzip python3 make g++ build-essential libsqlite3-dev git
+apt-get install -y curl ca-certificates unzip python3 make g++ build-essential libsqlite3-dev git avahi-daemon avahi-utils libnss-mdns
 
 if ! command -v node >/dev/null 2>&1; then
   log "Installiere Node.js 20 LTS"

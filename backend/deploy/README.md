@@ -7,7 +7,7 @@ Anleitung, um das CRM-Backend auf einem frisch geflashten Raspberry Pi 5 in Betr
 - Raspberry Pi 5 mit USB-SSD (siehe `mem://reference/hardware`)
 - Raspberry Pi OS Lite (64-bit, Bookworm oder neuer)
 - SSH aktiv, Standard-User `pi` mit sudo-Rechten
-- Pi ist im LAN erreichbar unter `mycleancenter.local` (mDNS)
+- Pi ist im LAN erreichbar per IP; das Install-Skript richtet mDNS automatisch ein.
 
 ## Erstinstallation (1-Befehl-Variante)
 
@@ -35,6 +35,8 @@ sudo bash /opt/mycleancenter/current/backend/deploy/install.sh
 Das Skript:
 
 - legt System-User `mycleancenter` an
+- setzt den Gerätenamen auf `My Clean Center Pi` / `mycleancenter-pi.local`
+- aktiviert Avahi/mDNS und veröffentlicht zusätzlich die Aliase `mycleancenter.local` und `timekeeper.local`
 - erzeugt `/var/lib/mycleancenter/{db,keys,uploads,logs,backups/...}`
 - installiert Node.js 20 LTS (falls fehlt)
 - installiert Backend-Dependencies (`npm ci --omit=dev`) — Native-Module (better-sqlite3, @node-rs/argon2) werden für Pi-Architektur kompiliert
@@ -46,11 +48,13 @@ Das Skript:
 Nach Erfolg:
 
 ```bash
-curl http://mycleancenter.local:8787/health
+curl http://mycleancenter-pi.local:8787/health
 # → {"status":"ok",...}
 ```
 
-Im Browser dann `http://mycleancenter.local:8787` öffnen → Setup-Wizard.
+Im Browser dann `http://mycleancenter-pi.local:8787` oder `http://mycleancenter.local:8787` öffnen → Setup-Wizard. Die IP-Adresse bleibt weiterhin parallel erreichbar.
+
+Für den Stundenzettel/Timekeeper kann dieselbe Pi-IP zusätzlich als `timekeeper.local` genutzt werden, z. B. `http://timekeeper.local:4001`.
 
 ## Updates
 
