@@ -156,15 +156,20 @@ ensure_mdns() {
   systemctl enable --now avahi-daemon
   ok "mDNS aktiv: http://${STATIC_HOSTNAME}.local:8787"
 
-  if [[ -f "$MDNS_ALIASES_UNIT" ]]; then
-    install -m 0644 "$MDNS_ALIASES_UNIT" /etc/systemd/system/mycleancenter-mdns-aliases.service
+  # Der zusätzliche Alias-Dienst war fehleranfällig und konnte in eine
+  # systemd-Restart-Schleife geraten. Er ist nicht nötig, weil der Pi über
+  # IP und den echten Hostnamen erreichbar bleibt. Bestehende Installationen
+  # werden hier bereinigt, ohne CRM/Stundenzettel neu zu starten.
+  if systemctl list-unit-files mycleancenter-mdns-aliases.service &>/dev/null \
+     || [[ -f /etc/systemd/system/mycleancenter-mdns-aliases.service ]]; then
+    log "Deaktiviere fehleranfälligen mDNS-Alias-Dienst"
+    systemctl disable --now mycleancenter-mdns-aliases.service 2>/dev/null || true
+    rm -f /etc/systemd/system/mycleancenter-mdns-aliases.service
     systemctl daemon-reload
     systemctl reset-failed mycleancenter-mdns-aliases.service 2>/dev/null || true
-    systemctl enable mycleancenter-mdns-aliases.service
-    systemctl restart mycleancenter-mdns-aliases.service
-    ok "mDNS-Alias aktiv: http://mycleancenter.local:8787"
+    ok "mDNS-Alias-Dienst deaktiviert; kein Restart-Loop mehr"
   else
-    warn "mDNS-Alias-Unit fehlt: $MDNS_ALIASES_UNIT"
+    ok "mDNS-Alias-Dienst ist nicht installiert"
   fi
 }
 
