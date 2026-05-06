@@ -49,7 +49,7 @@ export function PasswortAendernDialog({
       if (err instanceof PiApiError) {
         if (err.status === 401) setFehler("Aktuelles Passwort ist falsch.");
         else if (err.status === 422)
-          setFehler("Neues Passwort: min. 12 Zeichen, 1 Ziffer + 1 Sonderzeichen.");
+          setFehler("Neues Passwort: Passwort ungültig.");
         else setFehler(err.message);
       } else setFehler(err instanceof Error ? err.message : "Fehler");
     } finally {
@@ -63,7 +63,7 @@ export function PasswortAendernDialog({
         <DialogHeader>
           <DialogTitle>Passwort ändern</DialogTitle>
           <DialogDescription>
-            Min. 12 Zeichen, mindestens 1 Ziffer und 1 Sonderzeichen.
+            Passwort frei wählbar.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-3">

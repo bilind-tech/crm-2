@@ -304,7 +304,7 @@ function SetupForm() {
     } catch (err) {
       if (err instanceof PiApiError) {
         if (err.status === 422) {
-          setFehler("Passwort: min. 12 Zeichen, mindestens 1 Ziffer + 1 Sonderzeichen.");
+          setFehler("Passwort: Passwort ungültig.");
           return;
         }
         if (err.status === 401) {
@@ -342,7 +342,7 @@ function SetupForm() {
           <code className="mx-1">data/keys/setup.token</code>.
         </div>
         <div className="space-y-2">
-          <Label htmlFor="setup-pw">Passwort (min. 12 Zeichen)</Label>
+          <Label htmlFor="setup-pw">Passwort</Label>
           <PasswordInput
             id="setup-pw"
             value={password}
@@ -393,7 +393,7 @@ function RecoveryForm({ onZurueck }: { onZurueck: () => void }) {
       setNeuerCode(res.recoveryCode);
     } catch (err) {
       if (err instanceof PiApiError) {
-        if (err.status === 422) setFehler("Passwort: min. 12 Zeichen, 1 Ziffer + 1 Sonderzeichen.");
+        if (err.status === 422) setFehler("Passwort: Passwort ungültig.");
         else if (err.status === 401) setFehler("Recovery-Code ungültig.");
         else if (err.status === 429) setFehler("Zu viele Versuche, bitte warten.");
         else setFehler(err.message);
@@ -430,7 +430,7 @@ function RecoveryForm({ onZurueck }: { onZurueck: () => void }) {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="rec-pw">Neues Passwort (min. 12 Zeichen)</Label>
+          <Label htmlFor="rec-pw">Neues Passwort</Label>
           <PasswordInput id="rec-pw" value={pw} onChange={setPw} autoComplete="new-password" />
         </div>
         {fehler && (
