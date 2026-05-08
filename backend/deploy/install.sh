@@ -19,6 +19,7 @@ readonly PRETTY_HOSTNAME="My Clean Center Pi"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SYSTEMD_UNIT="$SCRIPT_DIR/systemd/mycleancenter.service"
 readonly MDNS_ALIASES_UNIT="$SCRIPT_DIR/systemd/mycleancenter-mdns-aliases.service"
+readonly MDNS_ALIAS_UNIT="$SCRIPT_DIR/systemd/mycleancenter-mdns-alias.service"
 readonly SUDOERS_FILE="$SCRIPT_DIR/sudoers.d/mycleancenter"
 readonly LOGROTATE_FILE="$SCRIPT_DIR/logrotate.conf"
 
