@@ -260,6 +260,15 @@ export async function driveRoutes(app: FastifyInstance): Promise<void> {
       });
     });
     scoped.post<{ Params: { id: string } }>("/drive/uploads/:id/retry", async (req, reply) => {
+      const s = loadDriveSettings();
+      if (!s.refreshTokenIsSet) {
+        reply.status(409);
+        return {
+          error: "drive-not-connected",
+          message:
+            "Google Drive ist nicht verbunden. Beleg liegt sicher lokal — bitte Drive in Einstellungen verbinden.",
+        };
+      }
       if (!retry(req.params.id)) { reply.status(404); return { error: "not-found" }; }
       void tickDriveQueue(1).catch(() => undefined);
       return { ok: true };
