@@ -32,6 +32,8 @@ import { driveRoutes } from "./routes/drive.js";
 import { emailRoutes } from "./routes/email.js";
 import { startDriveWorker } from "./drive/upload-worker.js";
 import { wireDriveAutoEnqueue } from "./drive/auto-enqueue.js";
+import { on as onBusEvent } from "./events/bus.js";
+import { tickDriveQueue } from "./drive/upload-worker.js";
 import { wireDokumenteDriveAutoEnqueue } from "./dokumente/drive-wireup.js";
 import { purgeExpiredSessions as purgeExpiredUploadSessions } from "./dokumente/repo.js";
 import { reapStaleLock, cleanupStaleStaging } from "./system/runner.js";
@@ -299,6 +301,14 @@ async function main(): Promise<void> {
   startBelegeScheduler();
   // Drive-Upload Worker (Cron-basiert, jede Minute)
   startDriveWorker();
+  // Sobald Google-Drive-Einstellungen geändert werden (typisch: User hat
+  // gerade verbunden), sofort den Worker einmal anstoßen — alle wartenden
+  // Belege werden direkt hochgeladen, ohne auf den nächsten Cron-Tick zu warten.
+  onBusEvent("einstellung:geaendert", (p) => {
+    if (p.key === "googleDrive") {
+      void tickDriveQueue(10).catch((e) => app.log.error({ err: e }, "drive auto-tick"));
+    }
+  });
   // Dokumente-Frist-Cron (täglich nach 07:00 Pi-Zeit)
   startFristenScheduler();
   // Mahn-Automatik (Cron) STILLGELEGT — niemals automatischer Mail-Versand.
