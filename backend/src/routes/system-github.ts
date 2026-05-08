@@ -68,11 +68,7 @@ export async function systemGithubRoutes(app: FastifyInstance): Promise<void> {
         if (!t.success) return reply.status(400).send({ error: "Token zu kurz" });
         setSetting(SENSITIVE_KEYS.githubToken, t.data.token, { encrypt: true });
       }
-      // Stellen sicher, dass irgendein Token vorhanden ist
-      const tokenMeta = getSettingMeta(SENSITIVE_KEYS.githubToken);
-      if (!tokenMeta.exists) {
-        return reply.status(400).send({ error: "Kein PAT gespeichert — bitte Token mitgeben" });
-      }
+      // Token ist optional — public Repos funktionieren ohne PAT.
 
       saveGithubSettings(settings);
 
