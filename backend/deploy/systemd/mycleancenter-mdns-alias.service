@@ -1,0 +1,24 @@
+[Unit]
+Description=Veröffentlicht den mDNS-Alias mycleancenter.local
+Documentation=man:avahi-publish-address(1)
+After=avahi-daemon.service network-online.target
+Wants=avahi-daemon.service network-online.target
+# Bricht ab statt zu loopen, wenn der Dienst >3x in 5 min crasht.
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+# Eigener IP-Lookup, dann genau EINEN Alias publizieren (avahi-publish-address
+# akzeptiert nur einen Namen pro Prozess).
+ExecStartPre=/bin/sh -c 'IP="$(hostname -I 2>/dev/null | awk "{print \$1}")"; test -n "$IP" || { echo "Keine IP gefunden — Alias nicht möglich"; exit 1; }'
+ExecStart=/bin/sh -c 'IP="$(hostname -I | awk "{print \$1}")"; exec /usr/bin/avahi-publish-address -R mycleancenter.local "$IP"'
+Restart=on-failure
+RestartSec=60
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
