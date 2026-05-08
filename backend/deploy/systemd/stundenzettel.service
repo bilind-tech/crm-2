@@ -1,0 +1,38 @@
+[Unit]
+Description=Stundenzettel (Timekeeper Hub) — statisches Frontend auf Port 8080
+Documentation=https://github.com/bilind-tech/timekeeper-hub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mycleancenter
+Group=mycleancenter
+WorkingDirectory=/opt/stundenzettel/current
+Environment=NODE_ENV=production
+Environment=TZ=Europe/Berlin
+Environment=PORT=8080
+Environment=HOST=0.0.0.0
+# `serve` wird global via npm installiert (siehe setup-pi.sh).
+# -s: Single-Page-App-Modus (alle Routen → index.html)
+# -l: Listen auf Port 8080, alle Interfaces
+ExecStart=/usr/bin/npx --yes serve -s dist -l tcp://0.0.0.0:8080
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=stundenzettel
+
+# Sicherheits-Hardening
+ProtectSystem=strict
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
