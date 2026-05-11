@@ -73,13 +73,24 @@ apt-get install -y -qq \
   avahi-daemon avahi-utils libnss-mdns
 ok "Systempakete OK"
 
-# Node.js 20 LTS
-if ! command -v node >/dev/null || ! node --version | grep -qE '^v(20|22|24)\.'; then
-  log "Node.js 20 LTS via NodeSource"
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null
+# Node.js 22 LTS (TanStack Start verlangt >=22.12)
+if ! command -v node >/dev/null || ! node --version | grep -qE '^v(22|24)\.'; then
+  log "Node.js 22 LTS via NodeSource"
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null
   apt-get install -y -qq nodejs
 fi
 ok "Node $(node --version), npm $(npm --version)"
+
+# Helper: bevorzugt `npm ci`, fällt bei Lockfile-Drift automatisch auf
+# `npm install` zurück, damit das Setup nicht an einem leicht veralteten
+# package-lock.json scheitert.
+npm_install_safe() {
+  if ! npm ci --no-audit --no-fund 2>/dev/null; then
+    warn "npm ci fehlgeschlagen (Lockfile-Drift) → npm install"
+    npm install --no-audit --no-fund
+  fi
+}
+export -f npm_install_safe warn ok 2>/dev/null || true
 
 # ============================================================================
 # 2) USB-SSD mounten + fstab-Eintrag (reboot-fest)
@@ -143,11 +154,11 @@ if [[ $SKIP_CRM -eq 0 ]]; then
   ok "CRM-Sourcen aus $CRM_REPO ($BRANCH)"
 
   log "Frontend bauen (Vite)"
-  ( cd "$CRM_SRC" && npm ci --no-audit --no-fund && npm run build )
+  ( cd "$CRM_SRC" && { npm ci --no-audit --no-fund || { echo "↪ npm ci failed, falling back to npm install"; npm install --no-audit --no-fund; }; } && npm run build )
   ok "Frontend dist/ gebaut"
 
   log "Backend bauen (TypeScript)"
-  ( cd "$CRM_SRC/backend" && npm ci --no-audit --no-fund && npm run build )
+  ( cd "$CRM_SRC/backend" && { npm ci --no-audit --no-fund || { echo "↪ npm ci failed, falling back to npm install"; npm install --no-audit --no-fund; }; } && npm run build )
   ok "Backend dist/ gebaut"
 
   # Release-Ordner anlegen + current-Symlink atomar
@@ -184,7 +195,7 @@ if [[ $SKIP_ZETTEL -eq 0 ]]; then
   ok "Stundenzettel-Sourcen aus $ZETTEL_REPO ($BRANCH)"
 
   log "Stundenzettel bauen (Vite)"
-  ( cd "$ZETTEL_SRC" && npm ci --no-audit --no-fund && npm run build )
+  ( cd "$ZETTEL_SRC" && { npm ci --no-audit --no-fund || { echo "↪ npm ci failed, falling back to npm install"; npm install --no-audit --no-fund; }; } && npm run build )
   ok "Stundenzettel dist/ gebaut"
 
   STAMP="$(date +%Y%m%d-%H%M%S)"
