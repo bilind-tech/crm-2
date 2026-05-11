@@ -1,4 +1,6 @@
 import path from "node:path";
+import fs from "node:fs";
+import { execFileSync } from "node:child_process";
 
 // Zentrale DB-Datei-Konstante. Backup, Restore und Live müssen denselben
 // Namen verwenden, sonst landet ein Restore in einer toten Datei.
@@ -81,12 +83,6 @@ export function inspectDataDir(): {
   warning: string | null;
   freeBytes: number | null;
 } {
-  // Lazy require für Edge-Bundles ohne node:fs
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const fs = require("node:fs") as typeof import("node:fs");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const child = require("node:child_process") as typeof import("node:child_process");
-
   let resolved = config.dataDir;
   try {
     resolved = fs.realpathSync(config.dataDir);
@@ -96,11 +92,8 @@ export function inspectDataDir(): {
 
   let freeBytes: number | null = null;
   try {
-    const out = child.execSync(`df -PB1 "${resolved}" | tail -1 | awk '{print $4}'`, {
-      encoding: "utf8",
-      timeout: 2000,
-    });
-    freeBytes = Number(out.trim()) || null;
+    const s = fs.statfsSync(resolved);
+    freeBytes = Number(s.bavail) * Number(s.bsize) || null;
   } catch {
     /* ignore */
   }
@@ -114,12 +107,13 @@ export function inspectDataDir(): {
   // ist als `/`-Root gemountet. Wenn unser DATA_DIR auf demselben Mountpoint
   // wie `/` liegt, ist es höchstwahrscheinlich die SD-Karte.
   try {
-    const dataMount = child
-      .execSync(`df -P "${resolved}" | tail -1 | awk '{print $1}'`, { encoding: "utf8", timeout: 2000 })
-      .trim();
-    const rootMount = child
-      .execSync(`df -P / | tail -1 | awk '{print $1}'`, { encoding: "utf8", timeout: 2000 })
-      .trim();
+    const dfLine = (p: string): string => {
+      const out = execFileSync("df", ["-P", p], { encoding: "utf8", timeout: 2000 });
+      const lines = out.trim().split("\n");
+      return (lines[lines.length - 1] || "").split(/\s+/)[0] ?? "";
+    };
+    const dataMount = dfLine(resolved);
+    const rootMount = dfLine("/");
     if (dataMount === rootMount) {
       return {
         ok: false,

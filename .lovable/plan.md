@@ -1,96 +1,68 @@
 ## Ziel
-1. Kunden / Angebote / Rechnungen funktionieren **immer** — auch ohne Google-Drive-Verbindung. Alles speichert auf USB-SSD.
-2. UI zeigt pro Beleg klar an: „in Drive" ✓ / „nur lokal" ⚠ / „Sync fehlgeschlagen" ✗ — mit „Jetzt synchronisieren"-Button.
-3. Fehlermeldungen sprechen Klartext („Google Drive nicht verbunden — Beleg liegt sicher lokal"), kein nacktes `unauthenticated`.
-4. Doctor + Installer prüfen, dass alle Daten **wirklich** auf der SSD landen, strukturiert und automatisch.
+Die Installation ist fast durchgelaufen: Frontend, Backend-Build und Stundenzettel funktionieren. Der einzige harte offene Punkt ist: `mycleancenter.service` antwortet nicht auf `/health`. Bevor du nochmal Befehle am Pi ausführst, mache ich den Installer robuster und liefere danach einen finalen Reparaturblock, der keine Daten löscht und keine doppelten Projektkopien erzeugt.
 
-## Status heute (geprüft)
-- ✅ Auto-Enqueue (`backend/src/drive/auto-enqueue.ts`) returned bereits leise, wenn Drive nicht verbunden → **Beleg-Erstellung wird nicht blockiert**, aber User sieht das auch nicht.
-- ✅ `drive_upload_queue` mit Retry-Logik existiert; `/drive/uploads/:id/retry` ist implementiert.
-- ❌ Auf Beleg-Detail-Seiten (Angebot/Rechnung) gibt es keinen Drive-Status-Badge mit „Jetzt synchronisieren"-Button.
-- ❌ Wenn Drive nicht verbunden ist, wird nichts in die Queue gelegt → später kein 1-Klick-Sync möglich (Queue leer).
-- ❌ Frontend-Fehlermeldungen (`PiApiError`) mappen `0` auf „Backend nicht erreichbar", aber 401/403/Drive-spezifische Fehler bleiben kryptisch.
-- ✅ Daten-Layout auf SSD ist sauber definiert (`/var/lib/mycleancenter/{db,backups,uploads,keys,logs}`), Symlink via `--use-ssd=`.
-- ❌ Kein systemd-Healthcheck, der bei nicht-gemounteter SSD den Backend-Start verweigert (Risiko: Schreiben auf SD-Karte).
+## Was ich ändern werde
 
-## Plan
+1. **Root-Lockfile reparieren**
+   - `package-lock.json` ist aktuell nicht synchron zur `package.json`.
+   - Das verursacht jedes Mal den sichtbaren `npm ci`-Fehler, auch wenn danach `npm install` weiterläuft.
+   - Ich aktualisiere das Lockfile sauber, damit `npm ci` direkt funktioniert und die Installation weniger fehleranfällig wird.
 
-### 1. Drive: „immer enqueuen, später syncen"
-- `auto-enqueue.ts` legt **immer** einen Queue-Eintrag an, sobald Beleg den Sync-würdigen Status erreicht (versendet/akzeptiert/bezahlt/teilbezahlt) — auch wenn Drive aktuell nicht verbunden ist.
-- Neuer Queue-Status `wartet-auf-verbindung` (oder Wiederverwendung von `pending` mit `naechster_versuch_at = NULL`). Worker überspringt Einträge, solange `refreshTokenIsSet === false`.
-- Sobald `einstellung:geaendert` für `googleDrive` mit `verbunden=true` kommt → Worker tickt einmal und arbeitet alle wartenden Einträge ab.
-- Damit ist „1-Klick-Nachsync" automatisch: User verbindet Drive → alle alten Belege fließen rein.
+2. **Pi baut das richtige Frontend-Bundle**
+   - Aktuell baut `setup-pi.sh` mit `npm run build` das normale TanStack/SSR-Bundle (`dist/client`, `dist/server`).
+   - Der Pi-Service erwartet aber ein statisches SPA unter `/opt/mycleancenter/current/dist`.
+   - Ich ändere den Pi-Installer auf `npm run build:spa` und kopiere `dist-spa/` als `dist/` in den Release-Ordner.
+   - Damit liefert Fastify später wirklich die richtige App aus.
 
-### 2. Per-Beleg-Drive-Status in der UI
-- Neuer kleiner Endpoint `GET /drive/uploads/by-beleg?belegArt=…&belegId=…` (existiert via `listUploads` mit Filter — nur Hook ergänzen).
-- Komponente `DriveSyncBadge` (klein, dezent — keine Sparkles, keine Gradients) auf:
-  - `angebote/$id`, `rechnungen/$id`, `kunden/$id` (Liste der zugehörigen Belege)
-- Zustände:
-  - **Drive nicht verbunden**: graues Pill „Nur lokal gespeichert · Drive nicht verbunden" + Link „Verbinden"
-  - **Wartet auf Verbindung**: graues Pill „Wartet auf Drive-Verbindung"
-  - **Pending/Running**: blaues Pill „Synchronisiert…"
-  - **Erfolg**: grünes Pill „In Drive ✓" + „Öffnen"-Link
-  - **Fehler/Manuell**: rotes Pill mit Fehlertext-Tooltip + Button „Jetzt erneut synchronisieren"
-- Button ruft `POST /drive/uploads/:id/retry` (oder neu `/drive/uploads/sync-beleg` falls noch keine Queue-Zeile da).
+3. **CRM-Service-Start härter absichern**
+   - `install.sh` soll beim Healthcheck nicht nur warnen, sondern bei einem Startproblem direkt die letzten relevanten Logs ausgeben und mit Fehlercode abbrechen.
+   - Dadurch endet das Setup nicht mehr mit „FERTIG“, wenn CRM gar nicht läuft.
+   - Zusätzlich soll der Start explizit `systemctl reset-failed`, `daemon-reload` und einen sauberen Restart machen.
 
-### 3. Klartext-Fehlermeldungen
-- `PiApiError` bekommt einen Mapper (`errorToMessage()`), der bekannte Fehlercodes übersetzt:
-  - `error: "drive-not-connected"` → „Google Drive ist nicht verbunden. Beleg liegt sicher lokal auf dem Pi. Verbinde Drive in Einstellungen → Google Drive."
-  - `error: "drive-token-expired"` → „Google-Drive-Verbindung abgelaufen. Bitte neu verbinden."
-  - `error: "unauthenticated"` → „Sitzung abgelaufen — bitte erneut anmelden."
-  - `status: 0` → „Backend nicht erreichbar. Läuft der Pi?"
-- Backend-Drive-Routen liefern strukturierte Fehler `{ error: "drive-not-connected", message: "…" }` statt Stack-Traces.
-- Toast-Wrapper `showApiError(err)` ersetzt überall `toast.error(err.message)`.
+4. **Backend-Start robuster machen**
+   - Die SSD-Prüfung in `config.ts` nutzt aktuell `require(...)` und `child_process` in einer ESM-TypeScript-Codebase. Auf Node kann das je nach Kompilat/Runtime ein Startproblem sein.
+   - Ich ersetze das durch reine ESM-Imports (`fs.realpathSync`, `statfsSync`, `execFileSync`) oder entferne unnötige Shell-Pipes.
+   - So ist der Backend-Start weniger abhängig von Node-/ESM-Eigenheiten.
 
-### 4. Einstellungen-Doppelcheck
-- E2E-Smoke (manuell): jeder Tab öffnet, lädt Daten, zeigt bei Fehler `LoadingPlaceholder` / Error-State.
-- Tabs prüfen: Firmendaten, SMTP, Nummernkreise, E-Mail-Vorlage, Signatur, Mahnung, Backup, Sicherheit, Erscheinung, Positionsvorlagen, Steuern, GitHub, System-Update, **Google Drive**, Stundenzettel.
-- Jeder Tab bekommt einheitliches Pattern: `isLoading` → Skeleton, `error` → „Konnte nicht geladen werden — erneut versuchen" + Retry-Button.
+5. **Pi-Deployment-Pfade vereinheitlichen**
+   - `setup-pi.sh` nutzt aktuell `/opt/mycleancenter/releases/...`.
+   - Die interne Update-Logik nutzt `/opt/mycleancenter/versions/...`.
+   - Ich vereinheitliche das auf die vorhandene Installer-/Update-Struktur, ohne Datenpfad `/mnt/ssd/mycleancenter` anzufassen.
 
-### 5. SSD-Garantie: nichts landet versehentlich auf SD-Karte
-- Backend-Boot-Check (`config.ts` → neue Funktion `assertDataDirSafe()`):
-  - Falls `NODE_ENV=production` und `DATA_DIR` Symlink: prüfe Ziel-Mountpoint via `stat` → muss `!=` `/`-Mount sein (= echte SSD).
-  - Falls Ziel = SD-Karte: Backend startet trotzdem, schreibt aber **lautes** Warning ins Log + setzt Flag `dataOnSdCard=true`, das im Doctor + UI-Status sichtbar ist.
-- Installer `--use-ssd`: wir haben das schon; jetzt zusätzlich:
-  - automatisch in `mycleancenter.service` → `Environment=DATA_DIR=/mnt/data/mycleancenter` schreiben (statt nur Symlink), redundant aber failsafe.
-  - `ReadWritePaths` in systemd-Unit erweitern, falls SSD-Pfad abweicht.
-- Doctor-Mode prüft zusätzlich:
-  - `/var/lib/mycleancenter` zeigt auf Mountpoint mit ≥ 5 GB frei
-  - SQLite-Integrity (`PRAGMA integrity_check`)
-  - Backup-Verzeichnis schreibbar
-  - Drive-Queue-Größe + Anzahl `manuell`-Einträge → Hinweis im Doctor-Output
+6. **Finale Befehle für dich vorbereiten**
+   - Nach den Änderungen bekommst du genau einen sauberen Reparaturblock.
+   - Der Block wird:
+     - kaputte npm-Caches entfernen,
+     - Rechte auf SSD-Datenpfad korrigieren,
+     - den aktuellen Code neu holen,
+     - CRM + Stundenzettel neu deployen,
+     - danach Service-Status, Logs, Healthcheck, SSD-Mount und `.local` prüfen.
+   - Wichtig: Daten bleiben auf `/mnt/ssd/mycleancenter`; Code liegt unter `/opt/...`; es wird nicht doppelt installiert, sondern atomar aktualisiert.
 
-### 6. UX-Hinweis im App-Header (dezent)
-- Kleiner Cloud-Status-Indikator oben rechts (existiert teilweise via `useDriveUploads`):
-  - Grün ✓ wenn alles synchron
-  - Grau wenn Drive nicht verbunden + Anzahl wartender Belege
-  - Gelb bei laufenden Uploads
-  - Rot bei manuellen Fehlern
-- Klick → springt nach Einstellungen → Google Drive.
+## Was ich nicht ändern werde
+- Keine Cloud-Installation.
+- Keine Datenbank auf SD-Karte.
+- Kein Löschen von `/mnt/ssd/mycleancenter`.
+- Keine Änderung am Single-User-Konzept.
+- Kein automatischer E-Mail-Versand.
 
-## Technische Details
-- `backend/src/drive/auto-enqueue.ts`: Bedingung `if (!settings.refreshTokenIsSet) return;` entfernen — immer enqueuen, aber `markFehler` fasst „nicht verbunden" als nicht-zählenden Versuch auf (kein Retry-Counter-Inkrement).
-- `backend/src/drive/upload-worker.ts`: Pre-Check „Drive verbunden?" → wenn nein, alle `pending` ignorieren (kein Fehler markieren, einfach pausieren).
-- `backend/src/events/bus.ts`: Listener auf `einstellung:geaendert key=googleDrive` → `tickDriveQueue()` wenn jetzt verbunden.
-- `backend/src/routes/drive.ts`: neue Query `?belegArt=…&belegId=…` für `GET /drive/uploads` (existiert teilweise).
-- `src/components/DriveSyncBadge.tsx`: neue Komponente, in Beleg-Detail-Headers eingebaut.
-- `src/lib/api/piClient.ts`: `errorToMessage()` Helper export, in allen Toast-Stellen ersetzen (gezielt auf Drive + Auth + Backend-Offline).
-- `backend/src/config.ts`: `assertDataDirSafe()` aufrufen in `server.ts` direkt nach Pfad-Init.
-- `backend/deploy/install.sh` `--doctor`: zusätzliche Checks für SSD-Mount, Queue-Größe, SQLite-Integrity.
-- `backend/deploy/install.sh` `--use-ssd`: schreibt `DATA_DIR=` in systemd-Unit.
+## Erwartetes Ergebnis
+Nach dem finalen Reparaturblock sollten erreichbar sein:
 
-## Akzeptanzkriterien
-- ✅ Kunde/Angebot/Rechnung anlegen ohne Drive-Verbindung funktioniert ohne jede Fehlermeldung.
-- ✅ Beleg-Detail zeigt klar: „Nur lokal · Drive nicht verbunden" mit „Verbinden"-Link.
-- ✅ Nach Drive-Verbindung werden alle bisher angelegten Belege (versendet/akzeptiert/bezahlt) automatisch hochgeladen, ohne dass User sie einzeln antippen muss.
-- ✅ Manueller „Jetzt synchronisieren"-Button funktioniert pro Beleg.
-- ✅ Fehlermeldungen sind menschenlesbar — kein „unauthenticated", kein Stack-Trace.
-- ✅ Alle 15 Einstellungs-Tabs öffnen ohne leere Inhalte, mit Loading + Error-States.
-- ✅ Backend-Log meldet beim Start klar: `data dir: /var/lib/mycleancenter -> /mnt/data/mycleancenter (SSD, 230 GB free)` oder warnt bei SD-Karte.
-- ✅ Doctor zeigt: SSD ✓, DB ✓, Backups ✓, Drive-Queue: 3 wartend / 0 Fehler.
+```text
+CRM:
+http://mycleancenter.local:8787
+http://mycleancenter-pi.local:8787
+http://<Pi-IP>:8787
 
-## Nicht-Ziele
-- Keine Änderung an Auth/Single-User.
-- Kein Auto-E-Mail-Versand.
-- Keine neuen Drive-Features (nur Sync-Status sichtbar machen).
-- Keine Cloud-Hosting-Optionen.
+Stundenzettel:
+http://stundenzettel.local:8080
+http://mycleancenter-pi.local:8080
+http://<Pi-IP>:8080
+
+Daten:
+/var/lib/mycleancenter -> /mnt/ssd/mycleancenter
+```
+
+## Falls trotzdem noch etwas scheitert
+Dann zeigt der Installer direkt die genaue `journalctl`-Fehlerursache an, statt nur „FERTIG“ zu melden. Damit wäre der nächste Schritt eindeutig und nicht wieder Ratespiel.

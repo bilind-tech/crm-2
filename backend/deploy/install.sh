@@ -409,6 +409,10 @@ start_service() {
   if [[ $CHECK_ONLY -eq 1 ]]; then
     return
   fi
+  # Eventuelle "failed"-Markierung aus früherem Lauf entfernen, sonst
+  # blockiert systemd den Restart wegen StartLimit.
+  systemctl reset-failed "$SERVICE_NAME" 2>/dev/null || true
+  systemctl daemon-reload
   if systemctl is-active --quiet "$SERVICE_NAME"; then
     log "Service $SERVICE_NAME läuft bereits — Restart"
     systemctl restart "$SERVICE_NAME"
@@ -443,7 +447,12 @@ start_service() {
     fi
     sleep 2
   done
-  warn "Service antwortet nicht auf /health — prüfe: journalctl -u $SERVICE_NAME -n 80"
+  err "Service antwortet nicht auf /health — letzte Logs:"
+  echo "────────────────────────────────────────────────────────────"
+  journalctl -u "$SERVICE_NAME" -n 80 --no-pager || true
+  echo "────────────────────────────────────────────────────────────"
+  echo "Vollständig: sudo journalctl -u $SERVICE_NAME -n 200 --no-pager"
+  exit 4
 }
 
 # --- Doctor: rein lesende Diagnose -----------------------------------------
