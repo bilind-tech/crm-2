@@ -63,6 +63,17 @@ err()  { printf "  \033[1;31m✗\033[0m %s\n" "$*" >&2; }
 [[ $EUID -eq 0 ]] || { err "Bitte mit sudo ausführen."; exit 1; }
 
 # ============================================================================
+# 0) Vorab: kaputte npm-Caches im Daten-Verzeichnis säubern (NUR Cache!).
+#    Das Daten-Verzeichnis selbst (/mnt/ssd/mycleancenter/db, keys, uploads,
+#    backups) wird NIEMALS angefasst.
+# ============================================================================
+for cache in /var/lib/mycleancenter/.npm /mnt/ssd/mycleancenter/.npm /root/.npm/_cacache/tmp; do
+  if [[ -e "$cache" ]]; then
+    rm -rf "$cache" 2>/dev/null || true
+  fi
+done
+
+# ============================================================================
 # 1) Systempakete
 # ============================================================================
 log "Systempakete installieren"
@@ -154,8 +165,16 @@ if [[ $SKIP_CRM -eq 0 ]]; then
   ok "CRM-Sourcen aus $CRM_REPO ($BRANCH)"
 
   log "Frontend bauen (Vite)"
-  ( cd "$CRM_SRC" && { npm ci --no-audit --no-fund || { echo "↪ npm ci failed, falling back to npm install"; npm install --no-audit --no-fund; }; } && npm run build )
-  ok "Frontend dist/ gebaut"
+  # WICHTIG: Auf dem Pi liefert Fastify die App als statisches SPA aus
+  # (FRONTEND_DIR=/opt/mycleancenter/current/dist). Daher MÜSSEN wir den
+  # SPA-Build (vite.spa.config.ts → dist-spa/) verwenden, NICHT den
+  # TanStack-Start-SSR-Build (dist/client + dist/server).
+  ( cd "$CRM_SRC" && { npm ci --no-audit --no-fund || { echo "↪ npm ci failed, falling back to npm install"; npm install --no-audit --no-fund; }; } && npm run build:spa )
+  if [[ ! -f "$CRM_SRC/dist-spa/index.html" ]]; then
+    err "SPA-Build fehlgeschlagen — dist-spa/index.html fehlt"
+    exit 3
+  fi
+  ok "Frontend dist-spa/ gebaut"
 
   log "Backend bauen (TypeScript)"
   ( cd "$CRM_SRC/backend" && { npm ci --no-audit --no-fund || { echo "↪ npm ci failed, falling back to npm install"; npm install --no-audit --no-fund; }; } && npm run build )
@@ -166,8 +185,16 @@ if [[ $SKIP_CRM -eq 0 ]]; then
   REL_DIR="/opt/mycleancenter/releases/$STAMP"
   mkdir -p "$REL_DIR"
   rsync -a --delete \
-    --exclude node_modules --exclude .git \
+    --exclude node_modules --exclude .git --exclude dist-spa --exclude dist \
     "$CRM_SRC/" "$REL_DIR/"
+  # SPA-Bundle als dist/ in den Release einhängen — das ist FRONTEND_DIR.
+  rm -rf "$REL_DIR/dist"
+  cp -a "$CRM_SRC/dist-spa" "$REL_DIR/dist"
+  # Backend-dist mit übernehmen (wurde von npm run build erzeugt).
+  if [[ -d "$CRM_SRC/backend/dist" ]]; then
+    rm -rf "$REL_DIR/backend/dist"
+    cp -a "$CRM_SRC/backend/dist" "$REL_DIR/backend/dist"
+  fi
   # Backend-node_modules werden gleich von install.sh per `npm ci --omit=dev` neu installiert
   ln -sfn "$REL_DIR" /opt/mycleancenter/current.new
   mv -Tf /opt/mycleancenter/current.new /opt/mycleancenter/current
