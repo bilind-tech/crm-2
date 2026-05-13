@@ -91,7 +91,33 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const [queryClient] = useState(
-    () => new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } }),
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 30_000,
+            refetchOnWindowFocus: false,
+            // Bei 4xx (außer 408/429) gar nicht retryen — sonst nur max. 2×.
+            retry: (failureCount, error: unknown) => {
+              const status =
+                typeof error === "object" && error !== null && "status" in error
+                  ? Number((error as { status?: number }).status)
+                  : 0;
+              if (status >= 400 && status < 500 && status !== 408 && status !== 429) {
+                return false;
+              }
+              return failureCount < 2;
+            },
+            // Exponentielles Backoff: 1s → 3s → 9s, gedeckelt bei 15s.
+            // Bremst Retry-Stürme nach einem 429 und gibt dem Bucket Zeit zum
+            // Erholen, bevor das nächste Bündel Calls losgeht.
+            retryDelay: (attempt) => Math.min(1000 * 3 ** attempt, 15_000),
+          },
+          mutations: {
+            retry: false,
+          },
+        },
+      }),
   );
   return (
     <QueryClientProvider client={queryClient}>
