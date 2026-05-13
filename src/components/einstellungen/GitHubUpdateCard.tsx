@@ -2,7 +2,7 @@
 // Zeigt installierte vs. verfügbare Version, Status, Buttons "Prüfen" / "Verbinden" /
 // "Trennen" / „Jetzt aktualisieren". Übergibt den gestarteten Lauf nach oben
 // (so dass SystemUpdateTab denselben Live-Fortschritts-Dialog wie beim ZIP-Upload öffnet).
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import {
   Github,
