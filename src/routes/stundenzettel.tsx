@@ -7,7 +7,6 @@ import {
   ExternalLink,
   RefreshCw,
   Settings as SettingsIcon,
-  AlertTriangle,
   Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -68,17 +67,17 @@ function Page() {
   const { url } = useStundenzettelUrl();
   const [reloadKey, setReloadKey] = useState(0);
   const [loaded, setLoaded] = useState(false);
-  const [headerBlocked, setHeaderBlocked] = useState(false);
+  const [slow, setSlow] = useState(false);
 
   const hindernis = useMemo(() => analysiereUmfeld(url), [url]);
 
   useEffect(() => {
     if (!url || hindernis) return;
     setLoaded(false);
-    setHeaderBlocked(false);
+    setSlow(false);
     const t = setTimeout(() => {
-      setHeaderBlocked((prev) => (loaded ? prev : true));
-    }, 6000);
+      setSlow((prev) => (loaded ? prev : true));
+    }, 8000);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, reloadKey, hindernis]);
@@ -139,52 +138,24 @@ function Page() {
         <HindernisInfo hindernis={hindernis} url={url} />
       ) : (
         <div className="relative flex-1 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-          {headerBlocked && !loaded && (
-            <div className="absolute inset-0 z-10 grid place-content-center bg-background/95 p-6 text-center">
-              <div className="mx-auto max-w-lg space-y-4">
-                <div className="mx-auto grid h-12 w-12 place-content-center rounded-full bg-warning/10">
-                  <AlertTriangle className="h-6 w-6 text-warning" />
-                </div>
-                <h3 className="text-base font-semibold">
-                  Stundenzettel-App verbietet das Einbetten
-                </h3>
-                <p className="text-sm text-muted-foreground">
-                  Die App ist erreichbar, sendet aber einen Header, der das Anzeigen in iframes
-                  verbietet (<code className="rounded bg-muted px-1.5 py-0.5">X-Frame-Options</code>{" "}
-                  oder CSP <code className="rounded bg-muted px-1.5 py-0.5">frame-ancestors</code>).
-                  Diese Einstellung muss in der Stundenzettel-App selbst geändert werden — nicht
-                  hier.
-                </p>
-                <div className="rounded-lg border border-border bg-muted/40 p-3 text-left text-xs text-muted-foreground">
-                  <p className="mb-1 font-medium text-foreground">
-                    Lösung in der Stundenzettel-App:
-                  </p>
-                  <p className="font-mono text-[11px]">
-                    Content-Security-Policy: frame-ancestors 'self' http://mycleancenter.local
-                  </p>
-                  <p className="mt-1">
-                    und kein{" "}
-                    <code className="rounded bg-background px-1 py-0.5">X-Frame-Options: DENY</code>{" "}
-                    setzen.
-                  </p>
-                </div>
-                <div className="flex justify-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setReloadKey((k) => k + 1)}
-                    className="gap-1.5 rounded-full px-5"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    Erneut versuchen
-                  </Button>
-                  <Button
-                    onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-                    className="gap-1.5 rounded-full px-5"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    In neuem Tab öffnen
-                  </Button>
-                </div>
+          {!loaded && (
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center p-3">
+              <div className="pointer-events-auto rounded-full border border-border bg-background/90 px-4 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur">
+                {slow ? (
+                  <span>
+                    Lädt länger als gewohnt — falls die Ansicht leer bleibt,{" "}
+                    <button
+                      type="button"
+                      className="underline underline-offset-2 hover:text-foreground"
+                      onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+                    >
+                      im neuen Tab öffnen
+                    </button>
+                    .
+                  </span>
+                ) : (
+                  <span>Stundenzettel wird geladen …</span>
+                )}
               </div>
             </div>
           )}
@@ -195,7 +166,7 @@ function Page() {
             className="h-full w-full"
             onLoad={() => {
               setLoaded(true);
-              setHeaderBlocked(false);
+              setSlow(false);
             }}
           />
         </div>

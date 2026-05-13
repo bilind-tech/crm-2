@@ -1,68 +1,36 @@
 ## Ziel
-Die Installation ist fast durchgelaufen: Frontend, Backend-Build und Stundenzettel funktionieren. Der einzige harte offene Punkt ist: `mycleancenter.service` antwortet nicht auf `/health`. Bevor du nochmal Befehle am Pi ausführst, mache ich den Installer robuster und liefere danach einen finalen Reparaturblock, der keine Daten löscht und keine doppelten Projektkopien erzeugt.
+Der Hinweis „Stundenzettel-App verbietet das Einbetten“ soll im CRM nicht mehr fälschlich auftauchen, wenn die andere App eigentlich schon angepasst wurde.
 
-## Was ich ändern werde
+## Ursache
+Im CRM wird dieser Fehler aktuell nicht wirklich anhand der Header geprüft. Die Seite wartet 6 Sekunden auf `iframe.onLoad`; wenn das Event bis dahin nicht gekommen ist, zeigt sie automatisch die Meldung „verbietet das Einbetten“. Das kann falsch sein, z. B. bei langsamem Laden, Login-Screen, Cache, mDNS/IP-Wechsel oder wenn der Browser das `onLoad` anders behandelt.
 
-1. **Root-Lockfile reparieren**
-   - `package-lock.json` ist aktuell nicht synchron zur `package.json`.
-   - Das verursacht jedes Mal den sichtbaren `npm ci`-Fehler, auch wenn danach `npm install` weiterläuft.
-   - Ich aktualisiere das Lockfile sauber, damit `npm ci` direkt funktioniert und die Installation weniger fehleranfällig wird.
+## Plan
 
-2. **Pi baut das richtige Frontend-Bundle**
-   - Aktuell baut `setup-pi.sh` mit `npm run build` das normale TanStack/SSR-Bundle (`dist/client`, `dist/server`).
-   - Der Pi-Service erwartet aber ein statisches SPA unter `/opt/mycleancenter/current/dist`.
-   - Ich ändere den Pi-Installer auf `npm run build:spa` und kopiere `dist-spa/` als `dist/` in den Release-Ordner.
-   - Damit liefert Fastify später wirklich die richtige App aus.
+1. **Falsche Timeout-Fehlermeldung entfernen**
+   - In `src/routes/stundenzettel.tsx` die Logik `headerBlocked` entfernen.
+   - Die Meldung „Stundenzettel-App verbietet das Einbetten“ nicht mehr automatisch nach 6 Sekunden anzeigen.
+   - Das iframe bleibt sichtbar, statt von der Fehlermeldung überdeckt zu werden.
 
-3. **CRM-Service-Start härter absichern**
-   - `install.sh` soll beim Healthcheck nicht nur warnen, sondern bei einem Startproblem direkt die letzten relevanten Logs ausgeben und mit Fehlercode abbrechen.
-   - Dadurch endet das Setup nicht mehr mit „FERTIG“, wenn CRM gar nicht läuft.
-   - Zusätzlich soll der Start explizit `systemctl reset-failed`, `daemon-reload` und einen sauberen Restart machen.
+2. **Neutralen Ladezustand statt harter Fehleranzeige einbauen**
+   - Beim Wechsel/Reload der Stundenzettel-URL kurz „Stundenzettel wird geladen …“ anzeigen.
+   - Wenn es länger dauert, keine Blocker-Diagnose behaupten, sondern nur dezent: „Falls die Ansicht leer bleibt, im neuen Tab öffnen.“
+   - Der Button „In neuem Tab“ bleibt bestehen.
 
-4. **Backend-Start robuster machen**
-   - Die SSD-Prüfung in `config.ts` nutzt aktuell `require(...)` und `child_process` in einer ESM-TypeScript-Codebase. Auf Node kann das je nach Kompilat/Runtime ein Startproblem sein.
-   - Ich ersetze das durch reine ESM-Imports (`fs.realpathSync`, `statfsSync`, `execFileSync`) oder entferne unnötige Shell-Pipes.
-   - So ist der Backend-Start weniger abhängig von Node-/ESM-Eigenheiten.
+3. **Optionalen Diagnose-Hinweis sachlicher machen**
+   - Falls weiterhin ein Hinweis nötig ist, nicht mehr behaupten „Header verbietet Einbetten“.
+   - Stattdessen neutral formulieren: „Die eingebettete Ansicht konnte nicht bestätigt werden.“
+   - Damit verschwindet genau der aktuelle falsche Fehlertext dauerhaft.
 
-5. **Pi-Deployment-Pfade vereinheitlichen**
-   - `setup-pi.sh` nutzt aktuell `/opt/mycleancenter/releases/...`.
-   - Die interne Update-Logik nutzt `/opt/mycleancenter/versions/...`.
-   - Ich vereinheitliche das auf die vorhandene Installer-/Update-Struktur, ohne Datenpfad `/mnt/ssd/mycleancenter` anzufassen.
+4. **Empfohlene Ziel-Konfiguration korrigieren**
+   - In Texten/Checks nicht nur `http://mycleancenter.local` nennen, sondern auch den echten CRM-Origin mit Port berücksichtigen, z. B.:
+     - `http://mycleancenter-pi.local:8787`
+     - `http://mycleancenter.local:8787`
+     - optional die lokale IP mit `:8787`
+   - Hintergrund: `frame-ancestors` muss exakt die einbettende Origin erlauben; ohne Port kann es trotz „Fix“ weiterhin blockieren.
 
-6. **Finale Befehle für dich vorbereiten**
-   - Nach den Änderungen bekommst du genau einen sauberen Reparaturblock.
-   - Der Block wird:
-     - kaputte npm-Caches entfernen,
-     - Rechte auf SSD-Datenpfad korrigieren,
-     - den aktuellen Code neu holen,
-     - CRM + Stundenzettel neu deployen,
-     - danach Service-Status, Logs, Healthcheck, SSD-Mount und `.local` prüfen.
-   - Wichtig: Daten bleiben auf `/mnt/ssd/mycleancenter`; Code liegt unter `/opt/...`; es wird nicht doppelt installiert, sondern atomar aktualisiert.
-
-## Was ich nicht ändern werde
-- Keine Cloud-Installation.
-- Keine Datenbank auf SD-Karte.
-- Kein Löschen von `/mnt/ssd/mycleancenter`.
-- Keine Änderung am Single-User-Konzept.
-- Kein automatischer E-Mail-Versand.
+5. **Pi-Update-tauglich lassen**
+   - Änderungen landen im normalen CRM-Code und werden beim nächsten CRM-Update/Setup auf den Pi übernommen.
+   - Keine Änderung am Datenordner, keine Änderung an Stundenzettel-Daten, kein Cloud-Backend.
 
 ## Erwartetes Ergebnis
-Nach dem finalen Reparaturblock sollten erreichbar sein:
-
-```text
-CRM:
-http://mycleancenter.local:8787
-http://mycleancenter-pi.local:8787
-http://<Pi-IP>:8787
-
-Stundenzettel:
-http://stundenzettel.local:8080
-http://mycleancenter-pi.local:8080
-http://<Pi-IP>:8080
-
-Daten:
-/var/lib/mycleancenter -> /mnt/ssd/mycleancenter
-```
-
-## Falls trotzdem noch etwas scheitert
-Dann zeigt der Installer direkt die genaue `journalctl`-Fehlerursache an, statt nur „FERTIG“ zu melden. Damit wäre der nächste Schritt eindeutig und nicht wieder Ratespiel.
+Die Stundenzettel-Seite im CRM zeigt nicht mehr automatisch diese falsche Header-Fehlermeldung. Entweder lädt die App im iframe, oder der Nutzer bekommt nur eine neutrale Lade-/Fallback-Option zum Öffnen im neuen Tab.
