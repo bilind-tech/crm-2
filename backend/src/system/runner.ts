@@ -530,14 +530,19 @@ async function ensureBuiltRuntime(versionRoot: string): Promise<string[]> {
   if (existsSync(path.join(versionRoot, "package.json"))) {
     safeRm(path.join(versionRoot, "dist"));
     safeRm(path.join(versionRoot, "dist-spa"));
-    const fe = await npmInstallWithFallback(versionRoot, [], "Frontend-Dependencies");
+    // Für den Frontend-Build nutzen wir bewusst `npm install` statt `npm ci`.
+    // Diese node_modules sind ephemer (werden nach dem Build nicht behalten),
+    // daher ist Reproduzierbarkeit weniger wichtig als Robustheit gegenüber
+    // einem leicht veralteten root-package-lock.json (typisch bei
+    // GitHub-Update-Paketen, die direkt vom Repo gezogen werden).
+    const fe = await npmInstallTolerant(versionRoot, [], "Frontend-Dependencies");
     details.push(fe);
     await runNpm(versionRoot, ["run", "build:spa"], "Frontend-Build");
     prepareRuntimeLayout(versionRoot);
     details.push("Frontend frisch gebaut");
   }
   if (!existsSync(backendServer)) {
-    const be = await npmInstallWithFallback(backendDir, [], "Backend-Dependencies");
+    const be = await npmInstallTolerant(backendDir, [], "Backend-Dependencies");
     details.push(be);
     await runNpm(backendDir, ["run", "build"], "Backend-Build");
     details.push("Backend gebaut");
@@ -644,6 +649,32 @@ async function npmInstallWithFallback(
           (err2.stderr || err2.stdout || err2.message).slice(0, 500),
       );
     }
+  }
+}
+
+/**
+ * Direkt `npm install` (tolerant gegenüber Lockfile-Drift). Geeignet für
+ * ephemere Build-Dependencies, bei denen Reproduzierbarkeit weniger zählt
+ * als Robustheit. Für produktive Backend-Dependencies bitte weiterhin
+ * `npmInstallWithFallback` (npm ci → install) verwenden.
+ */
+async function npmInstallTolerant(
+  cwd: string,
+  extraArgs: string[],
+  label: string,
+): Promise<string> {
+  try {
+    await execFileP(
+      "npm",
+      ["install", "--no-audit", "--no-fund", ...extraArgs],
+      { cwd, timeout: 20 * 60_000, maxBuffer: 80 * 1024 * 1024 },
+    );
+    return `${label}: npm install ok`;
+  } catch (e) {
+    const err = e as { stderr?: string; stdout?: string; message: string };
+    throw new Error(
+      `${label} fehlgeschlagen: ${(err.stderr || err.stdout || err.message).slice(0, 800)}`,
+    );
   }
 }
 
