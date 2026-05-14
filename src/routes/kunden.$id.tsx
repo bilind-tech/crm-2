@@ -20,10 +20,19 @@ import { FlowBar } from "@/components/flow/FlowBar";
 import { angebotFlow, rechnungFlow } from "@/lib/flow/flows";
 import { DokumentUploadPanel } from "@/components/dokumente/DokumentUploadPanel";
 import { DokumentThumb } from "@/components/dokumente/DokumentThumb";
+import type { Angebot, Ansprechpartner, Dokument, Kunde, Objekt, Rechnung } from "@/lib/api/types";
 
 export const Route = createFileRoute("/kunden/$id")({ component: Page });
 
 type KundenNotiz = { id?: string; titel?: string; inhalt?: string; text?: string; erstelltAm?: string };
+type KundeDetailSafe = Kunde & {
+  ansprechpartner: Ansprechpartner[];
+  objekte: Objekt[];
+  angebote: Angebot[];
+  rechnungen: Rechnung[];
+  dokumente: Dokument[];
+  notizen: KundenNotiz[];
+};
 
 function Page() {
   const { id } = Route.useParams();
@@ -57,6 +66,16 @@ function Page() {
   const notizenListe: KundenNotiz[] = Array.isArray(rawNotizen)
     ? rawNotizen.filter((n): n is KundenNotiz => !!n && typeof n === "object")
     : [];
+  const kundeSafe: KundeDetailSafe = {
+    ...k,
+    tags,
+    ansprechpartner,
+    objekte,
+    angebote,
+    rechnungen,
+    dokumente,
+    notizen: notizenListe,
+  };
 
   const fullName = k.firmenname || `${k.vorname ?? ""} ${k.nachname ?? ""}`.trim();
   const initialen =
@@ -247,7 +266,7 @@ function Page() {
                         </Link>
                       </td>
                       <td className="px-4 py-3 capitalize text-muted-foreground">
-                        {o.frequenz.replace("_", " ")}
+                        {(o.frequenz ?? "—").replace("_", " ")}
                       </td>
                       <td className="px-4 py-3 text-right">{o.qmZuReinigen ?? "—"}</td>
                     </tr>
@@ -280,7 +299,10 @@ function Page() {
                 </thead>
                 <tbody>
                   {angebote.map((a) => {
-                    const s = summenRechnung(a.positionen, a.rabattGesamt);
+                    const s = summenRechnung(
+                      Array.isArray(a.positionen) ? a.positionen : [],
+                      a.rabattGesamt ?? 0,
+                    );
                     const hatRechnung = rechnungen.some((r) => r.quellAngebotId === a.id);
                     const flow = angebotFlow(a, hatRechnung);
                     return (
@@ -344,8 +366,14 @@ function Page() {
                 </thead>
                 <tbody>
                   {rechnungen.map((r) => {
-                    const s = summenRechnung(r.positionen, r.rabattGesamt);
-                    const bezahlt = r.zahlungen.reduce((a, z) => a + z.betrag, 0);
+                    const s = summenRechnung(
+                      Array.isArray(r.positionen) ? r.positionen : [],
+                      r.rabattGesamt ?? 0,
+                    );
+                    const bezahlt = (Array.isArray(r.zahlungen) ? r.zahlungen : []).reduce(
+                      (a, z) => a + (Number(z.betrag) || 0),
+                      0,
+                    );
                     const offen = Math.max(0, s.brutto - bezahlt);
                     const flow = rechnungFlow(r);
                     return (
