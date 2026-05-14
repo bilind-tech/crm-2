@@ -39,7 +39,10 @@ function RouteShell() {
 function Page() {
   const navigate = useNavigate();
   const { id } = Route.useParams();
-  const { data: a, isLoading } = useAngebot(id);
+  const { data: angebot, isLoading } = useAngebot(id);
+  const a = angebot
+    ? { ...angebot, positionen: angebot.positionen ?? [], rabattGesamt: angebot.rabattGesamt ?? 0 }
+    : undefined;
   const { data: kunde } = useKunde(a?.kundeId ?? "");
   const inRechnung = useAngebotInRechnung(id);
   const updateAngebot = useUpdateAngebot(id);
