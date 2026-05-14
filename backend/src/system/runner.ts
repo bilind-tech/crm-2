@@ -203,6 +203,11 @@ async function runInstall(laufId: string, opts: InstallOptions): Promise<void> {
       // Move staging → versions/<stamp>
       safeRename(stagedRoot, targetVersionDir);
 
+      // Runtime VOR dem Umschalten vorbereiten. So landet niemals ein alter
+      // oder unvollständiger Frontend-Build unter /opt/mycleancenter/current.
+      prepareRuntimeLayout(targetVersionDir);
+      const buildDetails = opts.testMode ? ["test-mode: runtime check skipped"] : await ensureBuiltRuntime(targetVersionDir);
+
       // previous = aktuelles current-Ziel
       const old = readCurrentTarget();
       // current.tmp -> versions/<stamp>
@@ -221,21 +226,19 @@ async function runInstall(laufId: string, opts: InstallOptions): Promise<void> {
       if (verify !== targetVersionDir) {
         throw new Error(`Symlink-Swap nicht verifiziert (current=${verify})`);
       }
-      return `Symlink → ${targetVersionDir}`;
+      return [`Symlink → ${targetVersionDir}`, ...buildDetails].join(" | ");
     });
 
     // 4. INSTALL — npm ci im neuen Ordner
     await stepRun(laufId, "install", async () => {
       if (opts.testMode) return "test-mode: skipped npm ci";
-      prepareRuntimeLayout(targetVersionDir);
-      const buildDetails = await ensureBuiltRuntime(targetVersionDir);
       try {
         const { stdout } = await execFileP("npm", ["ci", "--omit=dev"], {
           cwd: backendRuntimeDir(targetVersionDir),
           timeout: 10 * 60_000, // Pi + USB-SSD: 5 min war knapp
           maxBuffer: 50 * 1024 * 1024,
         });
-        return [...buildDetails, stdout.split("\n").slice(-3).join(" ")].filter(Boolean).join(" | ");
+        return stdout.split("\n").slice(-3).join(" ");
       } catch (e) {
         const err = e as { stderr?: string; message: string };
         throw new Error("npm ci fehlgeschlagen: " + (err.stderr?.slice(0, 500) ?? err.message));
