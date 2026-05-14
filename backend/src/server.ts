@@ -277,14 +277,17 @@ async function main(): Promise<void> {
 
     app.setNotFoundHandler(async (req, reply) => {
       const url = req.raw.url ?? "/";
-      const acceptsHtml = String(req.headers.accept ?? "").includes("text/html");
-      if (isBackendApi(url) && !acceptsHtml) {
+      const wantsDocument =
+        String(req.headers.accept ?? "").includes("text/html") ||
+        String(req.headers["sec-fetch-mode"] ?? "").toLowerCase() === "navigate" ||
+        String(req.headers["sec-fetch-dest"] ?? "").toLowerCase() === "document";
+      if (isBackendApi(url) && !wantsDocument) {
         return reply.status(404).send({ error: "Not found", statusCode: 404 });
       }
       if (req.method !== "GET" && req.method !== "HEAD") {
         return reply.status(404).send({ error: "Not found", statusCode: 404 });
       }
-      if (!acceptsHtml) {
+      if (!wantsDocument) {
         return reply.status(404).send({ error: "Not found", statusCode: 404 });
       }
       if (!hasSpaIndex) {
