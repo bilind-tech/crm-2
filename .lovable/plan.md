@@ -1,44 +1,75 @@
-## Bug
-`backend/src/email/transport.ts` → `readSmtpPassword()` gibt das gespeicherte Passwort **mit umschließenden JSON-Anführungszeichen** an nodemailer weiter. Folge: Strato lehnt die Anmeldung ab („Benutzername oder Passwort falsch"), obwohl das Passwort korrekt eingegeben wurde.
+## Ziel
+Der Button **Aus GitHub aktualisieren** soll zuverlässig funktionieren, auch wenn sich `package.json` geändert hat oder eine Lockfile nicht exakt synchron ist. Der gezeigte Fehler entsteht aktuell, weil der Pi beim GitHub-Update im neuen Code-Ordner `npm ci` ausführt und dabei abbricht, sobald `package-lock.json` nicht exakt zu `package.json` passt.
 
-Ursache: `setSetting()` macht immer `JSON.stringify(value)`. Beim Speichern eines Strings `geheim!` landet `"geheim!"` (inkl. Quotes) verschlüsselt in der DB. Die Decode-Logik prüft auf `{password: ...}`-Objekt, fällt bei String-Werten aber auf das **rohe JSON** mit Quotes zurück, statt es als String zu unwrappen.
+## Problemursache
+- **Updates prüfen** funktioniert, weil dabei nur GitHub abgefragt wird.
+- **Aktualisieren** lädt den GitHub-Code und versucht auf dem Pi daraus Frontend/Backend zu bauen.
+- In der Phase **Quarantäne** läuft für das Frontend `npm ci`.
+- `npm ci` ist absichtlich streng und bricht ab, wenn `package.json` und `package-lock.json` nicht synchron sind.
+- Dadurch scheitert das Update, obwohl der Code an sich korrekt sein kann.
+- Gut: Der Fehler passiert vor dem finalen Symlink-Wechsel; das Sicherheits-Backup wurde erstellt und die Daten bleiben unangetastet.
 
-## Fix (eine Datei)
+## Plan
 
-`backend/src/email/transport.ts` — `readSmtpPassword()`:
+### 1. Update-Installer robuster machen
+Ich ändere die Update-Pipeline so, dass sie nicht mehr hart an einem Lockfile-Mismatch scheitert:
 
-```ts
-function readSmtpPassword(): string | null {
-  const row = getDatabase()
-    .prepare(`SELECT value, encrypted FROM setting WHERE key = ?`)
-    .get(SENSITIVE_KEYS.smtpPassword) as { value: string; encrypted: number } | undefined;
-  if (!row) return null;
-  const raw = row.encrypted ? decryptString(row.value) : row.value;
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed === "string") return parsed;          // ← neuer Fall
-    if (parsed && typeof parsed.password === "string") return parsed.password;
-    return raw;
-  } catch {
-    return raw;
-  }
-}
+- Zuerst weiterhin bevorzugt `npm ci` verwenden, wenn die Lockfile korrekt ist.
+- Wenn `npm ci` mit einem bekannten Lockfile-Sync-Fehler scheitert, automatisch auf `npm install --no-audit --no-fund` wechseln.
+- Das gilt für:
+  - Frontend-Dependencies vor `build:spa`
+  - Backend-Dependencies vor Backend-Build
+  - finalen produktiven Backend-Install mit `--omit=dev`
+
+Damit wird aus einem abbrechenden Update ein selbstheilender Update-Lauf.
+
+### 2. Lockfile-Handling sauber trennen
+Ich verhindere, dass falsche Lockfiles in den falschen Ordner kopiert werden:
+
+- Root-`package-lock.json` bleibt nur für das Frontend/Root-Projekt relevant.
+- `backend/package-lock.json` bleibt nur für das Backend relevant.
+- Wenn im GitHub-Code eine Backend-Lockfile fehlt oder nicht passt, wird im Backend-Ordner sauber per `npm install` installiert statt mit einer fremden/falschen Lockfile zu scheitern.
+
+### 3. Fehlertexte verständlicher machen
+Falls ein Dependency-Install trotzdem fehlschlägt, soll die UI nicht mehr einen riesigen npm-Rohfehler anzeigen, sondern eine klare Meldung wie:
+
+```text
+Abhängigkeiten konnten nicht installiert werden.
+Ursache: package-lock.json war nicht synchron und der automatische npm-install-Fallback ist ebenfalls fehlgeschlagen.
 ```
 
-Damit wird ein als String gespeichertes Passwort sauber unwrapped, ein historisch evtl. als Objekt gespeichertes weiter unterstützt, und unverschlüsselte/Plain-Werte funktionieren wie bisher.
+Die technischen Details bleiben gekürzt im Lauf-Detail erhalten, aber nicht als unlesbarer Block.
 
-## Was du danach machen musst
+### 4. Update-Reihenfolge sicher beibehalten
+Die bestehenden Sicherheitsregeln bleiben erhalten:
 
-1. Update auf Pi installieren (gleicher Update-Befehl wie zuletzt — keine Daten betroffen, nur Backend-Code).
-2. **Passwort in Einstellungen → E-Mail einmal neu eingeben und speichern** (das alte Passwort ist mit dem Fehler gespeichert worden — es wird nach dem Fix zwar korrekt gelesen, ist aber inhaltlich identisch zur Eingabe; ein erneutes Speichern ist nicht zwingend nötig, schadet aber nicht).
-3. „Verbindung prüfen" → muss jetzt grün werden.
+- Vor dem produktiven Code-Wechsel wird ein Sicherheits-Backup erstellt.
+- `/var/lib/mycleancenter/` wird nicht verändert oder gelöscht.
+- Der neue Code wird erst aktiv geschaltet, wenn Frontend und Backend gebaut bzw. geprüft sind.
+- Bei Fehler bleibt die bisherige Version aktiv.
 
-## Was NICHT geändert wird
+Ich werde dabei zusätzlich prüfen, dass der Build weiterhin **vor** dem finalen `current`-Symlink-Wechsel passiert.
 
-- Kein Daten-Migrations-Skript (nicht nötig — Lese-Pfad ist defensiv).
-- Keine Frontend-Änderung.
-- Keine anderen Settings-Bereiche (Google Drive Tokens, GitHub Token) — die haben dasselbe Schema, sind aber tatsächlich Objekte und betroffen nur, falls jemand einen reinen String reinspeichert.
+### 5. Tests ergänzen
+Ich ergänze Tests für genau diesen Fall:
 
-## Test (ich führe nach Implementierung selbst aus)
+- GitHub-/Update-Paket mit absichtlich unsynchronem `package-lock.json`.
+- Erwartung: Der Installer versucht `npm ci`, erkennt den Lockfile-Fehler und fällt auf `npm install` zurück.
+- Zusätzlich Test für Backend-Install-Fallback.
+- Test, dass bei einem endgültigen Install-Fehler kein Datenverzeichnis angefasst wird und kein kaputter Code aktiv geschaltet wird.
 
-`backend/test` enthält schon Vitest-Setup. Ich ergänze einen Mini-Test, der `setSetting` + `readSmtpPassword` Round-trip durchspielt mit einem Passwort, das Sonderzeichen enthält (`Ä!"§$%&/()=?`), und sicherstellt, dass keine Quotes übrig bleiben.
+### 6. Sofortige Reparatur für den aktuellen Stand
+Zusätzlich zur Code-Härtung wird die aktuelle Repo-Situation bereinigt:
+
+- Root-`package-lock.json` mit `package.json` synchronisieren.
+- `backend/package-lock.json` mit `backend/package.json` synchron halten.
+- Damit verschwindet der konkrete Fehler aus dem Screenshot sofort, und die neue Fallback-Logik verhindert, dass er später wieder blockierend wird.
+
+## Ergebnis
+Nach Umsetzung gilt:
+
+- GitHub-Update funktioniert auch bei Versions- und Dependency-Änderungen zuverlässig.
+- Lockfile-Mismatch führt nicht mehr automatisch zum Update-Abbruch.
+- Alte Version und Daten bleiben geschützt.
+- Fehlermeldungen werden deutlich verständlicher.
+- Dieser konkrete Fehler soll dauerhaft nicht mehr auftauchen.

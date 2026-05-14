@@ -232,17 +232,13 @@ async function runInstall(laufId: string, opts: InstallOptions): Promise<void> {
     // 4. INSTALL — npm ci im neuen Ordner
     await stepRun(laufId, "install", async () => {
       if (opts.testMode) return "test-mode: skipped npm ci";
-      try {
-        const { stdout } = await execFileP("npm", ["ci", "--omit=dev"], {
-          cwd: backendRuntimeDir(targetVersionDir),
-          timeout: 10 * 60_000, // Pi + USB-SSD: 5 min war knapp
-          maxBuffer: 50 * 1024 * 1024,
-        });
-        return stdout.split("\n").slice(-3).join(" ");
-      } catch (e) {
-        const err = e as { stderr?: string; message: string };
-        throw new Error("npm ci fehlgeschlagen: " + (err.stderr?.slice(0, 500) ?? err.message));
-      }
+      const cwd = backendRuntimeDir(targetVersionDir);
+      const detail = await npmInstallWithFallback(
+        cwd,
+        ["--omit=dev"],
+        "Backend-Produktiv-Install",
+      );
+      return detail;
     });
 
     // 5. MIGRATIONS-Probelauf — Kopie der DB anlegen, Migrationen drauflaufen lassen
@@ -550,6 +546,61 @@ async function runNpm(cwd: string, args: string[], label: string): Promise<void>
   } catch (e) {
     const err = e as { stderr?: string; stdout?: string; message: string };
     throw new Error(`${label} fehlgeschlagen: ${(err.stderr || err.stdout || err.message).slice(0, 800)}`);
+  }
+}
+
+/**
+ * Führt eine Dependency-Installation aus und fällt bei einem bekannten
+ * Lockfile-Sync-Fehler (`npm ci` → EUSAGE / "not in sync") automatisch
+ * auf `npm install` zurück. So bricht ein Update nicht mehr ab, nur weil
+ * `package-lock.json` und `package.json` minimal voneinander abweichen.
+ *
+ * Rückgabe: kurze Detail-Zeile für die Update-Historie.
+ */
+async function npmInstallWithFallback(
+  cwd: string,
+  extraArgs: string[],
+  label: string,
+): Promise<string> {
+  const ciArgs = ["ci", "--no-audit", "--no-fund", ...extraArgs];
+  try {
+    await execFileP("npm", ciArgs, {
+      cwd,
+      timeout: 15 * 60_000,
+      maxBuffer: 80 * 1024 * 1024,
+    });
+    return `${label}: npm ci ok`;
+  } catch (e) {
+    const err = e as { stderr?: string; stdout?: string; message: string };
+    const raw = `${err.stderr ?? ""}\n${err.stdout ?? ""}\n${err.message ?? ""}`;
+    const lockMismatch =
+      /EUSAGE/i.test(raw) ||
+      /can only install packages when/i.test(raw) ||
+      /lock ?file/i.test(raw) ||
+      /in sync/i.test(raw) ||
+      /Missing:/i.test(raw);
+    if (!lockMismatch) {
+      throw new Error(
+        `${label} fehlgeschlagen: ${(err.stderr || err.stdout || err.message).slice(0, 600)}`,
+      );
+    }
+    // Fallback: npm install (toleriert Lockfile-Drift, schreibt sie neu).
+    try {
+      await execFileP("npm", ["install", "--no-audit", "--no-fund", ...extraArgs], {
+        cwd,
+        timeout: 20 * 60_000,
+        maxBuffer: 80 * 1024 * 1024,
+      });
+      return `${label}: package-lock.json war nicht synchron — automatisch via npm install repariert`;
+    } catch (e2) {
+      const err2 = e2 as { stderr?: string; stdout?: string; message: string };
+      throw new Error(
+        `Abhängigkeiten konnten nicht installiert werden. ` +
+          `Ursache: package-lock.json war nicht synchron und der automatische ` +
+          `npm-install-Fallback ist ebenfalls fehlgeschlagen. Details: ` +
+          (err2.stderr || err2.stdout || err2.message).slice(0, 500),
+      );
+    }
   }
 }
 
