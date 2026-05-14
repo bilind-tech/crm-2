@@ -487,13 +487,23 @@ function readPreviousTarget(): string | null {
   try {
     return readlinkSync(previousLink());
   } catch {
-    // Fallback: zweitneuestes versions/<stamp>
+    // Fallback: neuestes nutzbares Release außer `current`.
+    // Wichtig für ältere Installationen: erste Pi-Installer nutzten releases/*,
+    // der neue In-App-Updater nutzt versions/*. Wenn previous fehlt, darf ein
+    // Rollback deshalb beide Orte durchsuchen.
     try {
-      const dirs = readdirSync(versionsDir())
-        .filter((d) => !d.startsWith("broken-"))
-        .map((d) => path.join(versionsDir(), d))
-        .sort();
       const cur = readCurrentTarget();
+      const roots = [versionsDir(), path.join(appRoot(), "releases")];
+      const dirs = roots.flatMap((root) => {
+        try {
+          return readdirSync(root)
+            .filter((d) => !d.startsWith("broken-"))
+            .map((d) => path.join(root, d))
+            .filter((d) => existsSync(path.join(d, "backend", "dist", "server.js")));
+        } catch {
+          return [];
+        }
+      }).sort();
       const others = dirs.filter((d) => d !== cur);
       return others[others.length - 1] ?? null;
     } catch { return null; }
