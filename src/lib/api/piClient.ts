@@ -2,7 +2,7 @@
 // Nutzt getBackendUrl() + Cookie-Auth.
 
 import { getBackendUrl, isLocalPreviewFallbackAllowed } from "./backendUrl";
-import { localPreviewGet } from "./localPreviewData";
+import { localPreviewGet, localPreviewMutate } from "./localPreviewData";
 
 const API_TIMEOUT_MS = 8_000;
 
@@ -34,8 +34,8 @@ function notifyUnauth(): void {
 type FetchInit = Omit<RequestInit, "body"> & { body?: unknown };
 
 async function request<T>(method: string, path: string, init: FetchInit = {}): Promise<T> {
-  if (method === "GET" && isLocalPreviewFallbackAllowed()) {
-    const local = localPreviewGet<T>(path);
+  if (isLocalPreviewFallbackAllowed()) {
+    const local = method === "GET" ? localPreviewGet<T>(path) : localPreviewMutate<T>(method, path, init.body);
     if (local !== null) return local;
   }
 
