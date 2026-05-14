@@ -13,6 +13,7 @@ import { FilterBar } from "@/routes/angebote";
 import { SlideOver } from "@/components/ui/slide-over";
 import { MobileListCard } from "@/components/ui/mobile-list-card";
 import { RechnungForm } from "@/components/forms/RechnungForm";
+import { FormErrorBoundary } from "@/components/layout/FormErrorBoundary";
 import { ZahlungErfassenDialog } from "@/components/forms/ZahlungErfassenDialog";
 import { useConfirm } from "@/hooks/useConfirm";
 import { RechnungAusDauerauftragDialog } from "@/components/dauerauftrag/RechnungAusDauerauftragDialog";
@@ -500,7 +501,9 @@ function Page() {
         title="Neue Rechnung"
         description="Positionen, Fristen und Optionen erfassen — wird sofort als Entwurf gespeichert."
       >
-        <RechnungForm onClose={() => setOpen(false)} />
+        <FormErrorBoundary onReset={() => setOpen(false)}>
+          <RechnungForm onClose={() => setOpen(false)} />
+        </FormErrorBoundary>
       </SlideOver>
 
       {zahlungFuer && (
