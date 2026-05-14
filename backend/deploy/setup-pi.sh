@@ -5,7 +5,7 @@
 # Frisch geflashter Raspberry Pi 5 (Pi-OS-Lite Bookworm 64-bit) → komplett
 # eingerichtet inkl.:
 #   • USB-SSD als Datenpfad (/var/lib/mycleancenter → /mnt/data/mycleancenter)
-#   • CRM-Backend von GitHub gepullt, gebaut, als systemd-Service auf Port 8787
+#   • CRM-Backend von GitHub gepullt, gebaut, als systemd-Service auf Port 8080
 #   • Stundenzettel-Frontend von GitHub gepullt, gebaut, als systemd-Service
 #     auf Port 8080
 #   • mDNS-Aliase mycleancenter.local + stundenzettel.local
@@ -271,9 +271,9 @@ cat <<EOF
 ════════════════════════════════════════════════════════════════════════════
 
  CRM (MyCleanCenter):
-   http://mycleancenter.local:8787
-   http://mycleancenter-pi.local:8787
-   http://${IP}:8787
+   http://mycleancenter.local:8080
+   http://mycleancenter-pi.local:8080
+   http://${IP}:8080
 
  Stundenzettel:
    http://stundenzettel.local:8080
