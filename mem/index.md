@@ -2,7 +2,7 @@
 
 ## Core
 Backend läuft später lokal auf Raspberry Pi (Pi 5, 8GB RAM) mit USB-SSD. Stack: Node.js + Fastify + SQLite (better-sqlite3). Nicht in Cloud deployen.
-**Git-Repo (PUBLIC):** https://github.com/bilind-tech/remix-of-crm.git — für Pi-Updates via git clone, kein Token nötig.
+**Git-Repo (PUBLIC):** https://github.com/bilind-tech/crm-2.git — für Pi-Updates via git clone, kein Token nötig.
 **Code/Daten strikt trennen:** Code in `/opt/mycleancenter/current/`, Daten in `/var/lib/mycleancenter/`. Updates ersetzen NUR Code, niemals Daten. Atomar via fs.rename, alter Code 1 Vorgänger-Ordner für Rollback.
 **ABSOLUTE REGEL:** Bei System-Updates UND Backup/Restore darf NIEMALS etwas am Daten-Verzeichnis verändert/gelöscht/überschrieben werden außerhalb des kontrollierten Restore-Flows. Vor jedem Update UND vor jedem Restore wird automatisch ein Sicherheits-Backup erstellt.
 **Single-User-System:** Genau ein Konto, kein Username-Feld, keine Rollen, keine Benutzerverwaltung. LockScreen = nur Passwort. Recovery-Code als einziger Wiederherstellungsweg. Backend: `requireAuth` überall, kein `requireOwner`, keine `/benutzer`-Route.

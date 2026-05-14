@@ -3,6 +3,18 @@ import { createReadStream, createWriteStream, mkdirSync, statSync } from "node:f
 import path from "node:path";
 import unzipper from "unzipper";
 
+interface ZipEntryLike {
+  path: string;
+  type: string;
+  uncompressedSize: number;
+  buffer(): Promise<Buffer>;
+  stream(): NodeJS.ReadableStream;
+}
+
+interface ZipDirectoryLike {
+  files: ZipEntryLike[];
+}
+
 export class ZipError extends Error {
   statusCode: number;
   constructor(msg: string, status = 400) {
@@ -53,7 +65,7 @@ function isPathSafe(rel: string): boolean {
  * Rückgabe: Manifest-JSON-Inhalt als String.
  */
 export async function extractManifestOnly(zipPath: string): Promise<string> {
-  const directory = await unzipper.Open.file(zipPath);
+  const directory = (await unzipper.Open.file(zipPath)) as ZipDirectoryLike;
   const manifestEntry = directory.files.find((f) => f.path === "manifest.json");
   if (!manifestEntry) throw new ZipError("manifest.json fehlt im Paket");
   if (manifestEntry.uncompressedSize > 256 * 1024) {
@@ -72,7 +84,7 @@ export async function extractZipSafe(zipPath: string, targetDir: string): Promis
   totalBytes: number;
 }> {
   const compressedSize = statSync(zipPath).size;
-  const directory = await unzipper.Open.file(zipPath);
+  const directory = (await unzipper.Open.file(zipPath)) as ZipDirectoryLike;
 
   if (directory.files.length > MAX_FILES) {
     throw new ZipError(`Paket enthält zu viele Dateien (${directory.files.length} > ${MAX_FILES})`, 413);

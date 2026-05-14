@@ -11,6 +11,10 @@ import { renderAngebotPdf, renderRechnungPdf } from "../pdf/belegPdf.server.js";
 
 const SEND_TIMEOUT_MS = 30_000;
 
+interface MailSendInfo {
+  messageId?: string | null;
+}
+
 export interface SendResult {
   ok: boolean;
   messageId?: string | null;
@@ -50,7 +54,7 @@ export async function sendNow(row: EmailVersand): Promise<SendResult> {
   try {
     const transport = getTransport();
     const from = getFromAddress();
-    const info = await withTimeout(
+    const info = await withTimeout<MailSendInfo>(
       transport.sendMail({
         from: { name: from.name, address: from.address },
         to: row.empfaengerTo,
