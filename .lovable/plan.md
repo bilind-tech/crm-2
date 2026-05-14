@@ -1,85 +1,106 @@
 ## Ziel
-Die Kundendetailseite muss auf dem Raspberry Pi zuverlässig funktionieren:
+Der Fehler `Something went wrong` soll bei `Angebot neu`, `Rechnung neu`, `Objekt neu` und ähnlichen Erstellen-Seiten weg. Kunden funktionieren bereits, deshalb konzentrieren wir uns auf die anderen Erstellen-/Detailbereiche.
 
-- Klick auf einen Kunden öffnet die Detailseite ohne Crash.
-- Reload auf `/kunden/<id>` zeigt die App, nicht rohen JSON-Text.
-- Der Fix muss nach „Jetzt aktualisieren“ wirklich im ausgelieferten Build landen.
+## Was wahrscheinlich falsch ist
+Es ist nicht der komplette Raspberry kaputt. Der Build lief durch. Das Problem ist sehr wahrscheinlich eine Kombination aus:
 
-## Was ich jetzt als Ursache sehe
-Der aktuelle Code enthält bereits den richtigen Ansatz, aber auf deinem Pi kommt offenbar noch nicht der neue, gebaute Frontend-/Backend-Stand an.
+1. Die Schnellanlage führt auf Platzhalter-Seiten wie `/angebote/neu` und `/rechnungen/neu`.
+2. Die eigentlichen funktionierenden Formulare liegen schon in den Listen-Seiten als SlideOver/Formular.
+3. Bei direktem Öffnen oder Navigieren auf manche Unterseiten greift der Router/Fallback aktuell fehleranfällig.
+4. Der Pi hatte außerdem vorher ein kaputtes `current`-Layout/Symlink-Problem, das jetzt separat sauber aktiviert werden muss.
 
-Zusätzlich ist im aktuell vorhandenen gebauten Frontend (`dist-spa/assets/kunden._id-...js`) noch eine alte gefährliche Version sichtbar: Dort wird weiterhin direkt auf `s.objekte.filter`, `s.ansprechpartner.length`, `s.notizen.length` usw. zugegriffen. Wenn das Backend eine ältere/teilweise Kundenantwort liefert, crasht genau diese gebaute Datei weiterhin.
+## Änderungen im Programm nach Bestätigung
+Ich würde im Code Folgendes ändern:
 
-Das bedeutet: Wir müssen nicht nur den Quellcode fixen, sondern auch sicherstellen, dass der Release-/Update-Prozess den neuen sicheren Build erzeugt und verteilt.
+1. **`/angebote/neu` reparieren**
+   - Statt Platzhalterkarte direkt das echte `AngebotForm` anzeigen.
+   - Nach Speichern zurück zu `/angebote`.
+   - Kein kaputter Zwischenzustand mehr.
 
-## Umsetzungsplan
+2. **`/rechnungen/neu` reparieren**
+   - Statt Platzhalterkarte direkt das echte `RechnungForm` anzeigen.
+   - Nach Speichern zurück zu `/rechnungen`.
 
-### 1. Gebauten SPA-Stand erneuern und absichern
-Ich sorge dafür, dass der Pi-Update-Prozess garantiert den aktuellen SPA-Build verwendet, nicht alte `dist-spa`-Artefakte.
+3. **`/objekte/neu` reparieren**
+   - Statt Platzhalterkarte direkt das echte `ObjektForm` anzeigen.
+   - Nach Speichern zurück zu `/objekte`.
 
-- Release-Bundle soll vor dem Packen immer frisch bauen.
-- Alte/liegengebliebene `dist-spa`-Dateien dürfen nicht versehentlich weiter ausgeliefert werden.
-- Nach dem Build wird geprüft, dass die gebaute Kundendetail-Datei nicht mehr die alten riskanten Zugriffe enthält.
+4. **Schnellanlage stabilisieren**
+   - Die Schnellanlage soll nicht mehr auf halbfertige/kaputte Platzhalter laufen.
+   - Kunde bleibt wie aktuell funktionierend.
+   - Angebot/Rechnung/Objekt öffnen dann die reparierten Neu-Seiten.
 
-### 2. Kunden-Detailseite vollständig crash-sicher machen
-Die Detailseite wird so gehärtet, dass sie auch mit unvollständigen Backend-Antworten stabil bleibt.
+5. **Fallback-Regeln prüfen/ergänzen**
+   - Sicherstellen, dass direkte Browseraufrufe wie `/angebote/neu`, `/rechnungen/neu`, `/objekte/neu`, Detailseiten und Bearbeiten-Seiten immer die SPA zurückbekommen und nicht in einen Backend-404/Fehler laufen.
 
-- Alle Listen werden lokal normalisiert:
-  - `ansprechpartner`
-  - `objekte`
-  - `angebote`
-  - `rechnungen`
-  - `dokumente`
-  - `notizen`
-  - `tags`
-- Alle Zähler und Dialoge verwenden nur noch diese normalisierten Listen.
-- Der Löschdialog bekommt ebenfalls eine sichere Kunden-Ansicht, damit `kunde.objekte.length` usw. nicht mehr crashen kann.
-- Felder wie `o.frequenz` werden defensiv behandelt, damit fehlende Werte keine Fehler werfen.
+6. **Keine Daten anfassen**
+   - Es wird nichts in `/var/lib/mycleancenter` gelöscht oder überschrieben.
+   - Es geht nur um Code/Release.
 
-### 3. Backend-SPA-Fallback stärker machen
-Der bisherige Fallback erkennt `Accept: text/html`. Das ist korrekt, aber ich mache ihn robuster:
+## Nach der Codeänderung: Befehl für den Raspberry
+Nach deiner Bestätigung und nachdem ich den Code geändert habe, bekommst du einen fertigen Update-Befehl. Der Befehl wird ungefähr so aufgebaut sein:
 
-- Browser-Navigation auf bekannten Frontend-Routen bekommt immer `index.html`.
-- API-/Fetch-Aufrufe mit `Accept: application/json` bekommen weiter JSON.
-- `/kunden/kuerzel-frei` und andere echte API-Sonderpfade bleiben API.
-- Wenn ein Browser versehentlich `Accept: */*` sendet, soll das für bekannte Frontend-Routen trotzdem als Seitenaufruf behandelt werden können.
+```bash
+set -e
 
-### 4. Tests erweitern
-Ich ergänze Tests genau gegen diesen Wiederholungsfehler:
+REPO="https://github.com/bilind-tech/remix-of-crm.git"
+STAMP="$(date +%Y-%m-%d_%H-%M-%S)"
+SRC="/tmp/mcc-src-$STAMP"
+NEW="/opt/mycleancenter/versions/$STAMP"
 
-- `/kunden/<id>` + HTML-Request → `index.html`.
-- `/kunden/<id>` + JSON-Request → JSON.
-- `/kunden/kuerzel-frei` bleibt API.
-- Kunden-Detail-Frontend darf mit minimaler Antwort nicht crashen.
-- Release-Bundle enthält einen aktuellen SPA-Build.
+sudo rm -f /opt/mycleancenter/current.new /opt/mycleancenter/current.tmp /opt/mycleancenter/previous.new || true
 
-### 5. Update-Prozess sichtbar verlässlich machen
-Der Code soll verhindern, dass du wieder im Zustand „Update geklickt, aber alter Build läuft weiter“ landest.
+git clone --depth 1 "$REPO" "$SRC"
 
-- Update-Vorbereitung prüft `dist/index.html` und Backend-Build vor dem Umschalten.
-- Wenn der Build fehlt oder alt ist, wird eindeutig abgebrochen statt halb zu aktualisieren.
-- Die bestehende Trennung von Code und Daten bleibt unangetastet.
-- Vor Update/Restore wird weiterhin kein Datenverzeichnis gelöscht oder überschrieben.
+cd "$SRC"
+npm ci --no-audit --no-fund
+npm run build:spa
 
-## Technische Details
+cd "$SRC/backend"
+npm ci --no-audit --no-fund
+npm run build
 
-```text
-Browser Reload /kunden/<id>
-  -> Accept HTML oder bekannte SPA-Route
-  -> Backend liefert dist/index.html
-  -> React lädt Kunden-Detailseite
-  -> API-Client fordert /kunden/<id> mit Accept: application/json an
-  -> Backend liefert JSON
-  -> Frontend normalisiert fehlende Arrays
-  -> Seite rendert stabil
+sudo mkdir -p "$NEW/backend"
+sudo cp -a "$SRC/dist-spa" "$NEW/backend/dist-spa"
+sudo cp -a "$SRC/dist-spa" "$NEW/dist"
+sudo cp -a "$SRC/backend/dist" "$NEW/backend/dist"
+sudo cp "$SRC/backend/package.json" "$NEW/backend/package.json"
+sudo cp "$SRC/backend/package-lock.json" "$NEW/backend/package-lock.json"
+
+cd "$NEW/backend"
+sudo npm ci --omit=dev --no-audit --no-fund
+sudo chown -R mycleancenter:mycleancenter "$NEW"
+
+if [ -e /opt/mycleancenter/current ] || [ -L /opt/mycleancenter/current ]; then
+  sudo ln -sfn "$(readlink -f /opt/mycleancenter/current)" /opt/mycleancenter/previous.new || true
+  sudo mv -Tf /opt/mycleancenter/previous.new /opt/mycleancenter/previous || true
+fi
+
+sudo ln -sfn "$NEW" /opt/mycleancenter/current.new
+sudo mv -T /opt/mycleancenter/current.new /opt/mycleancenter/current
+
+sudo systemctl restart mycleancenter
+sudo systemctl status mycleancenter --no-pager -l
+curl -sS -i http://127.0.0.1:8787/health
 ```
 
-## Erwartetes Ergebnis
-Nach Umsetzung und anschließendem Pi-Update gilt:
+Falls `current` auf deinem Pi noch ein echter Ordner statt Symlink ist, gebe ich dir im endgültigen Befehl wieder die sichere Variante mit Ordner-Backup, damit die Aktivierung nicht erneut bei `mv: cannot overwrite directory` abbricht.
 
-- Kundenliste öffnen.
-- Kunde anklicken.
-- Detailseite lädt stabil.
-- Seite neu laden.
-- Es erscheint kein roher JSON-Text mehr.
-- Auch ältere/unvollständige Kundenantworten lösen keinen `Something went wrong`-Crash mehr aus.
+## Erwartetes Ergebnis
+Danach sollten funktionieren:
+
+- Kunden Detailseite
+- Neues Angebot
+- Neue Rechnung
+- Neues Objekt
+- Angebots-/Rechnungslisten
+- Direkter Seiten-Reload auf diesen Routen
+
+## Wenn es danach noch knallt
+Dann brauchen wir nur noch diesen einen Diagnosebefehl, nicht 1000 Sachen:
+
+```bash
+sudo journalctl -u mycleancenter -n 120 --no-pager
+```
+
+Damit sieht man exakt, welche Route oder Datei noch crasht.
