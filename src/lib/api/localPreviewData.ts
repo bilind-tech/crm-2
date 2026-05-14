@@ -212,11 +212,13 @@ export const previewMahnungStatus = {
 export const previewMahnEinstellungen = previewMahnungStatus.einstellungen;
 
 export function previewDashboardKennzahlen(): DashboardKennzahlen {
+  const angebote = allAngebote();
+  const rechnungen = allRechnungen();
   return {
     aktiveKunden: previewKunden.length,
     aktiveObjekte: 0,
-    offeneAngebote: previewAngebote.filter((a) => a.status === "entwurf" || a.status === "versendet").length,
-    offeneRechnungen: previewRechnungen.filter((r) => r.status !== "bezahlt" && r.status !== "storniert").length,
+    offeneAngebote: angebote.filter((a) => a.status === "entwurf" || a.status === "versendet").length,
+    offeneRechnungen: rechnungen.filter((r) => r.status !== "bezahlt" && r.status !== "storniert").length,
     ausstehendEUR: 1011.5,
   };
 }
@@ -240,27 +242,30 @@ export function localPreviewGet<T>(path: string): T | null {
       ...kunde,
       ansprechpartner: [],
       objekte: [],
-      angebote: previewAngebote.filter((a) => a.kundeId === id),
-      rechnungen: previewRechnungen.filter((r) => r.kundeId === id),
+      angebote: allAngebote().filter((a) => a.kundeId === id),
+      rechnungen: allRechnungen().filter((r) => r.kundeId === id),
       dokumente: [],
       notizen: [],
     } as T;
   }
+  if (cleanPath.endsWith("/zaehler") && cleanPath.startsWith("/kunden/")) {
+    return { periode: month, naechsterStart: 1 } as T;
+  }
   if (cleanPath === "/angebote") {
     const kundeId = params.get("kundeId");
     const status = params.get("status");
-    return previewAngebote.filter((a) => (!kundeId || a.kundeId === kundeId) && (!status || a.status === status)) as T;
+    return allAngebote().filter((a) => (!kundeId || a.kundeId === kundeId) && (!status || a.status === status)) as T;
   }
   if (cleanPath.startsWith("/angebote/")) {
-    return (previewAngebote.find((a) => a.id === cleanPath.split("/")[2]) ?? null) as T | null;
+    return (allAngebote().find((a) => a.id === cleanPath.split("/")[2]) ?? null) as T | null;
   }
   if (cleanPath === "/rechnungen") {
     const kundeId = params.get("kundeId");
     const status = params.get("status");
-    return previewRechnungen.filter((r) => (!kundeId || r.kundeId === kundeId) && (!status || r.status === status)) as T;
+    return allRechnungen().filter((r) => (!kundeId || r.kundeId === kundeId) && (!status || r.status === status)) as T;
   }
   if (cleanPath.startsWith("/rechnungen/")) {
-    return (previewRechnungen.find((r) => r.id === cleanPath.split("/")[2]) ?? null) as T | null;
+    return (allRechnungen().find((r) => r.id === cleanPath.split("/")[2]) ?? null) as T | null;
   }
   if (cleanPath === "/objekte") return [] as T;
   if (cleanPath === "/dokumente") return [] as T;
@@ -280,6 +285,7 @@ export function localPreviewGet<T>(path: string): T | null {
   if (cleanPath === "/aktivitaeten") return [] as T;
   if (cleanPath === "/benachrichtigungen") return [] as T;
   if (cleanPath === "/einstellungen/firma") return previewFirma as T;
+  if (cleanPath === "/einstellungen/nummernkreise") return previewNummernkreise as T;
   if (cleanPath === "/mahnung/status") return previewMahnungStatus as T;
   if (cleanPath === "/mahnung/laeufe") return [] as T;
   return null;
