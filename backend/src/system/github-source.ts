@@ -12,7 +12,7 @@
 //    bei "richtigen" Releases) — fremde Repos kommen nicht durch, weil wir
 //    den Tarball nur von der konfigurierten owner/repo-Kombination herunterladen.
 
-import { createWriteStream, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, readFileSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { pipeline } from "node:stream/promises";
@@ -222,7 +222,7 @@ export async function prepareUpdateFromGithub(): Promise<PreparedPackage> {
   ensureAppDirs();
   const uploadId = crypto.randomUUID();
   const stage = stagingDir(uploadId);
-  mkdirSync(stage, { recursive: true });
+  prepareCleanDir(stage);
   const tarPath = path.join(stage, "_paket.tar.gz");
   const writeStream = createWriteStream(tarPath);
 
@@ -244,7 +244,7 @@ export async function prepareUpdateFromGithub(): Promise<PreparedPackage> {
 
   // Tarball entpacken in stage/_raw/  (eine Wurzel: <owner>-<repo>-<sha>/)
   const rawDir = path.join(stage, "_raw");
-  mkdirSync(rawDir, { recursive: true });
+  prepareCleanDir(rawDir);
   await tarExtract({ file: tarPath, cwd: rawDir, strip: 0 });
   const rootEntries = readdirSync(rawDir);
   if (rootEntries.length !== 1) {
@@ -258,6 +258,8 @@ export async function prepareUpdateFromGithub(): Promise<PreparedPackage> {
   renameSync(repoRoot, extractDir);
   rmSync(rawDir, { recursive: true, force: true });
   try { rmSync(tarPath); } catch { /* ignore */ }
+
+  normalizeGithubPackageLayout(extractDir);
 
   // Manifest lokal bauen + signieren (Wir vertrauen der Quelle, weil wir per
   // PAT authentifiziert von der konfigurierten Repo-URL geladen haben.)
