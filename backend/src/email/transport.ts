@@ -33,8 +33,16 @@ function readSmtpPassword(): string | null {
     .get(SENSITIVE_KEYS.smtpPassword) as { value: string; encrypted: number } | undefined;
   if (!row) return null;
   const raw = row.encrypted ? decryptString(row.value) : row.value;
-  try { return (JSON.parse(raw) as { password?: string }).password ?? raw; }
-  catch { return raw; }
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed === "string") return parsed;
+    if (parsed && typeof (parsed as { password?: unknown }).password === "string") {
+      return (parsed as { password: string }).password;
+    }
+    return raw;
+  } catch {
+    return raw;
+  }
 }
 
 export interface SmtpRuntime {
