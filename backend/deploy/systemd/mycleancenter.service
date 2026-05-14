@@ -34,7 +34,7 @@ SyslogIdentifier=mycleancenter
 
 # Sicherheits-Hardening
 ProtectSystem=strict
-ReadWritePaths=/var/lib/mycleancenter
+ReadWritePaths=/var/lib/mycleancenter /opt/mycleancenter
 PrivateTmp=true
 NoNewPrivileges=true
 ProtectHome=true

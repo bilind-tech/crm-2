@@ -129,6 +129,8 @@ ensure_dirs() {
   local dirs=(
     "$APP_DIR"
     "$APP_DIR/releases"
+    "$APP_DIR/versions"
+    "$APP_DIR/staging"
     "$DATA_DIR"
     "$DATA_DIR/db"
     "$DATA_DIR/keys"

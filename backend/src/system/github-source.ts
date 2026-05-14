@@ -12,7 +12,7 @@
 //    bei "richtigen" Releases) — fremde Repos kommen nicht durch, weil wir
 //    den Tarball nur von der konfigurierten owner/repo-Kombination herunterladen.
 
-import { createWriteStream, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, readFileSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { pipeline } from "node:stream/promises";
@@ -222,7 +222,7 @@ export async function prepareUpdateFromGithub(): Promise<PreparedPackage> {
   ensureAppDirs();
   const uploadId = crypto.randomUUID();
   const stage = stagingDir(uploadId);
-  mkdirSync(stage, { recursive: true });
+  prepareCleanDir(stage);
   const tarPath = path.join(stage, "_paket.tar.gz");
   const writeStream = createWriteStream(tarPath);
 
@@ -244,7 +244,7 @@ export async function prepareUpdateFromGithub(): Promise<PreparedPackage> {
 
   // Tarball entpacken in stage/_raw/  (eine Wurzel: <owner>-<repo>-<sha>/)
   const rawDir = path.join(stage, "_raw");
-  mkdirSync(rawDir, { recursive: true });
+  prepareCleanDir(rawDir);
   await tarExtract({ file: tarPath, cwd: rawDir, strip: 0 });
   const rootEntries = readdirSync(rawDir);
   if (rootEntries.length !== 1) {
@@ -258,6 +258,8 @@ export async function prepareUpdateFromGithub(): Promise<PreparedPackage> {
   renameSync(repoRoot, extractDir);
   rmSync(rawDir, { recursive: true, force: true });
   try { rmSync(tarPath); } catch { /* ignore */ }
+
+  normalizeGithubPackageLayout(extractDir);
 
   // Manifest lokal bauen + signieren (Wir vertrauen der Quelle, weil wir per
   // PAT authentifiziert von der konfigurierten Repo-URL geladen haben.)
@@ -359,6 +361,29 @@ function deriveAppVersion(extractDir: string, sha: string): string {
     } catch { /* ignore */ }
   }
   return `${config.version}-gh.${sha.slice(0, 7)}`;
+}
+
+function prepareCleanDir(dir: string): void {
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true, mode: 0o755 });
+}
+
+function normalizeGithubPackageLayout(extractDir: string): void {
+  const frontend = path.join(extractDir, "dist-spa");
+  const target = path.join(extractDir, "dist");
+  if (existsSync(frontend) && !existsSync(path.join(target, "index.html"))) {
+    rmSync(target, { recursive: true, force: true });
+    renameSync(frontend, target);
+  }
+
+  const backendDist = path.join(extractDir, "backend", "dist");
+  const backendPkg = path.join(extractDir, "backend", "package.json");
+  if (!existsSync(backendDist) && existsSync(backendPkg)) {
+    writeFileSync(
+      path.join(extractDir, "UPDATE_BUILD_REQUIRED.txt"),
+      "Dieses GitHub-Paket enthält keinen gebauten Backend-Ordner backend/dist. Bitte Release/CI-Build vor dem Pi-Update ausführen.\n",
+    );
+  }
 }
 
 function directorySize(dir: string): number {
