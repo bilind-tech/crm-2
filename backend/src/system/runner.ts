@@ -17,6 +17,8 @@ import {
   readdirSync,
   readlinkSync,
   statSync,
+  copyFileSync,
+  cpSync,
   writeFileSync,
 } from "node:fs";
 import { execFile } from "node:child_process";
@@ -225,9 +227,10 @@ async function runInstall(laufId: string, opts: InstallOptions): Promise<void> {
     // 4. INSTALL — npm ci im neuen Ordner
     await stepRun(laufId, "install", async () => {
       if (opts.testMode) return "test-mode: skipped npm ci";
+      prepareRuntimeLayout(targetVersionDir);
       try {
         const { stdout } = await execFileP("npm", ["ci", "--omit=dev"], {
-          cwd: targetVersionDir,
+          cwd: backendRuntimeDir(targetVersionDir),
           timeout: 10 * 60_000, // Pi + USB-SSD: 5 min war knapp
           maxBuffer: 50 * 1024 * 1024,
         });
