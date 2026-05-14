@@ -30,7 +30,6 @@ import type {
   Angebot,
   Rechnung,
   Dokument,
-  Notiz,
 } from "@/lib/api/types";
 
 type KundeDetail = Omit<Kunde, "notizen"> & {
