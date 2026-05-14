@@ -34,7 +34,16 @@ export function isBackendUrlExplicit(): boolean {
 
 export function isLocalPreviewFallbackAllowed(): boolean {
   if (typeof window === "undefined") return false;
-  return import.meta.env.DEV && !import.meta.env.VITE_API_BASE_URL;
+  const fromEnv = (import.meta.env.VITE_API_BASE_URL ?? "").toString().trim();
+  if (fromEnv) return false;
+  const host = window.location.hostname;
+  return (
+    import.meta.env.DEV ||
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host.endsWith(".lovableproject.com") ||
+    host.endsWith(".lovable.app")
+  );
 }
 
 export function setBackendUrl(url: string): void {
