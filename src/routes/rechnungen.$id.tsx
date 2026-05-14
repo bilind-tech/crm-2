@@ -238,15 +238,18 @@ function Page() {
             <ul className="space-y-3">
               {r.positionen.map((p, i) => {
                 const istPauschal = p.modus === "pauschal";
+                const beschreibung = p.beschreibung ?? "";
+                const menge = p.menge ?? 0;
+                const einzel = p.einzelpreisNetto ?? 0;
                 const summe = istPauschal
                   ? (p.pauschalpreisNetto ?? 0) * (1 - (p.rabatt || 0) / 100)
-                  : p.menge * p.einzelpreisNetto * (1 - (p.rabatt || 0) / 100);
+                  : menge * einzel * (1 - (p.rabatt || 0) / 100);
                 return (
                   <li key={p.id} className="text-sm">
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="min-w-0 font-medium">
                         {i + 1}.{" "}
-                        {istPauschal ? p.beschreibung.split("\n")[0] || "Pauschal" : p.beschreibung}
+                        {istPauschal ? beschreibung.split("\n")[0] || "Pauschal" : beschreibung}
                       </span>
                       <span className="whitespace-nowrap font-semibold tabular-nums">
                         {formatEUR(summe)}
@@ -259,7 +262,7 @@ function Page() {
                       </div>
                     ) : (
                       <div className="mt-0.5 text-xs text-muted-foreground">
-                        {p.menge} × {formatEUR(p.einzelpreisNetto)}
+                        {menge} × {formatEUR(einzel)}
                       </div>
                     )}
                   </li>

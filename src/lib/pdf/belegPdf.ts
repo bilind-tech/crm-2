@@ -121,13 +121,17 @@ function dt(iso?: string) {
   return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 function summe(p: Position) {
-  if (p.modus === "pauschal") return (p.pauschalpreisNetto ?? 0) * (1 - p.rabatt / 100);
-  return p.menge * p.einzelpreisNetto * (1 - p.rabatt / 100);
+  const rabatt = p.rabatt ?? 0;
+  if (p.modus === "pauschal") return (p.pauschalpreisNetto ?? 0) * (1 - rabatt / 100);
+  return (p.menge ?? 0) * (p.einzelpreisNetto ?? 0) * (1 - rabatt / 100);
 }
 function totals(positionen: Position[], rabattGesamt: number, steuersatz: number) {
-  const nettoRoh = positionen.reduce((s, p) => s + summe(p), 0);
-  const netto = nettoRoh * (1 - rabattGesamt / 100);
-  const steuer = netto * (steuersatz / 100);
+  const safePos = positionen ?? [];
+  const safeRabatt = rabattGesamt ?? 0;
+  const safeSteuer = steuersatz ?? 0;
+  const nettoRoh = safePos.reduce((s, p) => s + summe(p), 0);
+  const netto = nettoRoh * (1 - safeRabatt / 100);
+  const steuer = netto * (safeSteuer / 100);
   return { netto, steuer, brutto: netto + steuer };
 }
 
