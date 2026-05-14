@@ -69,7 +69,7 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
     if (!kundeId || !nummernkreise) return "";
     const kunde = kunden.find((k) => k.id === kundeId);
     const naechster = zaehlerQ.data?.naechsterStart ?? 1;
-    return vorschauBelegnummer(kunde?.kuerzel, nummernkreise.rechnungPraefix, naechster);
+    return vorschauBelegnummer(kunde?.kuerzel, nummernkreise.rechnungFormat, naechster);
   }, [kundeId, kunden, nummernkreise, zaehlerQ.data?.naechsterStart]);
   const vorschauLaedt = !!kundeId && zaehlerQ.isLoading;
 
