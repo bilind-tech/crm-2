@@ -4,7 +4,7 @@ import { Camera, Trash2, Check, Loader2, FolderOpen, FileText, AlertTriangle, Ro
 import { toast } from "sonner";
 import { uploadDokumentToSessionMitProgress, MAX_BYTES } from "@/lib/dokument/upload";
 
-export const Route = createFileRoute("/m/upload/$session")({
+export const Route = createFileRoute("/m/upload/")({
   component: MobileUploadPage,
 });
 
