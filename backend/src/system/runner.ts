@@ -652,6 +652,32 @@ async function npmInstallWithFallback(
   }
 }
 
+/**
+ * Direkt `npm install` (tolerant gegenüber Lockfile-Drift). Geeignet für
+ * ephemere Build-Dependencies, bei denen Reproduzierbarkeit weniger zählt
+ * als Robustheit. Für produktive Backend-Dependencies bitte weiterhin
+ * `npmInstallWithFallback` (npm ci → install) verwenden.
+ */
+async function npmInstallTolerant(
+  cwd: string,
+  extraArgs: string[],
+  label: string,
+): Promise<string> {
+  try {
+    await execFileP(
+      "npm",
+      ["install", "--no-audit", "--no-fund", ...extraArgs],
+      { cwd, timeout: 20 * 60_000, maxBuffer: 80 * 1024 * 1024 },
+    );
+    return `${label}: npm install ok`;
+  } catch (e) {
+    const err = e as { stderr?: string; stdout?: string; message: string };
+    throw new Error(
+      `${label} fehlgeschlagen: ${(err.stderr || err.stdout || err.message).slice(0, 800)}`,
+    );
+  }
+}
+
 function copyRuntimeDeployFiles(versionRoot: string, backendDir: string): void {
   const currentBackend = path.join(process.cwd());
   const files = ["package.json", "package-lock.json"];
