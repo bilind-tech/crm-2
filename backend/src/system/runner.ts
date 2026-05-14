@@ -228,13 +228,14 @@ async function runInstall(laufId: string, opts: InstallOptions): Promise<void> {
     await stepRun(laufId, "install", async () => {
       if (opts.testMode) return "test-mode: skipped npm ci";
       prepareRuntimeLayout(targetVersionDir);
+      const buildDetails = await ensureBuiltRuntime(targetVersionDir);
       try {
         const { stdout } = await execFileP("npm", ["ci", "--omit=dev"], {
           cwd: backendRuntimeDir(targetVersionDir),
           timeout: 10 * 60_000, // Pi + USB-SSD: 5 min war knapp
           maxBuffer: 50 * 1024 * 1024,
         });
-        return stdout.split("\n").slice(-3).join(" ");
+        return [...buildDetails, stdout.split("\n").slice(-3).join(" ")].filter(Boolean).join(" | ");
       } catch (e) {
         const err = e as { stderr?: string; message: string };
         throw new Error("npm ci fehlgeschlagen: " + (err.stderr?.slice(0, 500) ?? err.message));
@@ -507,17 +508,44 @@ function backendRuntimeDir(versionRoot: string): string {
 
 function prepareRuntimeLayout(versionRoot: string): void {
   const backendDir = backendRuntimeDir(versionRoot);
-  const distServer = path.join(backendDir, "dist", "server.js");
   const distSpa = path.join(versionRoot, "dist-spa");
   const dist = path.join(versionRoot, "dist");
 
   if (!existsSync(path.join(dist, "index.html")) && existsSync(path.join(distSpa, "index.html"))) {
     safeRename(distSpa, dist);
   }
-  if (!existsSync(distServer)) {
-    throw new Error(`Backend-Build fehlt im Update-Paket: ${distServer}`);
-  }
   copyRuntimeDeployFiles(versionRoot, backendDir);
+}
+
+async function ensureBuiltRuntime(versionRoot: string): Promise<string[]> {
+  const details: string[] = [];
+  const backendDir = backendRuntimeDir(versionRoot);
+  const frontendIndex = path.join(versionRoot, "dist", "index.html");
+  const backendServer = path.join(backendDir, "dist", "server.js");
+
+  if (!existsSync(frontendIndex) && existsSync(path.join(versionRoot, "package.json"))) {
+    await runNpm(versionRoot, ["ci", "--no-audit", "--no-fund"], "Frontend-Dependencies");
+    await runNpm(versionRoot, ["run", "build:spa"], "Frontend-Build");
+    prepareRuntimeLayout(versionRoot);
+    details.push("Frontend gebaut");
+  }
+  if (!existsSync(backendServer)) {
+    await runNpm(backendDir, ["ci", "--no-audit", "--no-fund"], "Backend-Dependencies");
+    await runNpm(backendDir, ["run", "build"], "Backend-Build");
+    details.push("Backend gebaut");
+  }
+  if (!existsSync(frontendIndex)) throw new Error(`Frontend-Build fehlt im Update-Paket: ${frontendIndex}`);
+  if (!existsSync(backendServer)) throw new Error(`Backend-Build fehlt im Update-Paket: ${backendServer}`);
+  return details;
+}
+
+async function runNpm(cwd: string, args: string[], label: string): Promise<void> {
+  try {
+    await execFileP("npm", args, { cwd, timeout: 15 * 60_000, maxBuffer: 80 * 1024 * 1024 });
+  } catch (e) {
+    const err = e as { stderr?: string; stdout?: string; message: string };
+    throw new Error(`${label} fehlgeschlagen: ${(err.stderr || err.stdout || err.message).slice(0, 800)}`);
+  }
 }
 
 function copyRuntimeDeployFiles(versionRoot: string, backendDir: string): void {
