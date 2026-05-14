@@ -133,13 +133,12 @@ export function previewDashboardKennzahlen(): DashboardKennzahlen {
     aktiveObjekte: 0,
     offeneAngebote: previewAngebote.filter((a) => a.status === "entwurf" || a.status === "versendet").length,
     offeneRechnungen: previewRechnungen.filter((r) => r.status !== "bezahlt" && r.status !== "storniert").length,
-    umsatzMonat: 1011.5,
-    ueberfaellig: 0,
-  } as DashboardKennzahlen;
+    ausstehendEUR: 1011.5,
+  };
 }
 
 export function previewUmsatz(): UmsatzPunkt[] {
-  return [{ monat: month, netto: 850, steuer: 161.5, brutto: 1011.5 } as UmsatzPunkt];
+  return [{ monat: month, netto: 850, brutto: 1011.5 }];
 }
 
 export function localPreviewGet<T>(path: string): T | null {
