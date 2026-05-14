@@ -45,8 +45,31 @@ export async function fetchBackendPdf(
   } catch {
     return null; // Backend offline → Fallback
   }
-  if (!res.ok) return null;
+  if (!res.ok) {
+    // 404 / 500 → strukturierte Fehlermeldung extrahieren falls möglich,
+    // damit Caller eine verständliche Meldung anzeigen kann statt still
+    // auf den Client-Generator zurückzufallen (was bei echten Renderfehlern
+    // ebenfalls fehlschlagen würde).
+    let message = `Backend antwortete mit Status ${res.status}.`;
+    try {
+      const ct = res.headers.get("content-type") ?? "";
+      if (ct.includes("application/json")) {
+        const j = (await res.json()) as { message?: string; error?: string };
+        if (j?.message) message = j.message;
+        else if (j?.error) message = j.error;
+      }
+    } catch {
+      /* noop */
+    }
+    // Bei 5xx (Renderfehler) Fehler werfen, damit kein leiser Client-Fallback erfolgt.
+    if (res.status >= 500) throw new Error(message);
+    // Bei 404 (z. B. Beleg gerade gelöscht) Fallback erlauben.
+    return null;
+  }
   const blob = await res.blob();
+  if (!blob || blob.size === 0) {
+    throw new Error("Backend lieferte eine leere PDF-Datei.");
+  }
   const etag = (res.headers.get("etag") ?? "").replace(/^"|"$/g, "");
   const fromCache = res.headers.get("x-pdf-cache") === "hit";
   return {

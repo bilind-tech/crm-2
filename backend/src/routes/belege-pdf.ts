@@ -18,7 +18,22 @@ export async function belegePdfRoutes(app: FastifyInstance): Promise<void> {
       ifNoneMatch: string | undefined,
       reply: import("fastify").FastifyReply,
     ) {
-      const result = art === "angebot" ? await renderAngebotPdf(id) : await renderRechnungPdf(id);
+      let result;
+      try {
+        result = art === "angebot" ? await renderAngebotPdf(id) : await renderRechnungPdf(id);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/nicht gefunden/i.test(msg)) {
+          reply.status(404).send({ error: "not-found", message: msg });
+          return;
+        }
+        req_log_error(reply, art, id, e);
+        reply.status(500).send({
+          error: "pdf-render-failed",
+          message: `PDF konnte nicht erzeugt werden: ${msg}`,
+        });
+        return;
+      }
       if (!result) {
         reply.status(404).send({ error: "not-found" });
         return;
@@ -43,6 +58,41 @@ export async function belegePdfRoutes(app: FastifyInstance): Promise<void> {
         .send(result.buffer);
     }
 
+    function req_log_error(
+      reply: import("fastify").FastifyReply,
+      art: string,
+      id: string,
+      e: unknown,
+    ) {
+      try {
+        reply.log?.error?.({ err: e, art, id }, "PDF-Render fehlgeschlagen");
+      } catch {
+        /* noop */
+      }
+    }
+
+    async function safeMeta(
+      art: "angebot" | "rechnung",
+      id: string,
+      reply: import("fastify").FastifyReply,
+    ) {
+      try {
+        const r = art === "angebot" ? await renderAngebotPdf(id) : await renderRechnungPdf(id);
+        handleMeta(r, reply);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/nicht gefunden/i.test(msg)) {
+          reply.status(404).send({ error: "not-found", message: msg });
+          return;
+        }
+        req_log_error(reply, art, id, e);
+        reply.status(500).send({
+          error: "pdf-render-failed",
+          message: `PDF konnte nicht erzeugt werden: ${msg}`,
+        });
+      }
+    }
+
     function handleMeta(
       result: { hash: string; dateiname: string; buffer: Buffer; fromCache: boolean } | null,
       reply: import("fastify").FastifyReply,
@@ -65,11 +115,11 @@ export async function belegePdfRoutes(app: FastifyInstance): Promise<void> {
       await handlePdf("angebot", req.params.id, req.headers["if-none-match"] as string | undefined, reply);
     });
     scoped.get<{ Params: { id: string } }>("/angebote/:id/pdf/meta", async (req, reply) => {
-      handleMeta(await renderAngebotPdf(req.params.id), reply);
+      await safeMeta("angebot", req.params.id, reply);
     });
     scoped.post<{ Params: { id: string } }>("/angebote/:id/pdf/regenerieren", async (req, reply) => {
       invalidatePdfCache("angebot", req.params.id);
-      handleMeta(await renderAngebotPdf(req.params.id), reply);
+      await safeMeta("angebot", req.params.id, reply);
     });
 
     // ---- Rechnungen ----
@@ -77,11 +127,11 @@ export async function belegePdfRoutes(app: FastifyInstance): Promise<void> {
       await handlePdf("rechnung", req.params.id, req.headers["if-none-match"] as string | undefined, reply);
     });
     scoped.get<{ Params: { id: string } }>("/rechnungen/:id/pdf/meta", async (req, reply) => {
-      handleMeta(await renderRechnungPdf(req.params.id), reply);
+      await safeMeta("rechnung", req.params.id, reply);
     });
     scoped.post<{ Params: { id: string } }>("/rechnungen/:id/pdf/regenerieren", async (req, reply) => {
       invalidatePdfCache("rechnung", req.params.id);
-      handleMeta(await renderRechnungPdf(req.params.id), reply);
+      await safeMeta("rechnung", req.params.id, reply);
     });
   });
 }

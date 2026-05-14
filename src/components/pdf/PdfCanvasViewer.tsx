@@ -12,7 +12,7 @@ import { Document, Page } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import { configurePdfWorker } from "@/lib/pdf/pdfjsWorker";
-import { Loader2, AlertCircle, Download, ExternalLink } from "lucide-react";
+import { Loader2, AlertCircle, Download, ExternalLink, RefreshCw } from "lucide-react";
 
 configurePdfWorker();
 
@@ -40,6 +40,7 @@ export function PdfCanvasViewer({
   const [containerWidth, setContainerWidth] = useState(0);
   const [numPages, setNumPages] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   // Container-Breite messen, mit Fallback falls ResizeObserver nicht feuert.
   useEffect(() => {
@@ -65,6 +66,7 @@ export function PdfCanvasViewer({
   useEffect(() => {
     setLoadError(null);
     setNumPages(0);
+    setAttempt(0);
   }, [pdfUrl]);
 
   const renderWidth = useMemo(
@@ -94,7 +96,18 @@ export function PdfCanvasViewer({
             PDF kann nicht angezeigt werden
           </div>
           <p className="max-w-md text-xs text-muted-foreground">{loadError}</p>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setLoadError(null);
+                setNumPages(0);
+                setAttempt((n) => n + 1);
+              }}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent"
+            >
+              <RefreshCw className="h-4 w-4" /> Erneut versuchen
+            </button>
             <a
               href={pdfUrl}
               target="_blank"
@@ -116,7 +129,7 @@ export function PdfCanvasViewer({
 
       {pdfUrl && !loadError && containerWidth > 0 && (
         <Document
-          key={pdfUrl}
+          key={`${pdfUrl}#${attempt}`}
           file={pdfUrl}
           onLoadSuccess={({ numPages }) => setNumPages(numPages)}
           onLoadError={(err) => {
