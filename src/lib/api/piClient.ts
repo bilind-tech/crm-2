@@ -32,6 +32,9 @@ type FetchInit = Omit<RequestInit, "body"> & { body?: unknown };
 
 async function request<T>(method: string, path: string, init: FetchInit = {}): Promise<T> {
   const headers = new Headers(init.headers ?? {});
+  if (!headers.has("Accept")) {
+    headers.set("Accept", "application/json");
+  }
   let body: BodyInit | undefined;
 
   if (init.body !== undefined) {
@@ -144,6 +147,7 @@ export function postWithProgress<T>(
     xhr.open("POST", `${getBackendUrl()}${path}`, true);
     xhr.withCredentials = true;
     xhr.responseType = "text";
+    xhr.setRequestHeader("Accept", "application/json");
 
     xhr.upload.onprogress = (e) => {
       if (!onProgress) return;

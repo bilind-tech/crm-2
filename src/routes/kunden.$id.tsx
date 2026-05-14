@@ -23,6 +23,8 @@ import { DokumentThumb } from "@/components/dokumente/DokumentThumb";
 
 export const Route = createFileRoute("/kunden/$id")({ component: Page });
 
+type KundenNotiz = { id?: string; titel?: string; inhalt?: string; text?: string; erstelltAm?: string };
+
 function Page() {
   const { id } = Route.useParams();
   const { data: k, isLoading } = useKunde(id);
@@ -45,12 +47,16 @@ function Page() {
   }
 
   // Defensiv: ältere Backend-Versionen liefern manche Listen nicht mit.
-  const ansprechpartner = k.ansprechpartner ?? [];
-  const objekte = k.objekte ?? [];
-  const angebote = k.angebote ?? [];
-  const rechnungen = k.rechnungen ?? [];
-  const dokumente = k.dokumente ?? [];
-  const notizenListe = Array.isArray(k.notizen) ? k.notizen : [];
+  const ansprechpartner = Array.isArray(k.ansprechpartner) ? k.ansprechpartner : [];
+  const objekte = Array.isArray(k.objekte) ? k.objekte : [];
+  const angebote = Array.isArray(k.angebote) ? k.angebote : [];
+  const rechnungen = Array.isArray(k.rechnungen) ? k.rechnungen : [];
+  const dokumente = Array.isArray(k.dokumente) ? k.dokumente : [];
+  const tags = Array.isArray(k.tags) ? k.tags : [];
+  const rawNotizen: unknown = k.notizen;
+  const notizenListe: KundenNotiz[] = Array.isArray(rawNotizen)
+    ? rawNotizen.filter((n): n is KundenNotiz => !!n && typeof n === "object")
+    : [];
 
   const fullName = k.firmenname || `${k.vorname ?? ""} ${k.nachname ?? ""}`.trim();
   const initialen =
@@ -175,9 +181,9 @@ function Page() {
           </SectionCard>
 
           <SectionCard title="Tags & Notizen">
-            {k.tags.length > 0 ? (
+            {tags.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
-                {k.tags.map((t) => (
+                {tags.map((t) => (
                   <span
                     key={t}
                     className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary"
@@ -407,14 +413,18 @@ function Page() {
             <Empty text="Noch keine Notizen." />
           ) : (
             <ul className="space-y-3">
-              {notizenListe.map((n) => (
-                <li key={n.id} className="rounded-2xl border border-border bg-card p-4">
-                  <p className="text-sm font-medium">{n.titel}</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
-                    {n.inhalt}
-                  </p>
-                </li>
-              ))}
+              {notizenListe.map((n, index) => {
+                const text = n.inhalt ?? n.text ?? "";
+                const title = n.titel ?? (n.erstelltAm ? formatDate(n.erstelltAm) : "Notiz");
+                return (
+                  <li key={n.id ?? index} className="rounded-2xl border border-border bg-card p-4">
+                    <p className="text-sm font-medium">{title}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
+                      {text || "—"}
+                    </p>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </TabsContent>

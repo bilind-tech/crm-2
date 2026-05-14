@@ -5,9 +5,9 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import { existsSync, mkdirSync } from "node:fs";
-import path from "node:path";
 import { config, inspectDataDir } from "./config.js";
 import { openDatabase, closeDatabase, getSchemaVersion } from "./db/index.js";
+import { registerSpaPageFallback } from "./spa-fallback.js";
 import { ensureMasterKey } from "./crypto/masterkey.js";
 import { healthRoutes } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
@@ -208,6 +208,17 @@ async function main(): Promise<void> {
     });
   });
 
+  let spaIndex = "";
+  let hasSpaIndex = false;
+  if (existsSync(config.frontendDir)) {
+    const registered = registerSpaPageFallback(app, config.frontendDir);
+    spaIndex = registered.spaIndex;
+    hasSpaIndex = registered.hasSpaIndex;
+    if (!hasSpaIndex) {
+      app.log.warn({ spaIndex }, "SPA index.html fehlt — Frontend nicht erreichbar");
+    }
+  }
+
   await app.register(healthRoutes);
   await app.register(authRoutes);
   await app.register(einstellungenRoutes);
@@ -241,11 +252,9 @@ async function main(): Promise<void> {
     });
     // Pi-Auslieferung: Das Backend liefert die gebaute App als statische SPA aus.
     // Kein SSR auf dem Raspberry Pi — so vermeiden wir TanStack-SSR-Runtime-Drift.
-    const spaIndex = path.resolve(config.frontendDir, "index.html");
-    const hasSpaIndex = existsSync(spaIndex);
-    if (!hasSpaIndex) {
-      app.log.warn({ spaIndex }, "SPA index.html fehlt — Frontend nicht erreichbar");
-    }
+    // WICHTIG: API-Pfade wie /kunden/:id kollidieren absichtlich mit SPA-Routen.
+    // Direkte Browser-Aufrufe (Accept: text/html) werden über registerSpaPageFallback
+    // VOR den API-Routen auf index.html gelegt; XHR/fetch fordert JSON an.
 
     const isBackendApi = (url: string): boolean =>
       url.startsWith("/auth") ||
