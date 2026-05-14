@@ -3,6 +3,8 @@
 
 import { getBackendUrl } from "./backendUrl";
 
+const API_TIMEOUT_MS = 8_000;
+
 export class PiApiError extends Error {
   status: number;
   body?: unknown;
@@ -46,6 +48,11 @@ async function request<T>(method: string, path: string, init: FetchInit = {}): P
     }
   }
 
+  const ctrl = new AbortController();
+  const timeout = window.setTimeout(() => ctrl.abort(), API_TIMEOUT_MS);
+  const onAbort = () => ctrl.abort();
+  init.signal?.addEventListener("abort", onAbort, { once: true });
+
   let res: Response;
   try {
     res = await fetch(`${getBackendUrl()}${path}`, {
@@ -53,10 +60,18 @@ async function request<T>(method: string, path: string, init: FetchInit = {}): P
       headers,
       body,
       credentials: "include",
-      signal: init.signal,
+      signal: ctrl.signal,
     });
   } catch (err) {
-    throw new PiApiError(err instanceof Error ? err.message : "Backend nicht erreichbar", 0);
+    const message = ctrl.signal.aborted && !init.signal?.aborted
+      ? "Backend antwortet nicht rechtzeitig"
+      : err instanceof Error
+        ? err.message
+        : "Backend nicht erreichbar";
+    throw new PiApiError(message, 0);
+  } finally {
+    window.clearTimeout(timeout);
+    init.signal?.removeEventListener("abort", onAbort);
   }
 
   if (res.status === 204) return undefined as T;
