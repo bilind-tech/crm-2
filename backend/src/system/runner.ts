@@ -233,14 +233,9 @@ async function runInstall(laufId: string, opts: InstallOptions): Promise<void> {
 
     // 4. INSTALL — npm ci im neuen Ordner
     await stepRun(laufId, "install", async () => {
-      if (opts.testMode) return "test-mode: skipped npm ci";
-      const cwd = backendRuntimeDir(targetVersionDir);
-      const detail = await npmInstallWithFallback(
-        cwd,
-        ["--omit=dev"],
-        "Backend-Produktiv-Install",
-      );
-      return detail;
+      if (opts.testMode) return "test-mode: runtime check skipped";
+      assertUsableRuntime(targetVersionDir, "Neue Version");
+      return "Runtime vollständig vorbereitet (Frontend, Backend, Produktions-Dependencies)";
     });
 
     // 5. MIGRATIONS-Probelauf — Kopie der DB anlegen, Migrationen drauflaufen lassen
@@ -549,7 +544,43 @@ async function ensureBuiltRuntime(versionRoot: string): Promise<string[]> {
   }
   if (!existsSync(frontendIndex)) throw new Error(`Frontend-Build fehlt im Update-Paket: ${frontendIndex}`);
   if (!existsSync(backendServer)) throw new Error(`Backend-Build fehlt im Update-Paket: ${backendServer}`);
+  const prod = await npmInstallWithFallback(
+    backendDir,
+    ["--omit=dev"],
+    "Backend-Produktiv-Install",
+  );
+  details.push(prod);
+  assertUsableRuntime(versionRoot, "Neue Version");
   return details;
+}
+
+function assertUsableRuntime(versionRoot: string, label: string): void {
+  const backendDir = backendRuntimeDir(versionRoot);
+  const required = [
+    path.join(versionRoot, "dist", "index.html"),
+    path.join(backendDir, "dist", "server.js"),
+    path.join(backendDir, "package.json"),
+    path.join(backendDir, "node_modules"),
+  ];
+  const missing = required.filter((p) => !existsSync(p));
+  if (missing.length > 0) {
+    throw new Error(`${label} ist nicht startfähig. Fehlend: ${missing.join(", ")}`);
+  }
+}
+
+async function restartServiceOrThrow(): Promise<void> {
+  try {
+    await execFileP("sudo", ["-n", "/bin/systemctl", "restart", "--no-block", "mycleancenter"], {
+      timeout: 10_000,
+      maxBuffer: 256 * 1024,
+    });
+  } catch (e) {
+    const err = e as { stderr?: string; stdout?: string; message?: string };
+    throw new Error(
+      `Service-Neustart fehlgeschlagen: ${(err.stderr || err.stdout || err.message || String(e)).slice(0, 500)}. ` +
+        `Bitte einmal den Installer aus dem neuen Release ausführen, damit die Update-Rechte aktualisiert werden.`,
+    );
+  }
 }
 
 async function runNpm(cwd: string, args: string[], label: string): Promise<void> {
