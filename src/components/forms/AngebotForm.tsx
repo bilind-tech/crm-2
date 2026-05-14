@@ -20,6 +20,7 @@ import {
 import { vorschauBelegnummer } from "@/lib/belegNummer";
 import { toast } from "sonner";
 import { addDays, todayISO } from "@/lib/format";
+import { errorToMessage } from "@/lib/api/piClient";
 import {
   PositionenEditor,
   emptyPosition,
@@ -52,7 +53,7 @@ export function AngebotForm({ onClose, defaultKundeId, defaultObjektId }: Props)
   const [steuersatz, setSteuersatz] = useState(19);
   const [rabattGesamt, setRabattGesamt] = useState(0);
   const [gueltigBis, setGueltigBis] = useState(addDays(todayISO(), 30));
-  const [positionen, setPositionen] = useState<PositionDraft[]>([emptyPosition(19)]);
+  const [positionen, setPositionen] = useState<PositionDraft[]>(() => [emptyPosition(19)]);
   const [optionen, setOptionen] = useState<OptionenState>(defaultOptionen);
   const [ansprechpartnerId, setAnsprechpartnerId] = useState<string | undefined>();
 
@@ -75,7 +76,8 @@ export function AngebotForm({ onClose, defaultKundeId, defaultObjektId }: Props)
     if (!titel.trim()) return toast.error("Titel ist erforderlich");
     if (positionen.length === 0) return toast.error("Mindestens eine Position erforderlich");
 
-    const a = await create.mutateAsync({
+    try {
+      const a = await create.mutateAsync({
       kundeId,
       objektId: objektId || undefined,
       ansprechpartnerId: ansprechpartnerId || undefined,
@@ -95,10 +97,13 @@ export function AngebotForm({ onClose, defaultKundeId, defaultObjektId }: Props)
         wiederkehrend: optionen.wiederkehrend,
         wiederkehrendDetails: optionen.wiederkehrend ? optionen.wiederkehrendDetails : undefined,
       },
-    });
-    toast.success("Angebot angelegt", { description: `${a.nummer} • erfolgreich gespeichert.` });
-    onClose();
-    navigate({ to: "/angebote/$id", params: { id: a.id } });
+      });
+      toast.success("Angebot angelegt", { description: `${a.nummer} • erfolgreich gespeichert.` });
+      onClose();
+      navigate({ to: "/angebote/$id", params: { id: a.id } });
+    } catch (err) {
+      toast.error("Angebot konnte nicht angelegt werden", { description: errorToMessage(err) });
+    }
   }
 
   return (

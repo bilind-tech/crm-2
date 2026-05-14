@@ -20,6 +20,7 @@ import {
 import { vorschauBelegnummer } from "@/lib/belegNummer";
 import { toast } from "sonner";
 import { addDays, todayISO } from "@/lib/format";
+import { errorToMessage } from "@/lib/api/piClient";
 import {
   PositionenEditor,
   emptyPosition,
@@ -54,7 +55,7 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
   const [rechnungsdatum, setRechnungsdatum] = useState(todayISO());
   const [frist, setFrist] = useState(14);
   const [faellig, setFaellig] = useState(addDays(todayISO(), 14));
-  const [positionen, setPositionen] = useState<PositionDraft[]>([emptyPosition(19)]);
+  const [positionen, setPositionen] = useState<PositionDraft[]>(() => [emptyPosition(19)]);
   const [optionen, setOptionen] = useState<OptionenState>(defaultOptionen);
   const [ansprechpartnerId, setAnsprechpartnerId] = useState<string | undefined>();
 
@@ -86,7 +87,8 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
     if (!titel.trim()) return toast.error("Titel ist erforderlich");
     if (positionen.length === 0) return toast.error("Mindestens eine Position erforderlich");
 
-    const r = await create.mutateAsync({
+    try {
+      const r = await create.mutateAsync({
       kundeId,
       objektId: objektId || undefined,
       ansprechpartnerId: ansprechpartnerId || undefined,
@@ -107,13 +109,16 @@ export function RechnungForm({ onClose, defaultKundeId, defaultObjektId }: Props
         wiederkehrend: optionen.wiederkehrend,
         wiederkehrendDetails: optionen.wiederkehrend ? optionen.wiederkehrendDetails : undefined,
       },
-    });
-    const beschreibung = r.dauerauftragNeu
-      ? `${r.nummer} • Dauerauftrag ${r.dauerauftragNeu.nummer} angelegt`
-      : `${r.nummer} • erfolgreich gespeichert.`;
-    toast.success("Rechnung angelegt", { description: beschreibung });
-    onClose();
-    navigate({ to: "/rechnungen/$id", params: { id: r.id } });
+      });
+      const beschreibung = r.dauerauftragNeu
+        ? `${r.nummer} • Dauerauftrag ${r.dauerauftragNeu.nummer} angelegt`
+        : `${r.nummer} • erfolgreich gespeichert.`;
+      toast.success("Rechnung angelegt", { description: beschreibung });
+      onClose();
+      navigate({ to: "/rechnungen/$id", params: { id: r.id } });
+    } catch (err) {
+      toast.error("Rechnung konnte nicht angelegt werden", { description: errorToMessage(err) });
+    }
   }
 
   return (
