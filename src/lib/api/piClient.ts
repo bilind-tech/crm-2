@@ -1,7 +1,8 @@
 // HTTP-Client gegen das Pi-Backend (echtes Backend, NICHT Mock).
 // Nutzt getBackendUrl() + Cookie-Auth.
 
-import { getBackendUrl } from "./backendUrl";
+import { getBackendUrl, isLocalPreviewFallbackAllowed } from "./backendUrl";
+import { localPreviewGet } from "./localPreviewData";
 
 const API_TIMEOUT_MS = 8_000;
 
@@ -33,6 +34,11 @@ function notifyUnauth(): void {
 type FetchInit = Omit<RequestInit, "body"> & { body?: unknown };
 
 async function request<T>(method: string, path: string, init: FetchInit = {}): Promise<T> {
+  if (method === "GET" && isLocalPreviewFallbackAllowed()) {
+    const local = localPreviewGet<T>(path);
+    if (local !== null) return local;
+  }
+
   const headers = new Headers(init.headers ?? {});
   if (!headers.has("Accept")) {
     headers.set("Accept", "application/json");
@@ -63,6 +69,10 @@ async function request<T>(method: string, path: string, init: FetchInit = {}): P
       signal: ctrl.signal,
     });
   } catch (err) {
+    if (method === "GET" && isLocalPreviewFallbackAllowed()) {
+      const local = localPreviewGet<T>(path);
+      if (local !== null) return local;
+    }
     const message = ctrl.signal.aborted && !init.signal?.aborted
       ? "Backend antwortet nicht rechtzeitig"
       : err instanceof Error
