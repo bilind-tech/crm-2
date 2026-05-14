@@ -184,11 +184,12 @@ export function localPreviewGet<T>(path: string): T | null {
   if (cleanPath === "/dashboard/kennzahlen") return previewDashboardKennzahlen() as T;
   if (cleanPath === "/dashboard/umsatz") return previewUmsatz() as T;
   if (cleanPath === "/dashboard/warnungen") return [] as T;
+  if (cleanPath === "/dauerauftraege") return [] as T;
+  if (cleanPath === "/dauerauftrag-laeufe") return [] as T;
   if (cleanPath === "/aktivitaeten") return [] as T;
   if (cleanPath === "/benachrichtigungen") return [] as T;
   if (cleanPath === "/einstellungen/firma") return previewFirma as T;
   if (cleanPath === "/mahnung/status") return { einstellungen: { autoVorschlagAktiv: false, modus: "vorschlag", cronZeit: "09:00", nurAnWerktagen: true, benachrichtigungBeiVorschlag: true, benachrichtigungBeiAutoversand: false, stufen: [] }, letzterLauf: null } as T;
   if (cleanPath === "/mahnung/laeufe") return [] as T;
-  if (cleanPath === "/dauerauftrag-laeufe") return [] as T;
   return null;
 }
