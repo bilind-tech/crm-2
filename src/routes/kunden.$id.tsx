@@ -300,8 +300,9 @@ function Page() {
                 </thead>
                 <tbody>
                   {angebote.map((a) => {
+                    const positionen = Array.isArray(a.positionen) ? a.positionen : [];
                     const s = summenRechnung(
-                      Array.isArray(a.positionen) ? a.positionen : [],
+                      positionen,
                       a.rabattGesamt ?? 0,
                     );
                     const hatRechnung = rechnungen.some((r) => r.quellAngebotId === a.id);
@@ -367,16 +368,16 @@ function Page() {
                 </thead>
                 <tbody>
                   {rechnungen.map((r) => {
-                    const s = summenRechnung(
-                      Array.isArray(r.positionen) ? r.positionen : [],
-                      r.rabattGesamt ?? 0,
-                    );
-                    const bezahlt = (Array.isArray(r.zahlungen) ? r.zahlungen : []).reduce(
+                    const positionen = Array.isArray(r.positionen) ? r.positionen : [];
+                    const zahlungen = Array.isArray(r.zahlungen) ? r.zahlungen : [];
+                    const safeRechnung: Rechnung = { ...r, positionen, zahlungen };
+                    const s = summenRechnung(positionen, r.rabattGesamt ?? 0);
+                    const bezahlt = zahlungen.reduce(
                       (a, z) => a + (Number(z.betrag) || 0),
                       0,
                     );
                     const offen = Math.max(0, s.brutto - bezahlt);
-                    const flow = rechnungFlow(r);
+                    const flow = rechnungFlow(safeRechnung);
                     return (
                       <tr
                         key={r.id}
