@@ -45,6 +45,8 @@ interface MeResponse {
   expiresAt: string;
 }
 
+const AUTH_LOADING_TIMEOUT_MS = 5_000;
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { status: backendStatus } = useBackendStatus();
   const [mode, setMode] = useState<AuthMode>("loading");
@@ -90,6 +92,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     void refreshMe();
   }, [refreshMe, backendStatus]);
+
+  useEffect(() => {
+    if (mode !== "loading") return;
+    const id = window.setTimeout(() => {
+      setUser(null);
+      setMode("backend-offline");
+    }, AUTH_LOADING_TIMEOUT_MS);
+    return () => window.clearTimeout(id);
+  }, [mode]);
 
   // Globaler 401-Listener: beliebiger API-Aufruf → "unauthenticated"
   // → Auth-Status neu prüfen, damit der LockScreen erscheint statt
