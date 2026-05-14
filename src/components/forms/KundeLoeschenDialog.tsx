@@ -33,7 +33,7 @@ import type {
   Notiz,
 } from "@/lib/api/types";
 
-type KundeDetail = Kunde & {
+type KundeDetail = Omit<Kunde, "notizen"> & {
   ansprechpartner?: Ansprechpartner[];
   objekte?: Objekt[];
   angebote?: Angebot[];
