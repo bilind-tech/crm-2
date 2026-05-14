@@ -523,11 +523,13 @@ async function ensureBuiltRuntime(versionRoot: string): Promise<string[]> {
   const frontendIndex = path.join(versionRoot, "dist", "index.html");
   const backendServer = path.join(backendDir, "dist", "server.js");
 
-  if (!existsSync(frontendIndex) && existsSync(path.join(versionRoot, "package.json"))) {
+  if (existsSync(path.join(versionRoot, "package.json"))) {
+    safeRm(path.join(versionRoot, "dist"));
+    safeRm(path.join(versionRoot, "dist-spa"));
     await runNpm(versionRoot, ["ci", "--no-audit", "--no-fund"], "Frontend-Dependencies");
     await runNpm(versionRoot, ["run", "build:spa"], "Frontend-Build");
     prepareRuntimeLayout(versionRoot);
-    details.push("Frontend gebaut");
+    details.push("Frontend frisch gebaut");
   }
   if (!existsSync(backendServer)) {
     await runNpm(backendDir, ["ci", "--no-audit", "--no-fund"], "Backend-Dependencies");
