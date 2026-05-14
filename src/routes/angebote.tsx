@@ -30,6 +30,7 @@ import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { SlideOver } from "@/components/ui/slide-over";
 import { MobileListCard } from "@/components/ui/mobile-list-card";
 import { AngebotForm } from "@/components/forms/AngebotForm";
+import { FormErrorBoundary } from "@/components/layout/FormErrorBoundary";
 import { FlowBar } from "@/components/flow/FlowBar";
 import { angebotFlow } from "@/lib/flow/flows";
 import {
@@ -323,7 +324,9 @@ function Page() {
         title="Neues Angebot"
         description="Leistungen, Optionen und Texte erfassen — wird sofort als Entwurf gespeichert."
       >
-        <AngebotForm onClose={() => setOpen(false)} />
+        <FormErrorBoundary onReset={() => setOpen(false)}>
+          <AngebotForm onClose={() => setOpen(false)} />
+        </FormErrorBoundary>
       </SlideOver>
 
       {emailFuer && <AngebotEmailLauncher angebot={emailFuer} onClose={() => setEmailFuer(null)} />}
