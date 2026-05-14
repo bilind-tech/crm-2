@@ -4,7 +4,7 @@
 //   aber wir parsen die `id:`-Felder selbst, weil wir nur ein Subset filtern wollen).
 // - Single-Instance pro App (mehrere Tabs sind ok, jeder Tab eine Verbindung).
 
-import { getBackendUrl } from "./backendUrl";
+import { getBackendUrl, isLocalPreviewFallbackAllowed } from "./backendUrl";
 
 export type SseListener = (ev: { type: string; data: unknown; id?: number }) => void;
 
@@ -121,6 +121,7 @@ function scheduleReconnect(): void {
 }
 
 export function startSse(): void {
+  if (isLocalPreviewFallbackAllowed()) return;
   if (active) return;
   active = true;
   open();

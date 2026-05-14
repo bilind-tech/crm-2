@@ -10,7 +10,7 @@ import {
 } from "react";
 import { piApi, PiApiError, onUnauthenticated } from "@/lib/api/piClient";
 import { useBackendStatus } from "@/hooks/useBackendStatus";
-import { isBackendUrlExplicit } from "@/lib/api/backendUrl";
+import { isBackendUrlExplicit, isLocalPreviewFallbackAllowed } from "@/lib/api/backendUrl";
 
 export type AuthMode = "loading" | "needs-setup" | "logged-out" | "logged-in" | "backend-offline";
 
@@ -56,6 +56,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const lastActivity = useRef<number>(Date.now());
 
   const refreshMe = useCallback(async () => {
+    if (isLocalPreviewFallbackAllowed()) {
+      setUser({ id: "preview-user", username: "lokal" });
+      setMode("logged-in");
+      lastActivity.current = Date.now();
+      return;
+    }
     if (!isBackendUrlExplicit()) {
       setUser(null);
       setMode("backend-offline");
