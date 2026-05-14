@@ -1,82 +1,53 @@
-## Was du siehst
-
-Frontend zeigt nur `Versand fehlgeschlagen: internal server error`, weil das Backend bei diesem Fall mit HTTP 500 + generischer Fastify-Fehlerantwort antwortet. Die echte Ursache (vermutlich ein Fehler beim Erstellen der Rechnungs-PDF, die als Anhang an die Mail gehängt wird) wird **vor** der Antwort verschluckt — sowohl SMTP-Verbindungsprüfung als auch Test-Mail funktionieren, weil dort **kein PDF-Anhang** gerendert wird. Sobald eine Mail mit Beleg-PDF rausgeht, läuft der Pfad `sendNow → renderRechnungPdf → pdfmake → ...` — und wenn dort etwas wirft (z. B. bei einer Rechnung mit ungewöhnlichen Daten, fehlendem Feld, kaputtem Logo o. ä.), bubble der Fehler unvermittelt in den globalen `setErrorHandler` und wird zu „Internal Server Error".
-
-Konkret:
-
-1. `backend/src/email/worker.ts → sendNow` ruft `renderRechnungPdf(row.belegId)` **außerhalb** des `try/catch`. Wirft das Rendern, geht der Fehler raus aus der Route.
-2. `backend/src/server.ts:202-209` `setErrorHandler` ersetzt jeden 5xx-Fehler mit `{ error: "Internal Server Error" }`. Frontend zeigt diese generische Message an. Echter Stack landet nur in `journalctl -u mycleancenter`.
-3. Die Route `POST /email/versand` (`backend/src/routes/email.ts:127`) hat keinen umfassenden `try/catch` um `sendNow` und auch nicht um die SMTP-Settings/Enqueue-Schritte.
-
 ## Ziel
+Der QR-Code soll auf dem Handy nach Foto-/Dateiauswahl sofort eine sichtbare Kachel anzeigen, den Upload eindeutig starten/abschließen und die Datei kurz danach live im Laptop-/PC-Dialog anzeigen.
 
-- Versand mit Beleg-PDF funktioniert.
-- Falls doch etwas knallt: Frontend zeigt **die echte Ursache** auf Deutsch an (z. B. „PDF konnte nicht erstellt werden — Logo ungültig"), nicht „internal server error".
-- Pi-Logs zeigen weiter den vollen Stack zum Nachschauen.
+## Gefundene Ursache
+Die bereits verbesserte Handy-Upload-Version wurde versehentlich in `src/routes/m.upload..tsx` eingebaut. Der QR-Code öffnet aber `/m/upload/:session` und nutzt damit weiterhin `src/routes/m.upload.$session.tsx` — dort ist noch die alte Version mit manuellem Button und weniger robuster Logik aktiv.
 
-## Lösung — Schritt für Schritt
+## Plan
+1. **Richtige Handy-Route ersetzen**
+   - Die funktionierende Queue-/Progress-Logik aus `src/routes/m.upload..tsx` wird nach `src/routes/m.upload.$session.tsx` übertragen.
+   - Danach ist genau die vom QR-Code geöffnete Seite repariert.
 
-### 1) PDF-Render-Fehler sauber abfangen (`backend/src/email/worker.ts`)
+2. **Doppel-/Fehlroute entfernen**
+   - `src/routes/m.upload..tsx` wird entfernt, damit es keine zweite falsche `/m/upload/`-Route mehr gibt.
+   - `src/routeTree.gen.ts` wird nicht manuell gepflegt; der Router generiert sie selbst neu.
 
-`sendNow`: PDF-Erzeugung in eigenes `try/catch` packen. Bei Fehler → `markFehler(row.id, msg)` + `return { ok: false, error: "PDF konnte nicht erstellt werden: …", errorCode: "PDF_RENDER_FAILED" }`. Damit liefert der Route-Handler bereits jetzt 502 + strukturierte Message zurück (siehe Zeile 222 in `routes/email.ts`), das Frontend zeigt sie via `err.body.message` an.
+3. **Handy-Seite klar und zuverlässig machen**
+   - Nach Foto/Galerie-Auswahl erscheint sofort eine Vorschau-Kachel auf dem Handy.
+   - Jede Kachel zeigt Status: wartet, lädt hoch, fertig oder Fehler.
+   - Fehler-Kacheln bekommen „Erneut“-Aktion.
+   - Unten bleibt eine feste Leiste mit Fortschritt und einem klaren Button.
+   - Zusätzlich wird Auto-Upload beibehalten, aber der Button bleibt als sichtbare Sicherheit/Bestätigung erhalten.
 
-```ts
-let pdf: RenderResult | null = null;
-if (row.belegArt && row.belegId) {
-  try {
-    pdf = row.belegArt === "angebot"
-      ? await renderAngebotPdf(row.belegId)
-      : await renderRechnungPdf(row.belegId);
-  } catch (e) {
-    const msg = `PDF konnte nicht erstellt werden: ${(e as Error).message ?? "Unbekannter Fehler"}`;
-    markFehler(row.id, msg);
-    return { ok: false, error: msg, errorCode: "PDF_RENDER_FAILED" };
-  }
-  if (pdf) { /* size check + push to attachments wie heute */ }
-}
+4. **Upload technisch stabilisieren**
+   - `uploadDokumentToSessionMitProgress` wird in der QR-Code-Route genutzt.
+   - Maximal 2 Uploads parallel, automatische Wiederholung bei temporären Limits.
+   - Nach erfolgreichem Upload bleibt die Handy-Vorschau sichtbar und zeigt „fertig“ statt zu verschwinden.
+
+5. **Laptop-/PC-Live-Anzeige absichern**
+   - Der bestehende Polling-Dialog bleibt aktiv und zeigt neue Dateien sofort nach erfolgreichem Backend-Speichern.
+   - Falls nötig wird der Live-Hook so angepasst, dass er bei offener Sitzung zuverlässig jede Sekunde nachlädt.
+
+6. **Verifikation**
+   - Prüfen, dass der QR-Code exakt `/m/upload/{token}` öffnet.
+   - Prüfen, dass die reparierte Route dort registriert ist.
+   - Code-seitig sicherstellen, dass Fotoauswahl → Handy-Kachel → Upload → Backend-Dokument → Laptop-Liste in einer Kette verbunden ist.
+
+## Ergebnis
+Nach Umsetzung fühlt sich der Ablauf so an:
+
+```text
+Laptop: QR-Code offen
+Handy: QR-Code scannen
+Handy: Foto auswählen/aufnehmen
+Handy: Bild erscheint sofort als Kachel
+Handy: Upload startet und zeigt Fortschritt
+Handy: Kachel wird grün/fertig
+Laptop: Datei erscheint automatisch im Dialog
 ```
 
-### 2) Route `POST /email/versand` mit Schutzschicht versehen (`backend/src/routes/email.ts`)
-
-Den gesamten Inhalt der Route in einen äußeren `try/catch` packen. Im `catch`:
-
-```ts
-req.log.error({ err }, "Versand-Route Fehler");
-audit({ userId: req.user?.id, ip: req.ip, action: "email.send.fehler", detail: { error: (err as Error).message } });
-reply.status(500);
-return {
-  error: "versand-fehler",
-  message: (err as Error).message ?? "Unbekannter Fehler beim Versand",
-};
-```
-
-So überschreibt die Route die generische Fastify-500-Antwort und liefert die echte Message — auch wenn der Fehler nicht aus `sendNow` selbst kommt (z. B. aus `loadSmtpRuntime`).
-
-### 3) Globaler `setErrorHandler` (`backend/src/server.ts`) — kleines Refinement
-
-Nicht-5xx weiter wie heute durchreichen. Bei 5xx zusätzlich die Original-Message **nur in den Pi-Logs** ausgeben (machen wir bereits via `req.log.error`), aber dem Client weiterhin die generische Antwort geben — das ist sicher. Diese Datei muss nicht geändert werden, solange die Route (Schritt 2) den 500-Fall vorher abfängt. Wir lassen sie unverändert.
-
-### 4) Defensive Verbesserungen im Renderer (`backend/src/pdf/belegPdf.server.ts`, `backend/src/pdf/render.ts`)
-
-- `renderPdf`: Fehler aus `printer.createPdfKitDocument(docDef)` (synchroner Wurf) und aus dem Stream sauber als `Error` mit aussagekräftiger Message weiterreichen — ggf. `err.message` mit „pdfmake: " präfixen. Verhindert „undefined"-Stack im Frontend.
-- `renderRechnungPdf` / `renderAngebotPdf`: wenn `getRechnung` / `getKunde` `null` liefert, statt stillem `return null` einen sprechenden `Error` werfen (z. B. „Rechnung nicht mehr vorhanden"), den Schritt 1 sauber als `PDF_RENDER_FAILED` ausgibt. Sonst würde `sendNow` einfach ohne Anhang weiterlaufen (heutiges Verhalten ist `attachments` bleibt leer).
-
-### 5) Verifikation
-
-- Echte Mail aus einer Rechnungsdetailseite → Senden. Erwartung: entweder erfolgreich (wenn Render jetzt durchläuft) oder strukturierter Fehler-Toast wie „PDF konnte nicht erstellt werden: <konkreter Grund>".
-- `sudo journalctl -u mycleancenter -n 50 --no-pager` zeigt den vollen Stack — damit lässt sich die Wurzelursache direkt benennen, sobald wir einen echten Render-Fehler sehen. Sollte der Render-Fehler ein triviales Datenproblem sein (fehlendes Feld auf der Rechnung, kaputtes Logo etc.), patchen wir das in einem Folgeschritt direkt.
-- SMTP-Test-Mail (ohne Anhang) muss weiter funktionieren — am Code dieses Pfads ändern wir nichts.
-
-## Was *nicht* angefasst wird
-
-- Manual-Only-Garantie (`enqueueVersand` weiterhin nur `quelle: "manuell"`).
-- SMTP-Transport / Strato-Konfiguration.
-- Daten in `/var/lib/mycleancenter`.
-- Frontend `EmailVersandDialog` — Toast-Logik liest `err.body.message` bereits korrekt aus.
-
-## Dateien, die geändert werden
-
-- `backend/src/email/worker.ts` — PDF-Render in eigenes try/catch (`PDF_RENDER_FAILED`).
-- `backend/src/routes/email.ts` — äußerer try/catch um die Versand-Route, strukturierte 500-Antwort.
-- `backend/src/pdf/belegPdf.server.ts` — sprechende Errors statt stiller Null-Returns.
-- `backend/src/pdf/render.ts` — pdfmake-Fehler mit Präfix versehen.
+## Technische Dateien
+- `src/routes/m.upload.$session.tsx`
+- `src/routes/m.upload..tsx` entfernen
+- ggf. `src/hooks/useApi.ts` nur falls Live-Polling noch nicht zuverlässig genug ist
