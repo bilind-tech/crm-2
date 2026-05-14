@@ -32,6 +32,11 @@ export function isBackendUrlExplicit(): boolean {
   return fromEnv.length > 0;
 }
 
+export function isLocalPreviewFallbackAllowed(): boolean {
+  if (typeof window === "undefined") return false;
+  return import.meta.env.DEV && !import.meta.env.VITE_API_BASE_URL;
+}
+
 export function setBackendUrl(url: string): void {
   if (typeof window === "undefined") return;
   const clean = url.trim().replace(/\/$/, "");
