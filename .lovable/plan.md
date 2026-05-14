@@ -1,45 +1,22 @@
-## Ursache
+Ich habe die Ursache eingegrenzt: Die beiden Einstellungs-Tabs erwarten andere Datenfelder als das Backend tatsächlich liefert. Dadurch greifen die Komponenten auf nicht vorhandene Felder zu und die globale Fehlerseite erscheint.
 
-Der systemd-Service `mycleancenter` läuft mit `Environment=NODE_ENV=production`. Diese Variable wird an alle vom Backend gespawnten `npm`-Prozesse vererbt. npm interpretiert `NODE_ENV=production` standardmäßig als `--omit=dev` — auch bei `npm install`. Dadurch werden devDependencies wie `@vitejs/plugin-react`, `vite`, `@tailwindcss/vite`, `@tanstack/router-plugin` etc. **nicht** installiert. Der anschließende `npm run build:spa` bricht dann ab mit:
+Plan:
 
-```
-Cannot find package '@vitejs/plugin-react'
-```
+1. Nummernkreise-Tab korrigieren
+- Frontend auf die echten Backend-Felder umstellen: `rechnungFormat`, `angebotFormat`, `startNummer`.
+- Vorschau an das aktuelle Format `{KUERZEL}{MM}{YY}/{NN}` anpassen.
+- Validierung so ändern, dass sie zu den realen Platzhaltern passt.
 
-Das `npm install` selbst läuft erfolgreich durch (deshalb keine Fehlermeldung in „Abhängigkeiten installieren"), nur die devDeps fehlen still.
+2. Daueraufträge-Tab korrigieren
+- Frontend auf die echten Backend-Felder umstellen: `laufzeitTagBeforeFaellig`, `autoVersand`.
+- Die fehlerauslösenden Zugriffe auf `defaultModus` und `defaultStichtag` entfernen.
+- Dabei die bestehende Sicherheitsregel beachten: keine automatische E-Mail-Versendung. Falls `autoVersand` im UI bleibt, wird es klar als Rechnungserzeugung/Workflow-Option behandelt und nicht als Mail-Autoversand.
 
-## Fix
+3. Typen angleichen
+- `src/lib/api/types.ts` an die echten Backend-Schemas anpassen, damit solche Feld-Mismatches künftig beim Entwickeln auffallen.
 
-In `backend/src/system/runner.ts` für den **Frontend**-Install-Schritt explizit devDependencies erzwingen. Zwei kombinierte Maßnahmen (Gürtel + Hosenträger):
+4. Fehlerrobustheit verbessern
+- Für beide Tabs Lade- und Fehlerzustände lokal anzeigen, statt die ganze App auf „Something went wrong“ fallen zu lassen.
 
-1. `npmInstallTolerant()` um optionales Env-Override erweitern.
-2. Beim Frontend-Aufruf `--include=dev` **und** `NODE_ENV=development` setzen.
-
-### Änderungen
-
-**`npmInstallTolerant()`** — neuer optionaler Parameter `env?: Record<string,string>`, wird an `execFileP` als `env: { ...process.env, ...env }` übergeben.
-
-**Frontend-Install (Zeile ~538):**
-```ts
-const fe = await npmInstallTolerant(
-  versionRoot,
-  ["--include=dev"],
-  "Frontend-Dependencies",
-  { NODE_ENV: "development" },
-);
-```
-
-Backend-Install (`npmInstallWithFallback` mit `--omit=dev`) bleibt unverändert — dort sollen devDeps ja gerade nicht rein.
-
-### Warum beides
-
-- `--include=dev` überschreibt `--omit=dev`-Default in den meisten npm-Versionen.
-- `NODE_ENV=development` ist der harte Fallback für ältere npm-Versionen, bei denen `--include=dev` ignoriert wird, wenn die Env-Variable gesetzt ist.
-
-## Test / Rollout
-
-1. Patch committen + pushen.
-2. Auf dem Pi den manuellen Update-Befehl von vorhin ausführen (holt neuen Runner-Code).
-3. Danach Update-Button in der App testen — Frontend-Build muss durchlaufen, `dist/index.html` entstehen, Healthcheck grün.
-
-Daten-Verzeichnis bleibt unangetastet, Sicherheits-Backup wird wie gewohnt vor jedem Versuch erstellt — kein Risiko für Bestandsdaten.
+5. Danach prüfen
+- Gezielte Prüfung, dass `/einstellungen` wieder öffnet und die Tabs „Nummernkreise“ sowie „Daueraufträge“ nicht mehr abstürzen.

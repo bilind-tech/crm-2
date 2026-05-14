@@ -591,9 +591,9 @@ export interface EmailVersand {
 }
 
 export interface Nummernkreise {
-  kundePraefix: string; // z.B. "K-{YYYY}-{####}"
-  angebotPraefix: string; // "AN-{YYYY}-{####}"
-  rechnungPraefix: string; // "RE-{YYYY}-{####}"
+  rechnungFormat: string; // z.B. "{KUERZEL}{MM}{YY}/{NN}"
+  angebotFormat: string;  // z.B. "A-{KUERZEL}{MM}{YY}/{NN}"
+  startNummer: number;
 }
 
 export interface SicherheitsEinstellungen {
