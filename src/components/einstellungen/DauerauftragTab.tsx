@@ -5,25 +5,15 @@ import { Save } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   useDauerauftragEinstellungen,
   useUpdateDauerauftragEinstellungen,
 } from "@/hooks/useDauerauftraege";
-import type {
-  DauerauftragEinstellungen,
-  DauerauftragModus,
-  DauerauftragStichtag,
-} from "@/lib/api/types";
+import type { DauerauftragEinstellungen } from "@/lib/api/types";
 
 export function DauerauftragTab() {
-  const { data } = useDauerauftragEinstellungen();
+  const { data, isLoading, error } = useDauerauftragEinstellungen();
   const update = useUpdateDauerauftragEinstellungen();
   const [form, setForm] = useState<DauerauftragEinstellungen | null>(null);
 
@@ -31,7 +21,20 @@ export function DauerauftragTab() {
     if (data) setForm(data);
   }, [data]);
 
-  if (!form) return <LoadingPlaceholder />;
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-destructive/40 bg-card p-6 shadow-sm">
+        <h3 className="mb-1 text-sm font-semibold">
+          Dauerauftrags-Einstellungen konnten nicht geladen werden
+        </h3>
+        <p className="text-sm text-muted-foreground">
+          {error instanceof Error ? error.message : "Unbekannter Fehler"}
+        </p>
+      </div>
+    );
+  }
+
+  if (isLoading || !form) return <LoadingPlaceholder />;
 
   const dirty = JSON.stringify(form) !== JSON.stringify(data);
 
@@ -45,80 +48,52 @@ export function DauerauftragTab() {
           </p>
         </div>
 
-        <div>
-          <Label className="text-xs font-medium">Standard-Modus</Label>
-          <div className="mt-2 flex gap-2">
-            {(["entwurf", "vollautomatisch"] as DauerauftragModus[]).map((m) => (
-              <button
-                key={m}
-                onClick={() => setForm({ ...form, defaultModus: m })}
-                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ${
-                  form.defaultModus === m
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border bg-background text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                {m === "entwurf" ? "Entwurf zur Freigabe" : "Vollautomatisch versenden"}
-              </button>
-            ))}
-          </div>
-          <p className="mt-1.5 text-[11px] text-muted-foreground">
-            Vollautomatik versendet Rechnungen ohne Klick — nutze sie nur für stabile, geprüfte
-            Daueraufträge.
-          </p>
-        </div>
-
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <Label className="text-xs font-medium">Standard-Stichtag</Label>
-            <Select
-              value={form.defaultStichtag.typ}
-              onValueChange={(v) =>
-                setForm({
-                  ...form,
-                  defaultStichtag: {
-                    ...form.defaultStichtag,
-                    typ: v as DauerauftragStichtag["typ"],
-                  },
-                })
-              }
-            >
-              <SelectTrigger className="mt-1.5 h-10">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="monatstag">Tag im Monat</SelectItem>
-                <SelectItem value="monatsletzter">Letzter Monatstag</SelectItem>
-                <SelectItem value="quartalstag">Tag im Quartalsmonat</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs font-medium">Tag (1–28)</Label>
+            <Label className="text-xs font-medium" htmlFor="laufzeit">
+              Vorlaufzeit (Tage vor Fälligkeit)
+            </Label>
             <Input
+              id="laufzeit"
               type="number"
-              min={1}
-              max={28}
-              disabled={form.defaultStichtag.typ === "monatsletzter"}
-              value={form.defaultStichtag.wert ?? 1}
+              min={0}
+              max={60}
+              value={form.laufzeitTagBeforeFaellig}
               onChange={(e) =>
                 setForm({
                   ...form,
-                  defaultStichtag: {
-                    ...form.defaultStichtag,
-                    wert: Number(e.target.value) || 1,
-                  },
+                  laufzeitTagBeforeFaellig: Math.min(60, Math.max(0, Number(e.target.value) || 0)),
                 })
               }
               className="mt-1.5"
             />
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Wie viele Tage vor dem Fälligkeitstermin der Lauf vorbereitet wird (0–60).
+            </p>
+          </div>
+
+          <div>
+            <Label className="text-xs font-medium">Automatische Rechnungserzeugung</Label>
+            <div className="mt-2 flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-2">
+              <Switch
+                checked={form.autoVersand}
+                onCheckedChange={(v) => setForm({ ...form, autoVersand: v })}
+              />
+              <span className="text-sm">
+                {form.autoVersand ? "Aktiviert" : "Deaktiviert"}
+              </span>
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Erzeugt am Stichtag automatisch eine Rechnung. E-Mails werden trotzdem nie
+              automatisch versendet — Versand bleibt immer ein bewusster Klick.
+            </p>
           </div>
         </div>
       </div>
 
       <div className="flex justify-end">
         <Button
-          disabled={!dirty}
+          disabled={!dirty || update.isPending}
           onClick={() =>
             update.mutate(form, { onSuccess: () => toast.success("Einstellungen gespeichert") })
           }

@@ -909,7 +909,8 @@ export interface DauerauftragSonderposition {
 // ---------- Dauerauftrag-Einstellungen (continued) ----------
 
 export interface DauerauftragEinstellungen {
-  defaultModus: DauerauftragModus;
-  /** Standard-Stichtag für neue DAs. */
-  defaultStichtag: DauerauftragStichtag;
+  /** Tage vor Fälligkeit, an denen der Lauf vorbereitet wird (0–60). */
+  laufzeitTagBeforeFaellig: number;
+  /** Wenn true: Lauf erzeugt direkt eine Rechnung statt eines Entwurfs. */
+  autoVersand: boolean;
 }
