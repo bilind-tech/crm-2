@@ -117,6 +117,7 @@ function useBlobUrl(blob: Blob | undefined, cacheKey: string): string | null {
 
 interface UsePdfResult {
   url: string | null;
+  blob: Blob | null;
   status: Status;
   error: string | null;
   fileName?: string;
@@ -150,6 +151,7 @@ export function useAngebotPdf(angebot?: Angebot): UsePdfResult {
 
   return {
     url,
+    blob: query.data?.blob ?? null,
     status,
     error: query.error ? String((query.error as Error)?.message ?? query.error) : null,
     fileName: query.data?.fileName,
@@ -184,6 +186,7 @@ export function useRechnungPdf(rechnung?: Rechnung): UsePdfResult {
 
   return {
     url,
+    blob: query.data?.blob ?? null,
     status,
     error: query.error ? String((query.error as Error)?.message ?? query.error) : null,
     fileName: query.data?.fileName,
