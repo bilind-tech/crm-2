@@ -30,6 +30,7 @@ import { mahnungRoutes } from "./routes/mahnung.js";
 import { startMahnScheduler } from "./mahnung/cron.js";
 import { driveRoutes } from "./routes/drive.js";
 import { emailRoutes } from "./routes/email.js";
+import { seedOrUpdateDefaultVorlagen } from "./email/templates.js";
 import { startDriveWorker } from "./drive/upload-worker.js";
 import { wireDriveAutoEnqueue } from "./drive/auto-enqueue.js";
 import { on as onBusEvent } from "./events/bus.js";
