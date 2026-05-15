@@ -17,6 +17,7 @@ import { audit } from "../auth/audit.js";
 import { emit } from "../events/bus.js";
 import { createConnection } from "node:net";
 import { resetTransport } from "../email/transport.js";
+import { resetImapClient } from "../email/imap-archive.js";
 import { flachZuUi, uiPatchZuFlach } from "../mahnung/settings-adapter.js";
 import { MahnungSchema } from "../settings/schemas.js";
 
@@ -158,6 +159,7 @@ export async function einstellungenRoutes(app: FastifyInstance): Promise<void> {
       }
       setSetting(SENSITIVE_KEYS.smtpPassword, pw.data.password, { encrypt: true });
       resetTransport();
+      resetImapClient();
     }
     const r = patchArea("smtp", core);
     if (!r.ok) {
@@ -165,6 +167,7 @@ export async function einstellungenRoutes(app: FastifyInstance): Promise<void> {
       return { error: r.error, issues: r.issues };
     }
     resetTransport();
+    resetImapClient();
     audit({ userId: req.user?.id, action: "settings.smtp.patch", ip: req.ip });
     emit("einstellung:geaendert", { key: "smtp", userId: req.user?.id ?? null });
     const meta = getSettingMeta(SENSITIVE_KEYS.smtpPassword);
@@ -172,6 +175,8 @@ export async function einstellungenRoutes(app: FastifyInstance): Promise<void> {
   });
   app.delete("/einstellungen/smtp/passwort", async (req) => {
     deleteSetting(SENSITIVE_KEYS.smtpPassword);
+    resetTransport();
+    resetImapClient();
     audit({ userId: req.user?.id, action: "settings.smtp.password-clear", ip: req.ip });
     return { ok: true };
   });

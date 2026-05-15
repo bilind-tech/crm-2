@@ -5,14 +5,31 @@
 // bereit, die vom Versand-Endpoint synchron aufgerufen wird. Es gibt keinen
 // Scheduler und auch keinen `startEmailWorker` mehr.
 
+import nodemailer, { type Transporter } from "nodemailer";
 import { getTransport, getFromAddress } from "./transport.js";
+import { archiveToSentFolder } from "./imap-archive.js";
 import { markErfolg, markFehler, type EmailVersand } from "./versand-repo.js";
 import { renderAngebotPdf, renderRechnungPdf, type RenderResult } from "../pdf/belegPdf.server.js";
 
 const SEND_TIMEOUT_MS = 30_000;
 
+// Lokaler Stream-Transport, der Mails NICHT verschickt, sondern nur das
+// fertige RFC-822-MIME als Buffer baut. Wir nutzen ihn nach erfolgreichem
+// SMTP-Send, um exakt dieselbe Mail per IMAP in den Sent-Ordner abzulegen.
+let _mimeBuilder: Transporter | null = null;
+function getMimeBuilder(): Transporter {
+  if (_mimeBuilder) return _mimeBuilder;
+  _mimeBuilder = nodemailer.createTransport({
+    streamTransport: true,
+    buffer: true,
+    newline: "unix",
+  });
+  return _mimeBuilder;
+}
+
 interface MailSendInfo {
   messageId?: string | null;
+  message?: Buffer | string;
 }
 
 export interface SendResult {
@@ -61,20 +78,40 @@ export async function sendNow(row: EmailVersand): Promise<SendResult> {
   try {
     const transport = getTransport();
     const from = getFromAddress();
+    const mailOpts = {
+      from: { name: from.name, address: from.address },
+      to: row.empfaengerTo,
+      cc: row.empfaengerCc || undefined,
+      bcc: row.empfaengerBcc || undefined,
+      subject: row.betreff,
+      html: row.bodyHtml,
+      attachments,
+    };
     const info = await withTimeout<MailSendInfo>(
-      transport.sendMail({
-        from: { name: from.name, address: from.address },
-        to: row.empfaengerTo,
-        cc: row.empfaengerCc || undefined,
-        bcc: row.empfaengerBcc || undefined,
-        subject: row.betreff,
-        html: row.bodyHtml,
-        attachments,
-      }),
+      transport.sendMail(mailOpts),
       SEND_TIMEOUT_MS,
       "smtp.sendMail",
     );
     markErfolg(row.id, info.messageId ?? null);
+
+    // Fire-and-forget: in den Sent-Ordner via IMAP appenden.
+    // Darf den Send-Erfolg unter KEINEN Umständen kippen.
+    void (async () => {
+      try {
+        const builder = getMimeBuilder();
+        const built = await withTimeout<MailSendInfo>(
+          builder.sendMail({ ...mailOpts, messageId: info.messageId ?? undefined }),
+          SEND_TIMEOUT_MS,
+          "mime.build",
+        );
+        const raw = built.message;
+        const rawBuf = typeof raw === "string"
+          ? Buffer.from(raw)
+          : Buffer.isBuffer(raw) ? raw : null;
+        if (rawBuf) await archiveToSentFolder(row.id, rawBuf);
+      } catch { /* schluckt — IMAP-Archiv ist non-kritisch */ }
+    })();
+
     return { ok: true, messageId: info.messageId ?? null };
   } catch (e) {
     const err = e as { code?: string; message?: string };
