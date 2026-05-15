@@ -302,6 +302,7 @@ function Page() {
           errorMessage={pdf.error}
           drive={a.drive}
           pdfUrl={pdf.url}
+          pdfBlob={pdf.blob}
           viewButton={
             <PdfViewButton kind="angebot" beleg={a} variant="icon-text" label="PDF ansehen" />
           }
