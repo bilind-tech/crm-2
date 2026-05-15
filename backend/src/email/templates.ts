@@ -38,11 +38,14 @@ interface SignaturRow {
   erstellt_am: string; geaendert_am: string;
 }
 
-const mapV = (r: VorlageRow): EmailVorlage => ({
+const mapV = (r: VorlageRow): EmailVorlage & { koerperHtml: string; aktualisiertAm: string } => ({
   id: r.id, name: r.name, betreff: r.betreff, bodyHtml: r.body_html,
+  // Frontend-Alias: das UI erwartet `koerperHtml` und `aktualisiertAm`.
+  koerperHtml: r.body_html,
   kontext: r.kontext, istStandard: !!r.ist_standard,
   seedKey: r.seed_key ?? null,
   erstelltAm: r.erstellt_am, geaendertAm: r.geaendert_am,
+  aktualisiertAm: r.geaendert_am,
 });
 const mapS = (r: SignaturRow): EmailSignatur => ({
   id: r.id, name: r.name, html: r.html, istStandard: !!r.ist_standard,
