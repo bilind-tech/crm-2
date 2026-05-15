@@ -50,6 +50,7 @@ import {
   useEmailSignaturen,
   useEmailVorlagen,
   useFirmendaten,
+  useKunde,
   useMahnEinstellungen,
   useSendEmail,
   useSmtp,
@@ -107,6 +108,22 @@ export function EmailVersandDialog({
   const { data: mahnEinstellungen } = useMahnEinstellungen();
   const { data: smtp } = useSmtp();
   const send = useSendEmail();
+  // Ansprechpartner des Kunden laden, um die Empfänger-Mail
+  // (falls auf Beleg ein Ansprechpartner ausgewählt ist) zu ermitteln.
+  const { data: kundeDetail } = useKunde(kunde?.id ?? "");
+  const ansprechpartnerListe = kundeDetail?.ansprechpartner ?? [];
+
+  const ansprechpartnerId = angebot?.ansprechpartnerId ?? rechnung?.ansprechpartnerId;
+
+  const empfaengerVorbelegt = useMemo(() => {
+    if (ansprechpartnerId) {
+      const ap = ansprechpartnerListe.find((a) => a.id === ansprechpartnerId);
+      if (ap?.email) return ap.email;
+    }
+    const primaer = ansprechpartnerListe.find((a) => a.primaer && a.email);
+    if (primaer?.email) return primaer.email;
+    return kunde?.email ?? "";
+  }, [ansprechpartnerId, ansprechpartnerListe, kunde?.email]);
 
   // Harte Voraussetzung: ohne SMTP kein Versand. UI muss das klar zeigen
   // und den Senden-Button sperren — sonst entsteht ein falsches Erfolgs-Signal.
@@ -149,7 +166,7 @@ export function EmailVersandDialog({
   // Vorbelegen beim Öffnen
   useEffect(() => {
     if (!open) return;
-    setAn(kunde?.email ?? "");
+    setAn(empfaengerVorbelegt);
     setCc("");
     setBcc("");
     setZeigeCcBcc(false);
@@ -182,6 +199,15 @@ export function EmailVersandDialog({
     setBodyHtml(standardVorlage?.koerperHtml ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Falls Ansprechpartner-Daten erst nach Öffnen des Dialogs eintreffen,
+  // den Empfänger nachträglich setzen — nur solange das Feld noch leer
+  // ist, damit User-Eingaben nie überschrieben werden.
+  useEffect(() => {
+    if (!open) return;
+    if (an) return;
+    if (empfaengerVorbelegt) setAn(empfaengerVorbelegt);
+  }, [open, an, empfaengerVorbelegt]);
 
   // Vorlage wechseln → Felder neu setzen
   const onVorlageChange = (id: string) => {
