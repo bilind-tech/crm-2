@@ -15,6 +15,23 @@ import {
 } from "../email/versand-repo.js";
 import { sendNow, translateSmtpError } from "../email/worker.js";
 import { getTransport, getFromAddress, loadSmtpRuntime, verifyTransport } from "../email/transport.js";
+import { sendeAngebot } from "../belege/angebote-repo.js";
+import { sendeRechnung } from "../belege/rechnungen-repo.js";
+import { emitBelegVersendet } from "../belege/events.js";
+
+function markBelegVersendet(
+  belegArt: "angebot" | "rechnung" | null | undefined,
+  belegId: string | null | undefined,
+): void {
+  if (!belegArt || !belegId) return;
+  try {
+    if (belegArt === "angebot") sendeAngebot(belegId);
+    else if (belegArt === "rechnung") sendeRechnung(belegId);
+    emitBelegVersendet(belegArt, belegId);
+  } catch (e) {
+    console.error("markBelegVersendet", e);
+  }
+}
 
 const KONTEXTE = ["rechnung", "angebot", "mahnung", "allgemein"] as const;
 
@@ -201,6 +218,7 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
 
       // SYNCHRON senden — der User wartet auf das Ergebnis. Kein Hintergrund-Worker.
       const result = await sendNow(row);
+      if (result.ok) markBelegVersendet(belegArt, d.belegId);
       const after = getById(row.id);
 
       // Audit-Trail: Pflicht. Jede Mail ist nachweisbar User-getriggert.
