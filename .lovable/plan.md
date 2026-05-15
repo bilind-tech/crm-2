@@ -1,37 +1,53 @@
 ## Problem
 
-Wenn aus dem `EmailVersandDialog` eine E-Mail zu einem Angebot oder einer Rechnung erfolgreich rausgeht, wird die zugehörige `email_versand`-Zeile zwar korrekt auf `gesendet` gesetzt — der **Beleg selbst** bleibt aber im Status `entwurf` und hat kein `versendet_am`. Dadurch sieht es überall (Detailseite, Listen, FlowBar, Dashboard "nächste Schritte") so aus, als wäre nie eine Mail rausgegangen.
+Auf den Detailseiten von Angebot und Rechnung steht unten links der Block „E-Mail-Versand". Der listet aktuell **jeden einzelnen Versuch** als eigene Zeile auf — bei mehrfachem Senden / Mahnungen / Retries wird das schnell eine sehr lange, unübersichtliche Liste, die für den Alltag null Mehrwert hat.
 
-**Ursache:** Die Route `POST /email/versand` (`backend/src/routes/email.ts`, ~Zeile 203) ruft `sendNow(row)` auf, aktualisiert aber danach nicht den Beleg. Es gibt bereits passende Helper:
-- `sendeAngebot(id)` in `backend/src/belege/angebote-repo.ts` — setzt `status='versendet'`, `versendet_am=now()`, gating via `isValidAngebotTransition`
-- `sendeRechnung(id)` in `backend/src/belege/rechnungen-repo.ts` — setzt `status='versendet'`, `versendet_am=now()`, nur wenn aktueller Status `entwurf`
+Der User will dort nur **eine kompakte Status-Aussage**:
 
-Beide werden aktuell nirgends vom E-Mail-Pfad aufgerufen.
+| Zustand | Anzeige |
+|---|---|
+| Noch nie versendet | „Noch nicht versendet" |
+| Mindestens einmal erfolgreich versendet | „E-Mail versendet" + Datum/Uhrzeit der **letzten** erfolgreichen Mail |
+| Letzter Versuch fehlgeschlagen (kein erfolgreicher Versand danach) | „Versand fehlgeschlagen" + Fehlertext + Retry-Button |
 
-## Fix
+Die volle Versand-Historie (jede einzelne Mail) bleibt im System erhalten und ist weiterhin über die zentrale Aktivitäts-/Versand-Liste auffindbar — sie wird nur **nicht mehr** auf den Beleg-Detailseiten ausgebreitet.
 
-In `backend/src/routes/email.ts`:
+## Umsetzung
 
-1. **`POST /email/versand`** — direkt nach `const result = await sendNow(row);` und vor `getById(row.id)`, falls `result.ok && belegArt && d.belegId`:
-   - `belegArt === "angebot"` → `sendeAngebot(d.belegId)`
-   - `belegArt === "rechnung"` → `sendeRechnung(d.belegId)`
-   - Zusätzlich `emitBelegVersendet(belegArt, d.belegId)` für die SSE-Aktivitäts-Wireup.
-   - Beide Repo-Funktionen sind idempotent (gating eingebaut), Mahn-Mails auf bereits-versendete Rechnungen ändern also nichts.
+Rein Frontend, keine Backend-/API-/Datenmodell-Änderung nötig.
 
-2. **`POST /email/versand/:id/retry`** — analog: nach erfolgreichem `sendNow` denselben Block ausführen, mit `belegArt`/`belegId` aus der `existing`-Zeile.
+### 1. `src/components/email/EmailVersandHistorie.tsx` umbauen → `EmailVersandStatus` (kompakt)
 
-3. Imports am Dateikopf ergänzen:
-   - `import { sendeAngebot } from "../belege/angebote-repo.js";`
-   - `import { sendeRechnung } from "../belege/rechnungen-repo.js";`
-   - `import { emitBelegVersendet } from "../belege/events.js";`
+Statt der `<ul>`-Auflistung:
 
-## Effekt
+- Daten weiterhin via `useEmailVersand({ belegId, belegTyp })` holen.
+- Aus der Liste ableiten:
+  - `letzterErfolg` = neueste Zeile mit `status === "gesendet"` (sortiert nach `versendetAm`/`erstelltAm`)
+  - `letzterVersuch` = chronologisch neueste Zeile insgesamt
+  - `hatOffenenFehler` = `letzterVersuch.status === "manuell"` UND (kein `letzterErfolg` ODER `letzterVersuch` neuer als `letzterErfolg`)
+  - `wirdGesendet` = `letzterVersuch.status === "sending"` oder `"pending"` (ohne neueren Erfolg)
 
-- Angebot / Rechnung springen sofort nach erfolgreichem Versand auf Status `versendet` mit korrektem `versendet_am`.
-- FlowBar, Listen-Status-Pills, Dashboard "nächste Schritte" und der Mahn-Lifecycle (Fälligkeitsprüfung) funktionieren wieder korrekt.
-- Keine Auto-Mail-Regel verletzt — Versand bleibt user-getriggert, nur die Status-Folge wird konsistent gemacht.
-- Keine Migration, keine Frontend-Änderung nötig — Repo + SSE-Event reichen, das Frontend invalidiert ohnehin auf `beleg:mutated`.
+- Render genau **eine** Zeile in der bestehenden Card-Hülle (`rounded-2xl border border-border bg-card p-5`), Header bleibt „E-Mail-Versand":
+  - **Leere Liste** → schlicht: „Noch nicht versendet" (muted-foreground), kein Icon-Schmuck.
+  - **Erfolg, kein neuer Fehler danach** → Success-Pill „E-Mail versendet" + sekundär klein „am {formatDateTime(versendetAm)}". Keine Empfänger, keine Anhänge-Zähler, kein Betreff.
+  - **Wird gerade gesendet** → Loader-Pill „Wird gesendet …".
+  - **Letzter Versuch fehlgeschlagen** → Destructive-Pill „Versand fehlgeschlagen" + Fehlertext (`fehlerText`, max 2 Zeilen, `line-clamp-2`) + kleiner sekundär-Button „Erneut senden" (ruft existierende `/email/versand/:id/retry`-Mutation auf — Hook prüfen: `useRetryVersand` o. ä. in `useApi`; falls nicht vorhanden, einfaches `api.post` inline).
 
-## Risiken
+- Komponente bleibt rückwärtskompatibel exportiert (`EmailVersandHistorie` als Alias / Re-Export), damit die Imports in `angebote.$id.tsx` und `rechnungen.$id.tsx` unverändert bleiben.
 
-- Keine. Beide `sende*`-Funktionen prüfen den aktuellen Status und sind no-ops, wenn der Beleg schon versendet/anderweitig fortgeschritten ist (z. B. Mahnungen auf `ueberfaellig`-Rechnungen).
+### 2. Keine Änderung an
+
+- `src/routes/angebote.$id.tsx` — Einbindung bleibt.
+- `src/routes/rechnungen.$id.tsx` — Einbindung bleibt.
+- Backend-Routen, `useApi`-Hooks für `useEmailVersand` (filtert bereits per `belegId`).
+- Aktivitäts-Stream / SSE — die volle Historie bleibt dort sichtbar.
+
+### 3. Verhalten gegenüber dem Beleg-Status
+
+Der jetzt erst saubere Beleg-Status (`status='versendet'`, gerade gefixt) wird hier **nicht** als alleinige Wahrheit verwendet — die Anzeige stützt sich weiter auf die `email_versand`-Zeilen, weil sie die einzige Quelle für „letzte Mail erfolgreich vs. mit Fehler" ist. Damit bleibt z. B. ein erneuter manueller Versand einer bereits-versendeten Rechnung sauber sichtbar (zuletzt erfolgreich → grüner Status).
+
+## Out of scope
+
+- Komplettes Verschwinden der Card, wenn nichts versendet wurde — der User will explizit „Noch nicht versendet" als Indikator sehen.
+- Zentrale Versand-Liste (`/aktivitaet` o. ä.) — bleibt unverändert mit voller Historie.
+- Mahn-Stufen-Anzeige im Beleg — bleibt wo sie heute ist.
