@@ -17,6 +17,7 @@ import { audit } from "../auth/audit.js";
 import { emit } from "../events/bus.js";
 import { createConnection } from "node:net";
 import { resetTransport } from "../email/transport.js";
+import { resetImapClient } from "../email/imap-archive.js";
 import { flachZuUi, uiPatchZuFlach } from "../mahnung/settings-adapter.js";
 import { MahnungSchema } from "../settings/schemas.js";
 
