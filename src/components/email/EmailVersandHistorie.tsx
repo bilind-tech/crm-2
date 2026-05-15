@@ -1,10 +1,16 @@
-// Liste aller versendeten E-Mails zu einem Beleg.
-// Kompakt — wird auf Angebot-/Rechnung-Detailseiten eingebettet.
+// Kompakter Versand-Status für Beleg-Detailseiten.
+// Zeigt nur EINE Zeile (letzter Stand), nicht jede Mail einzeln.
+// Volle Historie bleibt in der zentralen Aktivitäts-/Versand-Liste.
 
-import { CheckCircle2, XCircle, Clock, Loader2, Paperclip } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, Loader2, Mail } from "lucide-react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEmailVersand } from "@/hooks/useApi";
 import { formatDateTime } from "@/lib/format";
-import type { EmailVersandStatus } from "@/lib/api/types";
+import { api } from "@/lib/api/client";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import type { EmailVersand } from "@/lib/api/types";
 
 interface Props {
   belegId: string;
@@ -13,80 +19,115 @@ interface Props {
 
 export function EmailVersandHistorie({ belegId, belegTyp }: Props) {
   const { data: liste = [], isLoading } = useEmailVersand({ belegId, belegTyp });
+  const qc = useQueryClient();
+  const [retrying, setRetrying] = useState(false);
 
-  if (isLoading) {
-    return (
-      <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-        <p className="text-sm text-muted-foreground">Lade Versand-Historie …</p>
-      </div>
-    );
-  }
-
-  return (
+  const Card = ({ children }: { children: React.ReactNode }) => (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
       <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-        E-Mail-Versand ({liste.length})
+        E-Mail-Versand
       </p>
-      {liste.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Noch keine E-Mails versendet.</p>
-      ) : (
-        <ul className="divide-y divide-border">
-          {liste.map((v) => (
-            <li key={v.id} className="py-3 first:pt-0 last:pb-0">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{v.betreff}</p>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    An: {(v.empfaenger ?? []).join(", ") || "—"}
-                  </p>
-                  <div className="mt-1 flex items-center gap-3 text-[11px] text-muted-foreground">
-                    <span>{v.versendetAm ? formatDateTime(v.versendetAm) : "—"}</span>
-                    {(v.anhaenge?.length ?? 0) > 0 && (
-                      <span className="inline-flex items-center gap-1">
-                        <Paperclip className="h-3 w-3" />
-                        {v.anhaenge!.length}
-                      </span>
-                    )}
-                  </div>
-                  {v.fehlerText && (
-                    <p className="mt-1 text-xs text-destructive">{v.fehlerText}</p>
-                  )}
-                </div>
-                <StatusBadge status={v.status} />
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+      {children}
     </div>
   );
-}
 
-function StatusBadge({ status }: { status: EmailVersandStatus }) {
-  if (status === "gesendet") {
+  if (isLoading) {
+    return <Card><p className="text-sm text-muted-foreground">Lade …</p></Card>;
+  }
+
+  if (liste.length === 0) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
-        <CheckCircle2 className="h-3 w-3" /> Gesendet
-      </span>
+      <Card>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Mail className="h-4 w-4" />
+          Noch nicht versendet
+        </div>
+      </Card>
     );
   }
-  if (status === "manuell") {
+
+  // Liste kommt vom Backend sortiert DESC nach erstellt_am.
+  const letzterVersuch = liste[0];
+  const letzterErfolg = liste.find((v) => v.status === "gesendet");
+
+  // Wird gerade gesendet?
+  if (letzterVersuch.status === "sending" || letzterVersuch.status === "pending") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
-        <XCircle className="h-3 w-3" /> Fehler
-      </span>
+      <Card>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Wird gesendet …
+        </span>
+      </Card>
     );
   }
-  if (status === "sending") {
+
+  // Letzter Versuch fehlgeschlagen, kein neuerer Erfolg → Fehler-Zustand.
+  const erfolgIstNeuer =
+    letzterErfolg && letzterErfolg.id === letzterVersuch.id;
+
+  if (letzterVersuch.status === "manuell" && !erfolgIstNeuer) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-        <Loader2 className="h-3 w-3 animate-spin" /> Wird gesendet
-      </span>
+      <Card>
+        <div className="flex flex-col gap-2">
+          <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive">
+            <XCircle className="h-3.5 w-3.5" /> Versand fehlgeschlagen
+          </span>
+          {letzterVersuch.fehlerText && (
+            <p className="line-clamp-2 text-xs text-muted-foreground">
+              {letzterVersuch.fehlerText}
+            </p>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={retrying}
+            className="w-fit"
+            onClick={async () => {
+              setRetrying(true);
+              try {
+                await api.post<EmailVersand>(`/email/versand/${letzterVersuch.id}/retry`);
+                qc.invalidateQueries({ queryKey: ["email", "versand"] });
+                toast.success("Versand erneut gestartet");
+              } catch (e) {
+                toast.error((e as Error).message ?? "Versand fehlgeschlagen");
+              } finally {
+                setRetrying(false);
+              }
+            }}
+          >
+            {retrying ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+            Erneut senden
+          </Button>
+        </div>
+      </Card>
     );
   }
+
+  // Erfolg.
+  if (letzterErfolg) {
+    return (
+      <Card>
+        <div className="flex flex-col gap-1">
+          <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
+            <CheckCircle2 className="h-3.5 w-3.5" /> E-Mail versendet
+          </span>
+          {letzterErfolg.versendetAm && (
+            <p className="text-xs text-muted-foreground">
+              am {formatDateTime(letzterErfolg.versendetAm)}
+            </p>
+          )}
+        </div>
+      </Card>
+    );
+  }
+
+  // Fallback (sollte nicht eintreten).
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-      <Clock className="h-3 w-3" /> Wartend
-    </span>
+    <Card>
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+        <Clock className="h-3.5 w-3.5" /> Unbekannter Status
+      </span>
+    </Card>
   );
 }
