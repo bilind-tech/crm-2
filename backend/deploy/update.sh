@@ -13,6 +13,37 @@ APP_DIR="/opt/mycleancenter/current"
 BUILD_DIR="/tmp/mcc-build-$$"
 SERVICE="mycleancenter"
 
+cleanup() {
+  rm -rf "$BUILD_DIR"
+}
+trap cleanup EXIT
+
+cleanup_stale_build_dirs() {
+  for d in /tmp/mcc-build-*; do
+    [[ -d "$d" ]] || continue
+    pid="${d##*/mcc-build-}"
+    if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
+      continue
+    fi
+    rm -rf -- "$d"
+  done
+}
+
+require_tmp_space() {
+  local min_kb=2097152 # 2 GiB
+  local avail_kb
+  avail_kb="$(df -Pk /tmp | awk 'NR==2 {print $4}')"
+  if [[ -n "$avail_kb" && "$avail_kb" -lt "$min_kb" ]]; then
+    echo "FEHLER: Zu wenig freier Speicher in /tmp bzw. auf der Root-Partition."
+    echo "Frei: $((avail_kb / 1024)) MB, benötigt: mindestens $((min_kb / 1024)) MB."
+    echo "Tipp: sudo rm -rf /tmp/mcc-build-* && sudo npm cache clean --force && sudo apt clean"
+    exit 1
+  fi
+}
+
+cleanup_stale_build_dirs
+require_tmp_space
+
 echo "==> 1/6  Klone $REPO ($BRANCH) nach $BUILD_DIR"
 rm -rf "$BUILD_DIR"
 git clone --depth 1 --branch "$BRANCH" "$REPO" "$BUILD_DIR"

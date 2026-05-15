@@ -176,6 +176,11 @@ if [[ $SKIP_CRM -eq 0 ]]; then
   fi
   ok "Frontend dist-spa/ gebaut"
 
+  # Frontend-node_modules enthalten große Build-Tools (u. a. workerd) und können
+  # beim anschließenden Backend-Install zusätzlich esbuild-Binaries aus dem
+  # Parent-Verzeichnis auflösen. Direkt nach dem SPA-Build entfernen.
+  rm -rf "$CRM_SRC/node_modules"
+
   log "Backend bauen (TypeScript)"
   ( cd "$CRM_SRC/backend" && { npm ci --no-audit --no-fund || { echo "↪ npm ci failed, falling back to npm install"; npm install --no-audit --no-fund; }; } && npm run build )
   ok "Backend dist/ gebaut"
