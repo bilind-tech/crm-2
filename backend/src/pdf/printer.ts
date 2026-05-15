@@ -4,6 +4,8 @@
 // Hinweis: Im Frontend wird "Roboto" verwendet, im Backend "Helvetica".
 // Strukturelles Layout ist identisch — minimale Glyphen-Unterschiede sind akzeptabel.
 
+import { createRequire } from "node:module";
+
 // pdfmake hat keine sauberen TS-Typen für Server-Use — daher hier dezent any.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyPrinter = any;
@@ -21,9 +23,7 @@ let printerSingleton: AnyPrinter | null = null;
 
 export function getPrinter(): AnyPrinter {
   if (printerSingleton) return printerSingleton;
-  // Lazy import: pdfmake hat keine ESM-Exports, also dynamisches require über createRequire.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { createRequire } = require("node:module");
+  // pdfmake hat keine ESM-Exports — via createRequire CommonJS laden.
   const requireCjs = createRequire(import.meta.url);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const PdfPrinter: any = requireCjs("pdfmake/src/printer.js");

@@ -1,64 +1,65 @@
-# Plan: „Bad Gateway" beim E-Mail-Versand sichtbar machen & beheben
+# Plan: „require is not defined" beim PDF-Versand fixen
 
-## Was ist „Bad Gateway"?
+## Was ist kaputt
 
-Das ist **nicht** ein Lovable/Cloud-Fehler — es ist die HTTP-Statusnachricht **502** vom Pi-Backend. Der Backend-Code (`backend/src/routes/email.ts`, Zeile 223) macht das absichtlich:
+Beim Klick auf „E-Mail senden" antwortet der Pi-Backend mit 502 und der Fehlermeldung:
 
-```
-reply.status(result.ok ? 201 : 502);
-return { ...row, sendOk:false, sendError, sendErrorCode };
-```
+> PDF konnten nicht erstellt werden: require is not defined
 
-→ Wenn `sendNow()` aus `backend/src/email/worker.ts` fehlschlägt (SMTP-Fehler, PDF-Render-Fehler, Timeout …), antwortet das Backend mit **502 + Body**, der den **echten Grund** in `sendError` / `sendErrorCode` enthält.
+(jetzt sichtbar dank des vorherigen Fixes in `piClient.ts`).
 
-## Warum siehst du nur „Bad Gateway"?
+## Ursache
 
-`src/lib/api/piClient.ts` (Zeile 93-98) sucht im Fehler-Body nur nach `error` oder `message` — nicht nach `sendError`. Beides ist im Body nicht vorhanden, also fällt der Client auf `res.statusText` zurück → das ist genau der String **„Bad Gateway"**. Der echte Fehler (z. B. „SMTP-Server nicht erreichbar", „EAUTH", „PDF konnte nicht erstellt werden") liegt im Body, wird aber verworfen.
+Das Backend ist als ESM-Projekt konfiguriert (`backend/package.json` → `"type": "module"`, `tsconfig` → `"module": "ES2022"`).
 
-## Mögliche echte Ursachen (Reihenfolge nach Wahrscheinlichkeit)
+In `backend/src/pdf/printer.ts` (Zeile 26) steht aber:
 
-1. **SMTP-Fehler** (Strato): falsches Passwort (`EAUTH`), Host/Port falsch (`ECONNECTION`/`ETIMEDOUT`), TLS-Problem (`ESOCKET`), DNS (`EDNS`), Empfänger abgelehnt (`EENVELOPE`).
-2. **PDF-Render-Fehler**: `renderAngebotPdf` / `renderRechnungPdf` wirft → `errorCode: "PDF_RENDER_FAILED"`. Das wäre dann derselbe Render-Fehler wie zuletzt, nur backend-seitig.
-3. **Anhang zu groß** (>15 MB) → `ATTACHMENT_TOO_LARGE`.
-4. **Timeout** (30 s) — Strato hängt.
-5. **SMTP gar nicht konfiguriert** → eigentlich 412/400, aber gemeldet wenn Settings inkonsistent.
-
-## Fix-Plan in zwei Schritten
-
-### Schritt 1 — Sofort: Echten Fehler sichtbar machen (1 Datei)
-
-`src/lib/api/piClient.ts` so erweitern, dass für die `/email/versand`-Route der `sendError` aus dem Body bevorzugt wird:
-
-```text
-msg = data.sendError ?? data.error ?? data.message ?? res.statusText;
+```ts
+const { createRequire } = require("node:module");
+const requireCjs = createRequire(import.meta.url);
+const PdfPrinter = requireCjs("pdfmake/src/printer.js");
 ```
 
-Zusätzlich `errorCode` (oder `sendErrorCode`) im `PiApiError.body` lassen, damit der `EmailVersandDialog` ihn anzeigen kann. Toast wird dann z. B.:
-- „Versand fehlgeschlagen: Anmeldung am SMTP-Server fehlgeschlagen — Benutzername oder Passwort falsch."
-- „Versand fehlgeschlagen: PDF konnte nicht erstellt werden: …"
+In einem ESM-Modul existiert `require` schlicht nicht — daher der Laufzeit-Fehler **„require is not defined"**, sobald zum ersten Mal eine PDF gerendert werden soll (also genau beim Mail-Versand mit Anhang). In der Lovable-Preview tritt das nicht auf, weil dort gar nicht das echte Backend läuft, sondern nur der Frontend-Build.
 
-Optional: kleine Diagnose-Box im `EmailVersandDialog`, die `sendErrorCode` (z. B. `EAUTH`, `PDF_RENDER_FAILED`) plus Kurzbeschreibung anzeigt — analog zur PDF-Diagnose-Box.
+Die Idee, `createRequire` zu nutzen, ist richtig (pdfmake hat keine sauberen ESM-Exports). Der Import war nur falsch geschrieben.
 
-**Keine Backend-Änderungen.** Detail-Seiten und Listen werden nicht angefasst → kein Risiko, dass die Seite wieder kaputt geht wie davor.
+## Fix (genau eine Datei)
 
-### Schritt 2 — Nach deinem Output: Echte Ursache fixen
+`backend/src/pdf/printer.ts`:
 
-Sobald du mir den jetzt sichtbaren Fehlertext + Code schickst, weiß ich genau, wo:
-- `EAUTH` / `ECONNECTION` … → `Einstellungen → E-Mail-Server` (SMTP-Konfig auf dem Pi).
-- `PDF_RENDER_FAILED` → `backend/src/pdf/belegPdf.server.ts` bzw. `backend/src/pdf/render.ts`.
-- `ATTACHMENT_TOO_LARGE` → PDF-Optimierung in `backend/src/pdf/`.
-- `Timeout (smtp.sendMail, 30000ms)` → SMTP-Timeout/Strato-Limits.
-- Anderes → gezielt nach Code-Ort suchen.
+- Oben einen statischen ESM-Import hinzufügen:
+  ```ts
+  import { createRequire } from "node:module";
+  ```
+- In `getPrinter()` den falschen `require("node:module")`-Aufruf entfernen und direkt nutzen:
+  ```ts
+  const requireCjs = createRequire(import.meta.url);
+  const PdfPrinter: any = requireCjs("pdfmake/src/printer.js");
+  ```
 
-## Geplante Datei-Änderungen (nur Schritt 1)
-
-- `src/lib/api/piClient.ts` — `request()`-Funktion: `sendError` und `sendErrorCode` mit in die Fehlermeldung aufnehmen.
-- (Optional) `src/components/email/EmailVersandDialog.tsx` — kleine Diagnose-Zeile, die `errorCode` aus `body` rendert, falls vorhanden.
+Das ist die offiziell empfohlene ESM-kompatible Methode, CommonJS-Module wie `pdfmake/src/printer.js` zu laden. Verhalten der PDF-Erzeugung und der Singleton-Logik bleibt 1:1 identisch.
 
 ## Was NICHT angefasst wird
 
-- Keine Routen, kein `routeTree.gen.ts`, keine Detail-Seiten, kein PDF-Viewer, keine Backend-Routes. Damit ist ausgeschlossen, dass die Rechnungs-/Angebots-Detailseite wieder bricht.
+- Keine Änderung am Frontend (PDF-Viewer, Detailseiten, Email-Dialog) — die laufen wieder, das soll so bleiben.
+- Keine Änderung an `piClient.ts`, am Mail-Worker, an den Routen oder am Datenmodell.
+- Keine Änderung an `package.json`, `tsconfig.json` oder Build-Skripten.
+- Keine neuen Dependencies.
 
-## Nächster Schritt
+## Deployment auf dem Pi
 
-Plan freigeben → ich setze Schritt 1 um. Du klickst dann nochmal auf „E-Mail senden", schickst mir den jetzt klaren Fehlertext + Code, und ich weiß sofort, wo Schritt 2 hin muss.
+Da Code (nicht Daten) ersetzt wird, auf dem Pi nach dem Update:
+
+1. `npm run build` im `backend/`-Ordner (kompiliert das geänderte `printer.ts` nach `dist/`).
+2. Backend-Service neu starten (z. B. `systemctl restart mycleancenter-backend`).
+
+Daten in `/var/lib/mycleancenter/` werden nicht berührt — die Regel wird eingehalten.
+
+## Verifikation nach dem Fix
+
+1. Auf einer Rechnungs-/Angebots-Detailseite „E-Mail senden" klicken.
+2. Erwartet: Mail geht raus, kein 502, kein „require is not defined".
+3. PDF-Vorschau / Editor weiterhin funktionsfähig (sollten von der Änderung nicht betroffen sein).
+
+Wenn ein neuer Fehler erscheint (z. B. SMTP `EAUTH`), ist das ein **anderer** Fehler und wird separat angegangen — der jetzige Fix beseitigt nur das `require`-Problem.
