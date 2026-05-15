@@ -1,126 +1,41 @@
-# Option A — Versendete E-Mails landen im Strato „Gesendet"-Ordner (IMAP-Append)
+# Fix: `npm ci` schlägt fehl — `backend/package-lock.json` out of sync
 
-## Ziel & harte Regeln
+## Was passiert ist
 
-- Jede E-Mail, die unser System per SMTP versendet, erscheint danach **automatisch im Strato-Webmail unter „Gesendet"** (und damit auch in Outlook/Handy via IMAP).
-- **Niemals den Versand brechen.** SMTP ist die Wahrheit: Wenn die Mail rausgegangen ist, gilt sie als „erfolgreich versendet" — auch wenn das nachgelagerte IMAP-Append fehlschlägt. Der User sieht weiterhin den grünen Toast.
-- Reuse der **bereits eingestellten SMTP-Credentials** (Benutzer + Passwort). Kein zweiter Login-Dialog, keine doppelte Konfiguration.
-- Keine Berührung der Daten in `/var/lib/mycleancenter/`. Kein Schema-Bruch. Keine neuen Pflichtfelder. Keine UI-Pflichtklicks.
+Beim Hinzufügen von `imapflow` habe ich `bun add imapflow` benutzt — das hat **`backend/bun.lock`** aktualisiert, aber **`backend/package-lock.json`** unangetastet gelassen. Der Update-Flow auf dem Pi nutzt aber `npm ci` (strict — bricht ab, sobald lock und package.json nicht 1:1 zusammenpassen). Daher die Meldung „Missing: imapflow@1.3.3 from lock file".
 
-## Warum überhaupt IMAP-Append?
+Belegt: `grep imapflow backend/package-lock.json` → 0 Treffer. `package.json` und `bun.lock` haben es.
 
-SMTP ist nur Versand — Strato sieht das nie als „von dir gesendet". Der „Gesendet"-Ordner im Webmail/Outlook wird ausschließlich befüllt, wenn ein IMAP-Client die Mail dort selbst per `APPEND` ablegt. Genau das machen wir jetzt im Backend nach jedem erfolgreichen `transport.sendMail(...)`.
+## Fix — exakt eine Aktion
 
-Strato-Eckdaten (öffentlich dokumentiert, identische Credentials wie SMTP):
-- Host: `imap.strato.de`
-- Port: `993` (TLS, `secure: true`)
-- Benutzer/Passwort: dieselben wie SMTP
-- Sent-Ordner: meistens `Sent` oder `Gesendet` — wir erkennen ihn dynamisch über IMAP-`SPECIAL-USE \Sent`, mit Fallbacks.
+`backend/package-lock.json` neu generieren, sodass es alle aktuellen Abhängigkeiten (inkl. `imapflow` + Transitive: `@zone-eu/mailsplit`, `libmime`, `libqp`, `libbase64`, `encoding-japanese`, `socks`, `ip-address`, `smart-buffer`, `pino@10`, `pino-abstract-transport`, `process-warning`, `thread-stream`, `real-require`) enthält.
 
-## Architektur — minimal, isoliert, fehlertolerant
-
-```text
-sendNow(row)
-   │
-   ├─► transport.sendMail(...)          ← SMTP (unverändert, hartes „erfolgreich"-Kriterium)
-   │
-   └─► archiveToSentFolder(rawMime)     ← NEU, „fire-and-forget", non-blocking
-          │
-          ├─ IMAP-Connect (Pool, 1 Verbindung, Lazy-Init)
-          ├─ Sent-Ordner ermitteln (\Sent SPECIAL-USE → "Sent" → "Gesendet" → "INBOX.Sent")
-          ├─ APPEND mit Flag \Seen
-          └─ Bei Fehler: leise loggen + Status in versand-Zeile vermerken,
-             NIEMALS den Send-Result auf "fehler" kippen.
+Konkret:
+```bash
+cd backend
+rm -f package-lock.json
+npm install --package-lock-only --ignore-scripts
 ```
+- `--package-lock-only` → schreibt nur die Lockfile, baut kein `node_modules` neu (schneller, deterministischer).
+- `--ignore-scripts` → keine postinstall-Skripte aus den neuen Deps.
 
-Die IMAP-Schicht lebt in **einer einzigen neuen Datei**: `backend/src/email/imap-archive.ts`. Kein anderer Code darf direkt mit IMAP reden.
+Danach `git`-mäßig sichtbar nur **eine geänderte Datei**: `backend/package-lock.json`. Kein Code-Touch, keine Schemaänderung, kein Daten-Risiko.
 
-## Änderungen im Detail
+## Verifikation vor Auslieferung
 
-### 1) Neue Dependency
-- `imapflow` (modernes, gepflegtes Promise-IMAP für Node, läuft sauber auf Pi/ARM, keine native Builds).
-- Installation: `cd backend && bun add imapflow` (oder `npm install imapflow`).
-
-### 2) Neue Datei `backend/src/email/imap-archive.ts`
-Verantwortlich für **alles** rund um „Mail in Sent-Ordner ablegen":
-- Re-uses `loadSmtpRuntime()` aus `transport.ts` für Benutzername + Absender, und `readSmtpPassword()` (intern) für das Passwort. Damit ist garantiert: **dieselben Credentials wie SMTP, keine Doppel-Eingabe.**
-- IMAP-Host wird abgeleitet aus `smtp.host`:
-  - `smtp.strato.de` → `imap.strato.de`
-  - generischer Fallback: `smtp.X` → `imap.X`, sonst Wert aus optionalem Setting `imap.host`.
-- Singleton-Connection mit `imapflow`-Client, Lazy-Open, automatisches Reconnect bei `NoConnect`.
-- Funktion `appendToSent(rawMime: Buffer, opts?: { flags?: string[] })`:
-  1. Verbindung sicherstellen.
-  2. Sent-Ordner ermitteln (Cache nach erstem Erfolg):
-     - `client.list({ statusQuery: { messages: false } })` und nach `\Sent` filtern.
-     - Fallback-Reihenfolge: `Sent`, `Gesendet`, `INBOX.Sent`, `INBOX.Gesendet`.
-  3. `client.append(folder, rawMime, ['\\Seen'], new Date())`.
-  4. Timeout 15 s pro Operation.
-- Funktion `resetImapClient()` — wird vom `PUT /einstellungen/smtp`-Endpoint mit aufgerufen, damit nach Konfig-Änderung die alte IMAP-Session entsorgt wird (analog zu `resetTransport()`).
-- Funktion `verifyImap()` für späteren Test-Button (siehe optional).
-
-### 3) Anpassung `backend/src/email/worker.ts` (sendNow)
-Direkt nach erfolgreichem `transport.sendMail(...)`:
-
-```ts
-// Raw MIME mit nodemailer bauen, damit IMAP-Append IDENTISCH zur gesendeten Mail ist.
-const built = await transport.sendMail({ ...sameOptions, ...attachments });
-//   nodemailer liefert info.messageId; raw via "buildOnly"-Option erzeugen wir parallel:
-const rawMime = await new Promise<Buffer>((resolve, reject) => {
-  transport.sendMail({ ...sameOptions, attachments, _builderOnly: true } as any)... 
-});
-```
-
-Konkrete Umsetzung — sauber, ohne Hack:
-- `nodemailer` bietet `transport.sendMail(...)` und parallel **denselben Mail-Builder** über `mailer.use("compile", ...)` bzw. einfach `nodemailer.createTransport({ streamTransport: true, buffer: true }).sendMail(opts)` für die Raw-MIME-Erzeugung.
-- Wir bauen einen **lokalen Stream-Transport** einmal als Singleton (`mimeBuilder`) und rufen ihn parallel/unmittelbar nach dem echten Send auf. Output: `info.message` (Buffer) — exakt das MIME, das auch verschickt wurde (gleicher Header inkl. `Message-ID`, weil wir die `Message-ID` aus dem echten Send mitgeben: `messageId: realInfo.messageId`).
-- `archiveToSentFolder(rawMime)` wird **nicht awaited im kritischen Pfad**, sondern via `void appendToSent(...).catch(logQuietly)` aufgerufen → User-Antwort bleibt schnell.
-- Optional kleine Verbesserung: 1 Retry nach 2 s bei IMAP-Fehler, danach aufgeben.
-
-### 4) Erweiterung `email_versand`-Zeile (rein additiv, optional)
-Neue Migration `022_email_imap_archive.sql`:
-```sql
-ALTER TABLE email_versand ADD COLUMN imap_archived INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE email_versand ADD COLUMN imap_archive_fehler TEXT NULL;
-```
-Beim erfolgreichen Append → `imap_archived = 1` setzen. Bei Fehler → Klartext in `imap_archive_fehler` schreiben. **Beides hat null Einfluss auf den Sende-Status der Mail.** Reines Audit/Diagnose.
-
-### 5) Reset bei Konfig-Änderung
-In `backend/src/routes/einstellungen.ts` (PUT /einstellungen/smtp und PUT /einstellungen/smtp/passwort): nach `resetTransport()` zusätzlich `resetImapClient()` aufrufen. Damit ist garantiert, dass eine geänderte Strato-Zugangsdaten-Eingabe sofort auch für IMAP greift.
-
-### 6) Optional, aber empfohlen: Test-Button in Einstellungen
-- Backend: `POST /email/imap/verify` → ruft `verifyImap()` auf, gibt `{ ok, latencyMs, sentFolder }` zurück.
-- Frontend: in „Einstellungen → E-Mail" neben dem bestehenden „SMTP testen"-Button ein zweiter Button **„Sent-Ordner-Verbindung testen"**. Zeigt bei Erfolg z. B. `Verbunden mit imap.strato.de — Sent-Ordner: "Sent" (123 ms)`.
-- Rein optional — wenn dir das zu viel ist, lassen wir es weg, der Versand funktioniert auch ohne.
-
-## Sicherheits- & Stabilitätsgarantien
-
-- **Versand kann durch IMAP NIE fehlschlagen.** `archiveToSentFolder` ist hinter `void ...catch(...)` entkoppelt, plus Timeout. Im worst case landet die Mail einfach nicht im Strato-Sent — der User hat aber trotzdem versendet.
-- **Keine zusätzliche Klartext-Speicherung des Passworts.** Wir lesen das bereits verschlüsselte SMTP-Passwort über die existierende `decryptString`-Pipeline. Kein neuer Speicherort.
-- **Single-Connection-Pool** (`maxConnections: 1`) — Strato mag keine parallelen IMAP-Sessions; passt zur SMTP-Strategie.
-- **Idempotent**: Doppel-Append würde im worst case zwei identische Mails im Sent-Ordner erzeugen. Verhindern wir, indem wir das `imap_archived`-Flag prüfen, bevor wir bei einem Retry erneut anhängen.
-- **Manual-Only-Garantie bleibt unangetastet.** Kein Cron, kein Hook, kein automatischer Trigger ruft IMAP. `archiveToSentFolder` läuft nur im selben Aufruf-Stack wie der User-getriggerte SMTP-Versand.
+1. `grep -c "\"imapflow\":" backend/package-lock.json` → ≥ 1
+2. `cd backend && npm ci --ignore-scripts` lokal grün → exakt das, was auf dem Pi laufen wird.
+3. `bun run typecheck` weiterhin grün (sollte unberührt sein).
 
 ## Was NICHT angefasst wird
 
-- `EmailVersandDialog.tsx`, `EmailVersandHistorie.tsx`, `versand-repo.ts` Status-Werte, `routes/email.ts` Antwort-Schema (außer optional 2 neue Felder spiegeln) — alles bleibt wie es ist.
-- Kein Mahn-Cron, kein Auto-Versand, keine Datenmigration ausserhalb der einen ALTER TABLE.
-- Keine Änderung am PDF-Renderer, am Drive-Upload, am Backup, am Auth, an UI-Layout.
+- Kein TypeScript-Code, keine Migration, kein UI, keine Daten in `/var/lib/mycleancenter/`.
+- `bun.lock` bleibt wie es ist (zeigt schon korrekt auf imapflow@1.3.3 — Versionen werden zwischen npm und bun konsistent gehalten).
 
-## Deployment auf dem Pi
+## Auf dem Pi danach
 
-1. `cd backend && bun install` (zieht `imapflow` rein).
-2. `bun run build` (Migration `022_email_imap_archive.sql` wird mitkopiert).
-3. Standard-Update-Flow (Code in `/opt/mycleancenter/current/`, Daten in `/var/lib/mycleancenter/` unangetastet).
-4. Beim ersten Start: Migration läuft, Spalten werden ergänzt — keine manuelle Aktion nötig.
+Der nächste „MCC-Update"-Lauf zieht den neuen Code inkl. neuer `package-lock.json`, `npm ci` läuft sauber durch, Migration `024_email_imap_archive.sql` greift, IMAP-Append in den Strato-Sent-Ordner geht live. Kein zusätzlicher Eingriff am Pi nötig.
 
-## Verifikation (Akzeptanzkriterien)
+## Lehre für künftige Backend-Deps
 
-1. **Echter Send aus dem CRM** → Strato-Webmail → „Gesendet" → Mail ist mit korrektem Empfänger, Betreff, Body und PDF-Anhang sichtbar (innerhalb weniger Sekunden).
-2. **Outlook / iPhone Mail** → Sent-Ordner zeigt dieselbe Mail.
-3. **Künstlicher IMAP-Fehler** (z. B. falscher IMAP-Host für 60 s) → SMTP-Versand bleibt grün, UI sagt „E-Mail versendet". In `email_versand` steht `imap_archived = 0` und `imap_archive_fehler = "..."`. **Kein roter Toast.**
-4. **Konfig-Änderung** des SMTP-Passworts → nächste Mail landet weiterhin korrekt im Sent-Ordner (Reset hat gegriffen).
-5. **PDF-Anhang** ist im Sent-Ordner identisch zur tatsächlich versendeten Mail (selber Hash).
-
-## Was mache ich nicht ohne deine Freigabe
-
-Du hast den Plan. Sag „los" und ich setze genau das um — keine Scope-Erweiterung, keine zusätzlichen Buttons außer dem optionalen Test-Button, den du explizit freigeben kannst.
+Nach jedem `bun add ...` im `backend/`-Ordner muss `npm install --package-lock-only --ignore-scripts` direkt hinterher laufen, sonst kippt der Pi-Updater wieder. Ich werde das ab jetzt automatisch zusammen erledigen.
