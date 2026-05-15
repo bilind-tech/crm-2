@@ -44,7 +44,11 @@ export function LivePdfPreview(props: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [pdfData, setPdfData] = useState<Uint8Array | null>(null);
+  // Originaldaten als ArrayBuffer halten, NIE direkt an PDF.js geben.
+  // Pro Document-Load wird eine frische Kopie via slice(0) erzeugt,
+  // sonst: "ArrayBuffer at index 0 is already detached" beim Re-Render.
+  const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [hotspots, setHotspots] = useState<RuntimeHotspot[]>([]);
   const [numPages, setNumPages] = useState(0);
   const [rendering, setRendering] = useState(false);
@@ -85,7 +89,7 @@ export function LivePdfPreview(props: Props) {
 
   // Pending: erst tauschen, wenn neue PDF erfolgreich geladen ist (atomarer Swap → kein Flackern).
   const [pendingUrl, setPendingUrl] = useState<string | null>(null);
-  const [pendingData, setPendingData] = useState<Uint8Array | null>(null);
+  const [pendingBuffer, setPendingBuffer] = useState<ArrayBuffer | null>(null);
 
   // Debounced PDF-Build — alte URL bleibt bis neue geladen ist (kein Flicker).
   useEffect(() => {
@@ -104,10 +108,9 @@ export function LivePdfPreview(props: Props) {
         }
         const buf = await result.blob.arrayBuffer();
         if (cancelled) return;
-        const newData = new Uint8Array(buf);
         const newUrl = URL.createObjectURL(result.blob);
         setHotspots(result.hotspots);
-        setPendingData(newData);
+        setPendingBuffer(buf);
         setPendingUrl((prev) => {
           if (prev) URL.revokeObjectURL(prev);
           return newUrl;
@@ -143,10 +146,14 @@ export function LivePdfPreview(props: Props) {
   );
   const scale = renderWidth / A4.width;
 
-  const fileSource = useMemo(() => (pdfData ? { data: pdfData } : null), [pdfData]);
+  // Frische Kopie pro Render — sonst detacht PDF.js-Worker den Buffer.
+  const fileSource = useMemo(
+    () => (pdfBuffer ? { data: new Uint8Array(pdfBuffer.slice(0)) } : null),
+    [pdfBuffer, loadAttempt],
+  );
   const pendingFileSource = useMemo(
-    () => (pendingData ? { data: pendingData } : null),
-    [pendingData],
+    () => (pendingBuffer ? { data: new Uint8Array(pendingBuffer.slice(0)) } : null),
+    [pendingBuffer],
   );
 
   // Falls Tracker-Treffer leer (z.B. Rendering-Glitch), nutze Fallback (Seite 1).
@@ -174,21 +181,21 @@ export function LivePdfPreview(props: Props) {
         </div>
       )}
 
-      {!pdfData && !buildError && containerWidth > 0 && (
+      {!pdfBuffer && !buildError && containerWidth > 0 && (
         <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin" />
           <span>PDF wird erzeugt …</span>
         </div>
       )}
 
-      {buildError && !pdfData && (
+      {buildError && !pdfBuffer && (
         <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 px-6 text-center text-sm">
           <p className="font-medium text-destructive">PDF konnte nicht erzeugt werden</p>
           <p className="text-xs text-muted-foreground">{buildError}</p>
         </div>
       )}
 
-      {buildError && pdfData && (
+      {buildError && pdfBuffer && (
         <div className="sticky top-2 z-20 mx-auto mb-2 w-fit max-w-[90%] rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1 text-xs text-destructive">
           Vorschau veraltet — letzter Build fehlgeschlagen: {buildError}
         </div>
@@ -196,6 +203,7 @@ export function LivePdfPreview(props: Props) {
 
       {fileSource && containerWidth > 0 && !viewerError && (
         <Document
+          key={`buf#${pdfBuffer?.byteLength}#${loadAttempt}`}
           file={fileSource}
           onLoadSuccess={({ numPages }) => {
             setNumPages(numPages);
@@ -203,7 +211,16 @@ export function LivePdfPreview(props: Props) {
           }}
           onLoadError={(err) => {
             console.error("[LivePdfPreview] Document load error", err);
-            setViewerError(err?.message || String(err));
+            const msg = err?.message || String(err);
+            if (
+              loadAttempt < 1 &&
+              pdfBuffer &&
+              /detached|already detached|neutered/i.test(msg)
+            ) {
+              setLoadAttempt((n) => n + 1);
+              return;
+            }
+            setViewerError(msg);
           }}
           loading={null}
           error={<div className="text-sm text-destructive">PDF kann nicht angezeigt werden.</div>}
@@ -236,24 +253,26 @@ export function LivePdfPreview(props: Props) {
       )}
 
       {/* Hidden pre-loader: lädt die nächste PDF im Hintergrund und tauscht atomar. */}
-      {pendingFileSource && pendingData !== pdfData && (
+      {pendingFileSource && pendingBuffer !== pdfBuffer && (
         <div className="pointer-events-none absolute -z-10 h-0 w-0 overflow-hidden opacity-0">
           <Document
+            key={`pending#${pendingBuffer?.byteLength}`}
             file={pendingFileSource}
             onLoadSuccess={({ numPages }) => {
               setNumPages(numPages);
-              setPdfData(pendingData);
+              setPdfBuffer(pendingBuffer);
+              setLoadAttempt(0);
               setPdfUrl((prev) => {
                 if (prev) URL.revokeObjectURL(prev);
                 return pendingUrl;
               });
               setPendingUrl(null);
-              setPendingData(null);
+              setPendingBuffer(null);
             }}
             onLoadError={() => {
               if (pendingUrl) URL.revokeObjectURL(pendingUrl);
               setPendingUrl(null);
-              setPendingData(null);
+              setPendingBuffer(null);
             }}
             loading={null}
           >
@@ -262,7 +281,7 @@ export function LivePdfPreview(props: Props) {
         </div>
       )}
 
-      {viewerError && pdfData && (
+      {viewerError && pdfBuffer && (
         <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 px-6 text-center text-sm">
           <p className="font-medium text-destructive">PDF kann nicht angezeigt werden</p>
           <p className="text-xs text-muted-foreground">{viewerError}</p>
