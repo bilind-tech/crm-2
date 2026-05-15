@@ -1,53 +1,65 @@
 ## Problem
 
-Auf den Detailseiten von Angebot und Rechnung steht unten links der Block „E-Mail-Versand". Der listet aktuell **jeden einzelnen Versuch** als eigene Zeile auf — bei mehrfachem Senden / Mahnungen / Retries wird das schnell eine sehr lange, unübersichtliche Liste, die für den Alltag null Mehrwert hat.
+Beim Klick auf „Drucken" auf Angebot-, Rechnung- oder Protokoll-Detail erscheint im Druck-Dialog **nicht das echte PDF**, sondern ein nahezu leeres A4-Blatt mit kleinen Texten in den Ecken (das sind die Browser-Druck-Header: URL, Datum, Seitenzahl).
 
-Der User will dort nur **eine kompakte Status-Aussage**:
+## Ursache
 
-| Zustand | Anzeige |
-|---|---|
-| Noch nie versendet | „Noch nicht versendet" |
-| Mindestens einmal erfolgreich versendet | „E-Mail versendet" + Datum/Uhrzeit der **letzten** erfolgreichen Mail |
-| Letzter Versuch fehlgeschlagen (kein erfolgreicher Versand danach) | „Versand fehlgeschlagen" + Fehlertext + Retry-Button |
+`src/lib/pdf/printBlob.ts` legt für den nicht-iOS-Pfad ein Iframe an mit
+```css
+width: 0; height: 0;
+```
+und ruft danach `iframe.contentWindow.print()`. Chromium-basierte Browser **rendern den eingebetteten PDF-Viewer in einem 0×0-Iframe nicht** — `print()` druckt dann eine leere Page mit den Standard-Browser-Headern (das sind die kleinen Texte oben/unten rechts, die der User sieht). Mit echter Iframe-Größe rendert das PDF-Plugin normal und der Druck-Dialog enthält alle Seiten.
 
-Die volle Versand-Historie (jede einzelne Mail) bleibt im System erhalten und ist weiterhin über die zentrale Aktivitäts-/Versand-Liste auffindbar — sie wird nur **nicht mehr** auf den Beleg-Detailseiten ausgebreitet.
+Multi-Page funktioniert sobald der PDF-Viewer richtig lädt — das PDF selbst hat ja schon korrekte Seitenumbrüche aus `printer.ts`/`pdf-lib`. Es gibt nichts, was wir am Inhalt ändern müssen, nur an der iframe-Sichtbarkeit.
 
-## Umsetzung
+## Fix
 
-Rein Frontend, keine Backend-/API-/Datenmodell-Änderung nötig.
+Eine Datei: `src/lib/pdf/printBlob.ts`.
 
-### 1. `src/components/email/EmailVersandHistorie.tsx` umbauen → `EmailVersandStatus` (kompakt)
+### 1. Iframe sichtbar (für den PDF-Viewer) aber für den User unsichtbar machen
 
-Statt der `<ul>`-Auflistung:
+Statt `width: 0; height: 0` neue Styles:
+```ts
+iframe.style.position = "fixed";
+iframe.style.inset = "0";
+iframe.style.width = "100vw";
+iframe.style.height = "100vh";
+iframe.style.border = "0";
+iframe.style.opacity = "0";
+iframe.style.pointerEvents = "none";
+iframe.style.zIndex = "-1";
+```
+Damit lädt der eingebettete PDF-Viewer den vollständigen Inhalt, der User sieht aber weiterhin nichts vom Iframe. Druck-Dialog zeigt das echte PDF inklusive aller Seiten.
 
-- Daten weiterhin via `useEmailVersand({ belegId, belegTyp })` holen.
-- Aus der Liste ableiten:
-  - `letzterErfolg` = neueste Zeile mit `status === "gesendet"` (sortiert nach `versendetAm`/`erstelltAm`)
-  - `letzterVersuch` = chronologisch neueste Zeile insgesamt
-  - `hatOffenenFehler` = `letzterVersuch.status === "manuell"` UND (kein `letzterErfolg` ODER `letzterVersuch` neuer als `letzterErfolg`)
-  - `wirdGesendet` = `letzterVersuch.status === "sending"` oder `"pending"` (ohne neueren Erfolg)
+### 2. Etwas mehr Wartezeit vor `print()`
 
-- Render genau **eine** Zeile in der bestehenden Card-Hülle (`rounded-2xl border border-border bg-card p-5`), Header bleibt „E-Mail-Versand":
-  - **Leere Liste** → schlicht: „Noch nicht versendet" (muted-foreground), kein Icon-Schmuck.
-  - **Erfolg, kein neuer Fehler danach** → Success-Pill „E-Mail versendet" + sekundär klein „am {formatDateTime(versendetAm)}". Keine Empfänger, keine Anhänge-Zähler, kein Betreff.
-  - **Wird gerade gesendet** → Loader-Pill „Wird gesendet …".
-  - **Letzter Versuch fehlgeschlagen** → Destructive-Pill „Versand fehlgeschlagen" + Fehlertext (`fehlerText`, max 2 Zeilen, `line-clamp-2`) + kleiner sekundär-Button „Erneut senden" (ruft existierende `/email/versand/:id/retry`-Mutation auf — Hook prüfen: `useRetryVersand` o. ä. in `useApi`; falls nicht vorhanden, einfaches `api.post` inline).
+Die aktuellen 50 ms reichen für PDFs nicht immer (insbesondere mehrseitige). Auf 250–300 ms hochziehen — bleibt für den User unmerklich.
 
-- Komponente bleibt rückwärtskompatibel exportiert (`EmailVersandHistorie` als Alias / Re-Export), damit die Imports in `angebote.$id.tsx` und `rechnungen.$id.tsx` unverändert bleiben.
+### 3. `afterprint`-Cleanup nicht mehr global
 
-### 2. Keine Änderung an
+Aktuell hängt der Listener am `window` — feuert pro Druck **aller** Iframes auf der Seite (wenn der User schnell mehrmals druckt, wird zu früh aufgeräumt). Auf das Iframe-`contentWindow` umstellen:
+```ts
+cw.addEventListener("afterprint", cleanup);
+```
+Plus beibehaltener Sicherheits-Timeout-Cleanup nach 60 s.
 
-- `src/routes/angebote.$id.tsx` — Einbindung bleibt.
-- `src/routes/rechnungen.$id.tsx` — Einbindung bleibt.
-- Backend-Routen, `useApi`-Hooks für `useEmailVersand` (filtert bereits per `belegId`).
-- Aktivitäts-Stream / SSE — die volle Historie bleibt dort sichtbar.
+### 4. `printed`-Detektion robuster
 
-### 3. Verhalten gegenüber dem Beleg-Status
+Aktuell wird `printed = true` direkt nach dem `cw.print()`-Call gesetzt — bei Chromium blockiert `print()` synchron, also korrekt. In Firefox ist `print()` non-blocking; dort genügt der bestehende 6 s-Sicherheits-Fallback. Kein Eingriff nötig, nur Code-Kommentar präzisieren.
 
-Der jetzt erst saubere Beleg-Status (`status='versendet'`, gerade gefixt) wird hier **nicht** als alleinige Wahrheit verwendet — die Anzeige stützt sich weiter auf die `email_versand`-Zeilen, weil sie die einzige Quelle für „letzte Mail erfolgreich vs. mit Fehler" ist. Damit bleibt z. B. ein erneuter manueller Versand einer bereits-versendeten Rechnung sauber sichtbar (zuletzt erfolgreich → grüner Status).
+## Was nicht geändert wird
 
-## Out of scope
+- Backend-PDF-Generierung (`backend/src/pdf/printer.ts`, `belegPdf.server.ts`): das PDF selbst ist korrekt, multi-page funktioniert dort längst.
+- `PrintButton.tsx`: API bleibt identisch (`url` / `getBlob`).
+- iOS-Safari-Pfad (`openInNewTab`): bleibt — dort funktioniert iframe-print prinzipiell nicht.
+- Aufrufer (Angebot/Rechnung/Protokoll-Detail): keine Änderung.
 
-- Komplettes Verschwinden der Card, wenn nichts versendet wurde — der User will explizit „Noch nicht versendet" als Indikator sehen.
-- Zentrale Versand-Liste (`/aktivitaet` o. ä.) — bleibt unverändert mit voller Historie.
-- Mahn-Stufen-Anzeige im Beleg — bleibt wo sie heute ist.
+## Verifikation
+
+- Preview auf Angebot-Detail navigieren, „Drucken" klicken → echter PDF-Inhalt im Druck-Dialog mit allen Seiten.
+- Gleiches für Rechnung und Schlüsselübergabe-Protokoll (nutzt `getBlob`-Pfad).
+- Mehrseitiges Angebot mit ≥2 Seiten testen → alle Seiten im Druckdialog vorhanden.
+
+## Risiken
+
+Minimal. Iframe ist via `opacity:0` + `pointer-events:none` + `z-index:-1` für den User unsichtbar/unklickbar; layout-bedingte Nebenwirkungen (Scrollbar etc.) sind durch `position: fixed` ausgeschlossen.

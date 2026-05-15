@@ -54,11 +54,13 @@ export function printPdfBlobUrl(url: string): void {
 
   const iframe = document.createElement("iframe");
   iframe.style.position = "fixed";
-  iframe.style.right = "0";
-  iframe.style.bottom = "0";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
+  iframe.style.inset = "0";
+  iframe.style.width = "100vw";
+  iframe.style.height = "100vh";
   iframe.style.border = "0";
+  iframe.style.opacity = "0";
+  iframe.style.pointerEvents = "none";
+  iframe.style.zIndex = "-1";
   iframe.setAttribute("aria-hidden", "true");
   iframe.src = url;
 
@@ -69,7 +71,8 @@ export function printPdfBlobUrl(url: string): void {
     if (cleaned) return;
     cleaned = true;
     try {
-      window.removeEventListener("afterprint", cleanup);
+      const cw = iframe.contentWindow;
+      if (cw) cw.removeEventListener("afterprint", cleanup);
     } catch {
       /* noop */
     }
@@ -82,7 +85,11 @@ export function printPdfBlobUrl(url: string): void {
     try {
       const cw = iframe.contentWindow;
       if (!cw) throw new Error("iframe contentWindow nicht verfügbar");
-      // Etwas Zeit, damit der PDF-Plugin gerendert ist (Firefox, Edge):
+      // afterprint am iframe-eigenen Window — global feuert sonst pro Druck
+      // aller Iframes gleichzeitig.
+      try { cw.addEventListener("afterprint", cleanup); } catch { /* noop */ }
+      // Etwas Zeit, damit der PDF-Plugin den Inhalt vollständig rendert
+      // (Chromium braucht für mehrseitige PDFs deutlich länger als 50 ms).
       setTimeout(() => {
         try {
           cw.focus();
@@ -92,7 +99,7 @@ export function printPdfBlobUrl(url: string): void {
           openInNewTab(url);
           cleanup();
         }
-      }, 50);
+      }, 300);
     } catch {
       openInNewTab(url);
       cleanup();
@@ -106,9 +113,7 @@ export function printPdfBlobUrl(url: string): void {
 
   document.body.appendChild(iframe);
 
-  // Wenn print() den nativen Dialog auslöst, blockiert es synchron in Chromium
-  // → afterprint feuert verlässlich. In Firefox ggf. nicht → Sicherheits-Cleanup.
-  window.addEventListener("afterprint", cleanup);
+  // In Firefox blockiert print() nicht synchron → Sicherheits-Cleanup.
   setTimeout(() => {
     if (!printed) {
       // load hat nie gefeuert → harter Fallback
