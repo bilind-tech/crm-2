@@ -152,15 +152,27 @@ export function EmailVersandDialog({
   const [mahnConfirm, setMahnConfirm] = useState(false);
   const visuellRef = useRef<HTMLDivElement>(null);
 
+  // Ausgewählten Ansprechpartner für Platzhalter ({{ansprechpartner.*}},
+  // {{anrede.zeile}}) ermitteln. Reihenfolge wie bei der „An"-Vorbelegung:
+  // erst Beleg-Ansprechpartner, sonst primärer Ansprechpartner.
+  const ansprechpartnerFuerCtx = useMemo(() => {
+    if (ansprechpartnerId) {
+      const ap = ansprechpartnerListe.find((a) => a.id === ansprechpartnerId);
+      if (ap) return ap;
+    }
+    return ansprechpartnerListe.find((a) => a.primaer) ?? null;
+  }, [ansprechpartnerId, ansprechpartnerListe]);
+
   const ctx: PlaceholderContext = useMemo(
     () => ({
       kunde,
+      ansprechpartner: ansprechpartnerFuerCtx,
       angebot,
       rechnung,
       firma,
       mahnung: mahnStufe ? { stufe: mahnStufe, einstellungen: mahnEinstellungen ?? null } : null,
     }),
-    [kunde, angebot, rechnung, firma, mahnStufe, mahnEinstellungen],
+    [kunde, ansprechpartnerFuerCtx, angebot, rechnung, firma, mahnStufe, mahnEinstellungen],
   );
 
   // Vorbelegen beim Öffnen

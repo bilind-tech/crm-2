@@ -4,6 +4,7 @@
 
 import type {
   Angebot,
+  Ansprechpartner,
   Firmendaten,
   Kunde,
   MahnEinstellungen,
@@ -16,6 +17,7 @@ import { berechneNeueFrist, bestimmeMahnZustand, stufenLabel } from "@/lib/mahnu
 
 export interface PlaceholderContext {
   kunde?: Kunde | null;
+  ansprechpartner?: Ansprechpartner | null;
   angebot?: Angebot | null;
   rechnung?: Rechnung | null;
   firma?: Firmendaten | null;
@@ -48,13 +50,48 @@ function flatten(ctx: PlaceholderContext): Record<string, string> {
     out["kunde.name"] = name;
   }
 
+  // Ansprechpartner aus dem Beleg (falls vorhanden) — bevorzugt für Anrede.
+  const ap = ctx.ansprechpartner ?? null;
+  if (ap) {
+    const apAnrede = ap.anrede ? (ANREDE_LABELS[ap.anrede] ?? "") : "";
+    out["ansprechpartner.anrede"] = apAnrede;
+    out["ansprechpartner.vorname"] = ap.vorname ?? "";
+    out["ansprechpartner.nachname"] = ap.nachname ?? "";
+    out["ansprechpartner.name"] = `${ap.vorname ?? ""} ${ap.nachname ?? ""}`.trim();
+    out["ansprechpartner.position"] = ap.position ?? "";
+    out["ansprechpartner.email"] = ap.email ?? "";
+    out["ansprechpartner.telefon"] = ap.telefon ?? ap.mobil ?? "";
+  } else {
+    out["ansprechpartner.anrede"] = "";
+    out["ansprechpartner.vorname"] = "";
+    out["ansprechpartner.nachname"] = "";
+    out["ansprechpartner.name"] = "";
+    out["ansprechpartner.position"] = "";
+    out["ansprechpartner.email"] = "";
+    out["ansprechpartner.telefon"] = "";
+  }
+
+  // Smart-Anrede: persönliche Zeile, wenn Anrede + Nachname bekannt sind,
+  // sonst neutrale Geschäftsanrede. Erspart Vorlagen viele if/else-Konstrukte.
+  const apAnredeLabel = ap?.anrede ? ANREDE_LABELS[ap.anrede] ?? "" : "";
+  const apNachname = ap?.nachname ?? "";
+  const kAnredeLabel = ctx.kunde?.anrede ? ANREDE_LABELS[ctx.kunde.anrede] ?? "" : "";
+  const kNachname = ctx.kunde?.nachname ?? "";
+  let anredeZeile = "Sehr geehrte Damen und Herren,";
+  if (apAnredeLabel && apNachname) {
+    anredeZeile = `Sehr geehrte${apAnredeLabel === "Herr" ? "r" : ""} ${apAnredeLabel} ${apNachname},`;
+  } else if (kAnredeLabel && kNachname) {
+    anredeZeile = `Sehr geehrte${kAnredeLabel === "Herr" ? "r" : ""} ${kAnredeLabel} ${kNachname},`;
+  }
+  out["anrede.zeile"] = anredeZeile;
+
   if (ctx.angebot) {
     const a = ctx.angebot;
     const s = summenRechnung(a.positionen, a.rabattGesamt);
     out["angebot.nummer"] = a.nummer;
     out["angebot.titel"] = a.titel;
     out["angebot.datum"] = formatDate(a.erstelltAm);
-    out["angebot.gueltigBis"] = a.gueltigBis ? formatDate(a.gueltigBis) : "—";
+    out["angebot.gueltigBis"] = a.gueltigBis ? formatDate(a.gueltigBis) : "";
     out["angebot.summe"] = formatEUR(s.brutto);
     out["angebot.netto"] = formatEUR(s.netto);
   }
@@ -80,6 +117,15 @@ function flatten(ctx: PlaceholderContext): Record<string, string> {
     out["firma.telefon"] = f.telefon ?? "";
     out["firma.email"] = f.email ?? "";
     out["firma.iban"] = f.iban ?? "";
+    out["firma.bic"] = f.bic ?? "";
+    out["firma.bank"] = f.bankName ?? "";
+    out["firma.webseite"] = f.webseite ?? "";
+    out["firma.geschaeftsfuehrer"] = f.geschaeftsfuehrer ?? "";
+    const adressTeile = [
+      f.strasse,
+      [f.plz, f.ort].filter(Boolean).join(" "),
+    ].filter((s) => s && s.trim().length > 0);
+    out["firma.adresse"] = adressTeile.join(", ");
   }
 
   if (ctx.mahnung && ctx.rechnung && ctx.mahnung.einstellungen) {
@@ -128,6 +174,14 @@ export const ALLE_PLATZHALTER = [
   "kunde.anrede",
   "kunde.name",
   "kunde.email",
+  "ansprechpartner.anrede",
+  "ansprechpartner.vorname",
+  "ansprechpartner.nachname",
+  "ansprechpartner.name",
+  "ansprechpartner.position",
+  "ansprechpartner.email",
+  "ansprechpartner.telefon",
+  "anrede.zeile",
   "angebot.nummer",
   "angebot.summe",
   "angebot.gueltigBis",
@@ -139,6 +193,12 @@ export const ALLE_PLATZHALTER = [
   "firma.name",
   "firma.telefon",
   "firma.email",
+  "firma.adresse",
+  "firma.webseite",
+  "firma.iban",
+  "firma.bic",
+  "firma.bank",
+  "firma.geschaeftsfuehrer",
   "lauf.zeitraum",
   "lauf.monat",
   "lauf.von",
