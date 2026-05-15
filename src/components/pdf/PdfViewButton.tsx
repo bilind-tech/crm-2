@@ -70,6 +70,7 @@ function AngebotViewer({
       onOpenChange={onOpenChange}
       title={`Angebot ${beleg.nummer} — ${beleg.titel}`}
       pdfUrl={pdf.url}
+      pdfBlob={pdf.blob}
       status={pdf.status}
       errorMessage={pdf.error}
       fileName={`${beleg.nummer}.pdf`}
@@ -95,6 +96,7 @@ function RechnungViewer({
       onOpenChange={onOpenChange}
       title={`Rechnung ${beleg.nummer} — ${beleg.titel}`}
       pdfUrl={pdf.url}
+      pdfBlob={pdf.blob}
       status={pdf.status}
       errorMessage={pdf.error}
       fileName={`${beleg.nummer}.pdf`}

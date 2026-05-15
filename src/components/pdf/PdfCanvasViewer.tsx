@@ -19,6 +19,8 @@ configurePdfWorker();
 interface Props {
   /** Blob-URL (oder data:-URL) der anzuzeigenden PDF. */
   pdfUrl: string | null;
+  /** Bevorzugte Quelle für PDF.js: Blob direkt (umgeht instabile blob:-URLs). */
+  pdfBlob?: Blob | null;
   /** Datei­name für Download-Fallback. */
   fileName: string;
   /** Maximale Breite einer Seite in Pixeln. */
@@ -31,6 +33,7 @@ interface Props {
 
 export function PdfCanvasViewer({
   pdfUrl,
+  pdfBlob,
   fileName,
   maxWidth = 900,
   className,
@@ -41,6 +44,29 @@ export function PdfCanvasViewer({
   const [numPages, setNumPages] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [pdfData, setPdfData] = useState<Uint8Array | null>(null);
+
+  // Blob → Uint8Array konvertieren (stabilere Quelle für PDF.js als blob:-URL).
+  useEffect(() => {
+    let cancelled = false;
+    if (!pdfBlob) {
+      setPdfData(null);
+      return;
+    }
+    pdfBlob
+      .arrayBuffer()
+      .then((buf) => {
+        if (!cancelled) setPdfData(new Uint8Array(buf));
+      })
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error("[PdfCanvasViewer] blob→arrayBuffer failed", err);
+        if (!cancelled) setPdfData(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pdfBlob]);
 
   // Container-Breite messen, mit Fallback falls ResizeObserver nicht feuert.
   useEffect(() => {
@@ -67,7 +93,7 @@ export function PdfCanvasViewer({
     setLoadError(null);
     setNumPages(0);
     setAttempt(0);
-  }, [pdfUrl]);
+  }, [pdfUrl, pdfBlob]);
 
   const renderWidth = useMemo(
     () => Math.min(Math.max(containerWidth - 16, 280), maxWidth),
@@ -80,16 +106,25 @@ export function PdfCanvasViewer({
     return Array.from({ length: numPages }, (_, i) => i + 1);
   }, [numPages, firstPageOnly]);
 
+  // Memoisierte file-Quelle: bevorzugt Binärdaten, sonst URL.
+  const fileSource = useMemo(() => {
+    if (pdfData) return { data: pdfData };
+    return pdfUrl ?? null;
+  }, [pdfData, pdfUrl]);
+
+  const hasSource = !!pdfData || !!pdfUrl;
+  const sourceKey = pdfData ? `data#${pdfData.byteLength}` : (pdfUrl ?? "none");
+
   return (
     <div ref={containerRef} className={className ?? "h-full w-full overflow-y-auto bg-muted/30"}>
-      {!pdfUrl && (
+      {!hasSource && (
         <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
           <span>PDF wird erstellt …</span>
         </div>
       )}
 
-      {pdfUrl && loadError && (
+      {hasSource && loadError && (
         <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-3 px-6 text-center">
           <AlertCircle className="h-6 w-6 text-destructive" />
           <div className="text-sm font-medium text-destructive">
@@ -108,29 +143,33 @@ export function PdfCanvasViewer({
             >
               <RefreshCw className="h-4 w-4" /> Erneut versuchen
             </button>
-            <a
-              href={pdfUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent"
-            >
-              <ExternalLink className="h-4 w-4" /> In neuem Tab öffnen
-            </a>
-            <a
-              href={pdfUrl}
-              download={fileName}
-              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              <Download className="h-4 w-4" /> Herunterladen
-            </a>
+            {pdfUrl && (
+              <>
+                <a
+                  href={pdfUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent"
+                >
+                  <ExternalLink className="h-4 w-4" /> In neuem Tab öffnen
+                </a>
+                <a
+                  href={pdfUrl}
+                  download={fileName}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
+                >
+                  <Download className="h-4 w-4" /> Herunterladen
+                </a>
+              </>
+            )}
           </div>
         </div>
       )}
 
-      {pdfUrl && !loadError && containerWidth > 0 && (
+      {fileSource && !loadError && containerWidth > 0 && (
         <Document
-          key={`${pdfUrl}#${attempt}`}
-          file={pdfUrl}
+          key={`${sourceKey}#${attempt}`}
+          file={fileSource}
           onLoadSuccess={({ numPages }) => setNumPages(numPages)}
           onLoadError={(err) => {
             // eslint-disable-next-line no-console

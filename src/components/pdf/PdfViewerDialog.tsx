@@ -11,6 +11,7 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   title: string;
   pdfUrl: string | null;
+  pdfBlob?: Blob | null;
   status: "idle" | "loading" | "ready" | "error";
   errorMessage?: string | null;
   fileName: string;
@@ -24,6 +25,7 @@ export function PdfViewerDialog({
   onOpenChange,
   title,
   pdfUrl,
+  pdfBlob,
   status,
   errorMessage,
   fileName,
@@ -32,7 +34,8 @@ export function PdfViewerDialog({
 }: Props) {
   const navigate = useNavigate();
 
-  const isLoading = status === "loading" || (status === "ready" && !pdfUrl);
+  const hasSource = !!pdfBlob || !!pdfUrl;
+  const isLoading = status === "loading" || (status === "ready" && !hasSource);
   const isError = status === "error";
 
   return (
@@ -122,9 +125,10 @@ export function PdfViewerDialog({
             </div>
           )}
 
-          {!isLoading && !isError && pdfUrl && (
+          {!isLoading && !isError && hasSource && (
             <PdfCanvasViewer
               pdfUrl={pdfUrl}
+              pdfBlob={pdfBlob}
               fileName={fileName}
               className="h-full w-full overflow-y-auto bg-muted/30"
             />

@@ -44,6 +44,7 @@ export function LivePdfPreview(props: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfData, setPdfData] = useState<Uint8Array | null>(null);
   const [hotspots, setHotspots] = useState<RuntimeHotspot[]>([]);
   const [numPages, setNumPages] = useState(0);
   const [rendering, setRendering] = useState(false);
@@ -82,8 +83,9 @@ export function LivePdfPreview(props: Props) {
     return () => clearTimeout(t);
   }, [rendering]);
 
-  // Pending-URL: erst tauschen, wenn neue PDF erfolgreich geladen ist (atomarer Swap → kein Flackern).
+  // Pending: erst tauschen, wenn neue PDF erfolgreich geladen ist (atomarer Swap → kein Flackern).
   const [pendingUrl, setPendingUrl] = useState<string | null>(null);
+  const [pendingData, setPendingData] = useState<Uint8Array | null>(null);
 
   // Debounced PDF-Build — alte URL bleibt bis neue geladen ist (kein Flicker).
   useEffect(() => {
@@ -100,8 +102,12 @@ export function LivePdfPreview(props: Props) {
         if (!(result.blob instanceof Blob) || result.blob.size === 0) {
           throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
         }
+        const buf = await result.blob.arrayBuffer();
+        if (cancelled) return;
+        const newData = new Uint8Array(buf);
         const newUrl = URL.createObjectURL(result.blob);
         setHotspots(result.hotspots);
+        setPendingData(newData);
         setPendingUrl((prev) => {
           if (prev) URL.revokeObjectURL(prev);
           return newUrl;
@@ -137,6 +143,12 @@ export function LivePdfPreview(props: Props) {
   );
   const scale = renderWidth / A4.width;
 
+  const fileSource = useMemo(() => (pdfData ? { data: pdfData } : null), [pdfData]);
+  const pendingFileSource = useMemo(
+    () => (pendingData ? { data: pendingData } : null),
+    [pendingData],
+  );
+
   // Falls Tracker-Treffer leer (z.B. Rendering-Glitch), nutze Fallback (Seite 1).
   const effectiveHotspots: RuntimeHotspot[] = useMemo(() => {
     if (hotspots.length > 0) return hotspots;
@@ -162,29 +174,29 @@ export function LivePdfPreview(props: Props) {
         </div>
       )}
 
-      {!pdfUrl && !buildError && containerWidth > 0 && (
+      {!pdfData && !buildError && containerWidth > 0 && (
         <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin" />
           <span>PDF wird erzeugt …</span>
         </div>
       )}
 
-      {buildError && !pdfUrl && (
+      {buildError && !pdfData && (
         <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 px-6 text-center text-sm">
           <p className="font-medium text-destructive">PDF konnte nicht erzeugt werden</p>
           <p className="text-xs text-muted-foreground">{buildError}</p>
         </div>
       )}
 
-      {buildError && pdfUrl && (
+      {buildError && pdfData && (
         <div className="sticky top-2 z-20 mx-auto mb-2 w-fit max-w-[90%] rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1 text-xs text-destructive">
           Vorschau veraltet — letzter Build fehlgeschlagen: {buildError}
         </div>
       )}
 
-      {pdfUrl && containerWidth > 0 && !viewerError && (
+      {fileSource && containerWidth > 0 && !viewerError && (
         <Document
-          file={pdfUrl}
+          file={fileSource}
           onLoadSuccess={({ numPages }) => {
             setNumPages(numPages);
             setViewerError(null);
@@ -224,21 +236,24 @@ export function LivePdfPreview(props: Props) {
       )}
 
       {/* Hidden pre-loader: lädt die nächste PDF im Hintergrund und tauscht atomar. */}
-      {pendingUrl && pendingUrl !== pdfUrl && (
+      {pendingFileSource && pendingData !== pdfData && (
         <div className="pointer-events-none absolute -z-10 h-0 w-0 overflow-hidden opacity-0">
           <Document
-            file={pendingUrl}
+            file={pendingFileSource}
             onLoadSuccess={({ numPages }) => {
               setNumPages(numPages);
+              setPdfData(pendingData);
               setPdfUrl((prev) => {
                 if (prev) URL.revokeObjectURL(prev);
                 return pendingUrl;
               });
               setPendingUrl(null);
+              setPendingData(null);
             }}
             onLoadError={() => {
               if (pendingUrl) URL.revokeObjectURL(pendingUrl);
               setPendingUrl(null);
+              setPendingData(null);
             }}
             loading={null}
           >
@@ -247,13 +262,15 @@ export function LivePdfPreview(props: Props) {
         </div>
       )}
 
-      {viewerError && pdfUrl && (
+      {viewerError && pdfData && (
         <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 px-6 text-center text-sm">
           <p className="font-medium text-destructive">PDF kann nicht angezeigt werden</p>
           <p className="text-xs text-muted-foreground">{viewerError}</p>
-          <a href={pdfUrl} download className="mt-2 text-xs underline text-primary">
-            PDF trotzdem herunterladen
-          </a>
+          {pdfUrl && (
+            <a href={pdfUrl} download className="mt-2 text-xs underline text-primary">
+              PDF trotzdem herunterladen
+            </a>
+          )}
         </div>
       )}
     </div>

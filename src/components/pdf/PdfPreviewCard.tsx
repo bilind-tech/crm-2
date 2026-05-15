@@ -12,6 +12,8 @@ interface Props {
   viewButton: ReactNode;
   /** Wenn vorhanden, wird die PDF inline als kleine Vorschau (Seite 1) eingebettet. */
   pdfUrl?: string | null;
+  /** Bevorzugte Quelle für die Inline-Vorschau (umgeht blob:-URL-Probleme). */
+  pdfBlob?: Blob | null;
   /** Datei­name für Download-Fallback im Viewer. */
   fileName?: string;
 }
@@ -28,8 +30,10 @@ export function PdfPreviewCard({
   drive,
   viewButton,
   pdfUrl,
+  pdfBlob,
   fileName,
 }: Props) {
+  const hasPreview = !!pdfBlob || !!pdfUrl;
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
       <div className="flex items-start gap-4 p-5">
@@ -45,14 +49,14 @@ export function PdfPreviewCard({
         <div className="min-w-0 flex-1 space-y-1">
           <div className="font-semibold">{title}</div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            {status === "loading" && !pdfUrl && <span>PDF wird erstellt …</span>}
+            {status === "loading" && !hasPreview && <span>PDF wird erstellt …</span>}
             {status === "error" && (
               <span className="text-destructive">
                 {errorMessage || "PDF konnte nicht erstellt werden"}
               </span>
             )}
             {status === "ready" && <span>Vorschau bereit</span>}
-            {status === "loading" && pdfUrl && <span>Vorschau bereit</span>}
+            {status === "loading" && hasPreview && <span>Vorschau bereit</span>}
             <DriveStatusBadge drive={drive} />
           </div>
         </div>
@@ -60,9 +64,10 @@ export function PdfPreviewCard({
       </div>
 
       <div className="border-t border-border bg-muted/30">
-        {pdfUrl && status !== "error" ? (
+        {hasPreview && status !== "error" ? (
           <PdfCanvasViewer
-            pdfUrl={pdfUrl}
+            pdfUrl={pdfUrl ?? null}
+            pdfBlob={pdfBlob}
             fileName={fileName ?? `${title}.pdf`}
             className="block max-h-[70vh] w-full overflow-y-auto"
             firstPageOnly
