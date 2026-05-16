@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireAuth } from "../auth/middleware.js";
 import {
   loadDriveSettings, buildAuthUrl, exchangeCode, verifyState, disconnect, setStatusError,
+  getGoogleOAuthRedirectUri,
 } from "../drive/oauth.js";
 import { ensureRootFolder, createTextFile, resetDriveClient } from "../drive/folders.js";
 import { listUploads, retry, type DriveUploadStatus, type BelegArt } from "../drive/upload-repo.js";
@@ -11,7 +12,6 @@ import { tickDriveQueue } from "../drive/upload-worker.js";
 import { getSetting, setSetting } from "../settings/store.js";
 import { GoogleDriveSchema, SENSITIVE_KEYS, type GoogleDriveSettings } from "../settings/schemas.js";
 import { emit } from "../events/bus.js";
-import { config } from "../config.js";
 
 interface DriveResponse {
   // Form, die das Frontend (GoogleDriveEinstellungen) erwartet
@@ -53,12 +53,9 @@ const DEFAULT_FILES = {
 };
 
 function defaultRedirectUri(req?: { protocol?: string; hostname?: string }): string {
-  const fromCfg = process.env.GOOGLE_OAUTH_REDIRECT;
-  if (fromCfg) return fromCfg;
   // WICHTIG: redirect_uri ist IMMER localhost (siehe backend/src/drive/oauth.ts).
   // Google blockiert .local-Hosts und LAN-IPs bei http://.
-  void req;
-  return `http://localhost:${config.port}/einstellungen/google-drive/callback`;
+  return getGoogleOAuthRedirectUri(req);
 }
 
 function buildResponse(req?: { protocol?: string; hostname?: string }): DriveResponse {
