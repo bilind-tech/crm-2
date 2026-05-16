@@ -203,7 +203,13 @@ function MobileUploadInner() {
           setTimeout(() => starteUpload(id), 2000);
           return;
         }
-        updateEntry(id, { status: "fehler", versuche, fehler: msg });
+        updateEntry(id, {
+          status: "fehler",
+          versuche,
+          fehler: msg,
+          fehlerStatus: status,
+          fehlerSchritt: "upload",
+        });
       }
     },
     [token, updateEntry],
