@@ -1,58 +1,85 @@
-## Was wirklich passiert
+## Ziel
 
-Du greifst per SSH-Tunnel als `http://localhost:8787` auf den Pi zu. Der Pi liefert dort den **echten** Production-Build aus — also nicht der Lovable-Vorschau-Mock. Trotzdem aktiviert das Frontend bei dir den lokalen Vorschau-Mock, weil `isLocalPreviewFallbackAllowed()` in `src/lib/api/backendUrl.ts` schon dann `true` zurückgibt, wenn der Hostname „localhost" lautet — **ohne** zu prüfen, ob es ein PROD-Build ist.
+Google-Drive-Synchronisierung sauberer, vollständiger und benutzerfreundlicher machen:
+- Monats-Ordner mit Nummer **und** Name (z. B. `05_Mai`)
+- Beim erstmaligen Verbinden: alle bestehenden Angebote, Rechnungen und Dokumente automatisch nachsynchronisieren
+- Auf jedem Beleg/Dokument ein „Jetzt in Drive sichern"-Knopf
+- Statusanzeige nur grün („in Drive gespeichert"), wenn der Upload wirklich erfolgreich war — und Fehler in Klartext erklärt
 
-Daraus folgt diese Kettenreaktion:
+---
 
-1. Beim Seitenstart setzt `refreshMe()` in `src/lib/auth.tsx` (Zeile 59) den User stillschweigend auf `{ id: "preview-user" }` und Modus auf `logged-in` — **ohne** dass eine echte Login-Session am Pi existiert.
-2. `GET /einstellungen/google-drive` wird vom Mock beantwortet (`previewGoogleDrive`), also siehst du eine schöne, scheinbar funktionierende Drive-Seite.
-3. Sobald du auf **„Mit Google verbinden"** klickst, geht das `PATCH /einstellungen/google-drive` (zum Speichern von Client-ID/Secret) **nicht** durch den Mock — `localPreviewMutate` kennt diesen Pfad nicht und gibt `null` zurück. Der echte Request läuft, der Pi prüft die Session, findet keine — und antwortet `401 unauthenticated`.
+## 1. Monatsordner mit Name (`05_Mai`)
 
-Das ist exakt der rote Toast, den du siehst. Google war nie beteiligt. Deine Client-ID, das Secret und der Web-Application-Typ sind alle korrekt.
+**Backend** `backend/src/drive/naming.ts`
+- `applyPathTemplate`/`applyFileNameTemplate` um Platzhalter `{MMMM}` erweitern (deutscher Monatsname: Januar … Dezember) und `{MM-MMMM}` (z. B. `05_Mai`).
+- Default-Templates in `backend/src/routes/drive.ts` (`DEFAULT_FOLDERS`) ändern:
+  - `Rechnungen/{YYYY}/{MM}_{MMMM}` usw.
+- Für bereits gespeicherte Settings: Migration nicht nötig — wir normalisieren beim Laden (`buildResponse`): wenn der Wert dem alten Default `…/{MM}` entspricht, auf neuen Default heben.
 
-## Fix
+**Frontend** `src/components/einstellungen/GoogleDriveTab.tsx`
+- `DEFAULT_FOLDERS` und `pfadVorschau` analog erweitern.
+- `PFAD_PLATZHALTER` um `{MMMM}` ergänzen.
 
-Genau eine Datei wird geändert: `src/lib/api/backendUrl.ts`.
+**Folder-Cache** `backend/src/drive/folders.ts`
+- `folderCache` enthält alte Pfade als Keys. Bei Template-Wechsel wird der neue Pfad einfach neu angelegt. Wir fügen einen einmaligen „Soft-Reset" hinzu: wenn ein Cache-Eintrag auf einen Ordner zeigt, dessen Name nicht zum aktuell aufgelösten Segment passt, wird er übersprungen. Alte Ordner in Drive bleiben unangetastet (keine Datenverluste).
 
-In `isLocalPreviewFallbackAllowed()` ganz am Anfang ergänzen, dass Production-Builds **niemals** den Mock-Fallback verwenden — selbst wenn der Hostname zufällig `localhost` ist (Pi via Tunnel). Der Mock bleibt weiterhin aktiv für:
+## 2. Backfill bei Verbindung
 
-- die Lovable-Vorschau (`*.lovable.app`, `*.lovableproject.com`)
-- den Dev-Server (`bun run dev` lokal am Entwickler-Rechner)
+Neuer Service `backend/src/drive/backfill.ts`:
+- Funktion `backfillAll()` enqueued alle bisher nicht erfolgreich hochgeladenen:
+  - Angebote mit Status `angenommen|versendet`
+  - Rechnungen mit Status `versendet|bezahlt|teilbezahlt`
+  - Dokumente (`geloescht_am IS NULL`), die noch keinen `drive_status='uploaded'` haben
+- Idempotenz-Key identisch zur Auto-Enqueue-Logik → Duplikate landen nicht doppelt in der Queue.
 
-```ts
-export function isLocalPreviewFallbackAllowed(): boolean {
-  if (typeof window === "undefined") return false;
-  const host = window.location.hostname;
-  // Lovable-Preview/Published — immer Mock.
-  if (host.endsWith(".lovableproject.com") || host.endsWith(".lovable.app")) return true;
-  // PROD-Build (vom Pi ausgeliefert) NIE mocken — auch nicht via localhost-Tunnel.
-  if (import.meta.env.PROD) return false;
-  // Dev-Server am Entwickler-Rechner darf weiter mocken.
-  const fromEnv = (import.meta.env.VITE_API_BASE_URL ?? "").toString().trim();
-  if (fromEnv) return false;
-  return import.meta.env.DEV || host === "localhost" || host === "127.0.0.1";
-}
-```
+Wireup in `backend/src/routes/drive.ts`:
+- Nach erfolgreichem `exchangeCode` (im Callback) und nach `connect` (sobald `refreshTokenIsSet`) → `void backfillAll()` einmalig anstoßen.
+- Zusätzlich neuer Endpoint `POST /drive/backfill` (auth) für „Alles erneut prüfen"-Button in den Einstellungen.
 
-Mehr ist nicht nötig — `refreshMe()` und der piClient verzweigen automatisch in den richtigen Pfad, sobald die Funktion `false` zurückgibt:
+UI: in `GoogleDriveTab.tsx` → `SynchronisationSection` Button „Alles erneut prüfen" + Toast mit Anzahl enqueued.
 
-- `/auth/me` wird tatsächlich angefragt → 401 → LockScreen erscheint → du gibst dein Pi-Passwort ein → echte Session-Cookie steht.
-- Danach geht **„Mit Google verbinden"** wie geplant: PATCH speichert ID/Secret, POST `/connect` liefert die `authorizeUrl`, du landest bei Google, bestätigst, kommst zurück, und Drive zeigt „verbunden".
+## 3. „Jetzt in Drive sichern"-Knopf pro Beleg
 
-## Nach dem Deploy — was du tun musst
+Neuer Endpoint `backend/src/routes/drive.ts`:
+- `POST /drive/uploads/enqueue` mit Body `{ belegArt: "angebot"|"rechnung"|"dokument", belegId }` → ruft die gleichen Hilfsfunktionen wie der Backfill auf (eine Datei) und triggert sofort `tickDriveQueue(1)`.
 
-1. Neuen Pi-Build hochladen (Update-Mechanismus wie bisher).
-2. Tunnel öffnen: `ssh -L 8787:localhost:8787 pi@…`
-3. Browser: `http://localhost:8787` öffnen → **LockScreen erscheint** (anders als vorher).
-4. Pi-Passwort eingeben → Einstellungen → Google Drive → Verbinden klicken → Google-Login → fertig.
-5. In der Google Cloud Console im OAuth-Client unter **Authorized redirect URIs** muss exakt `http://localhost:8787/einstellungen/google-drive/callback` stehen (nichts anderes, keinen Trailing-Slash).
+Frontend-Hook `src/hooks/useApi.ts`:
+- `useEnqueueDriveUpload()` Mutation.
 
-## Zur Frage „nur Client-ID ohne Secret"
+Wo der Button hinkommt:
+- `src/routes/angebote.$id.tsx` und `rechnungen.$id.tsx` → in der bestehenden Drive-Status-Zeile/Card: Sekundär-Button „Jetzt in Drive sichern" wenn Status ≠ `erfolg`.
+- `src/components/dokumente/DokumentBearbeitenDialog.tsx` (oder Detail-Bereich) analog.
+- `DriveStatusBadge` / `DriveSyncBadge` bekommen optionalen `onResync`-Callback bzw. der Button wird daneben gerendert.
 
-Geht für deinen Anwendungsfall nicht. Das andere Programm hat den Browser-Token-Flow (Google Identity Services) genutzt — der liefert nur ein 1-Stunden-Access-Token und **kein** Refresh-Token. Der Pi muss aber jederzeit selbständig PDFs hochladen, auch wenn dein Browser zu ist. Dafür braucht der Server zwingend einen Refresh-Token, und Google gibt den nur raus, wenn der Code-Tausch **mit Client-Secret** läuft. Das Secret bleibt sicher: es liegt AES-GCM-verschlüsselt im SQLite-Setting auf dem Pi und wird nie ans Frontend zurückgegeben.
+## 4. Status-Anzeige & Fehlertexte
 
-## Scope
+`backend/src/drive/upload-worker.ts` + `upload-repo.ts`:
+- Beim `markFehler` → bekannten Google-Fehlertext (z. B. `invalid_grant`, `insufficientPermissions`, `storageQuotaExceeded`, `403: access_denied`) in benutzerfreundliche Codes mappen (`token-expired`, `drive-voll`, `kein-zugriff`).
+- Response enthält `fehlerCode` zusätzlich zu `fehlerText`.
 
-- Eine einzige Code-Änderung in `src/lib/api/backendUrl.ts`.
-- Kein Backend-Code, kein Daten-Verzeichnis, keine Migrationen, keine Mails.
-- Verhalten in Lovable-Preview bleibt 1:1 wie vorher.
+Frontend `DriveSyncBadge`/`DriveStatusBadge`:
+- Anzeige-Logik vereinheitlichen:
+  - `erfolg` → „In Drive gespeichert" (grün, Link öffnen)
+  - `pending`/`running` → „Wird gesichert…" (kein „gespeichert"-Label)
+  - `fehler`/`manuell` → konkrete Klartext-Hilfe je nach `fehlerCode`:
+    - `token-expired` → „Verbindung abgelaufen — in Einstellungen → Google Drive neu verbinden."
+    - `drive-voll` → „Google-Drive-Speicher voll — Platz schaffen und erneut versuchen."
+    - `kein-zugriff` → „Kein Schreibzugriff auf den Ordner — Konto-Berechtigung prüfen."
+    - sonst → Original-Fehlertext + „Erneut versuchen"-Button.
+
+`useLiveEvents`: existierende Invalidierungen reichen — kein Toast-Spam, Throttle bleibt.
+
+## 5. Tests / QA
+
+- Backend: `backend/test/drive-backfill.spec.ts` für Backfill-Idempotenz + Naming `{MMMM}`.
+- Manuell im Preview: Drive verbinden → bestehende Belege erscheinen in Queue → erfolgreiche und fehlerhafte States in den Einstellungen sichtbar → Detail-Seiten zeigen „Jetzt sichern"-Button.
+
+---
+
+## Technische Details
+
+- `{MMMM}` wird ausschließlich auf Deutsch geliefert (fix `["Januar","Februar",…]`), da das ganze System auf de-DE läuft.
+- Old → New Migration: nur Default-Template-Hub, keine DB-Migration nötig.
+- `backfillAll` läuft im Hintergrund (async, nicht blockierend), maximal ~500 Items pro Call, danach erneut anstoßbar.
+- Idempotenz-Key bleibt `{art}-{nummer|id}-{sha[0:16]}` — verhindert Doppel-Uploads.
+- `POST /drive/uploads/enqueue` und `POST /drive/backfill` sind Auth-geschützt (`requireAuth`), keine Mail-Trigger (gilt absolute Regel).

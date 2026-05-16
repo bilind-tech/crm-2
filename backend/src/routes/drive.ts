@@ -9,6 +9,7 @@ import {
 import { ensureRootFolder, createTextFile, resetDriveClient } from "../drive/folders.js";
 import { listUploads, retry, type DriveUploadStatus, type BelegArt } from "../drive/upload-repo.js";
 import { tickDriveQueue } from "../drive/upload-worker.js";
+import { backfillAll, backfillOne } from "../drive/backfill.js";
 import { getSetting, setSetting } from "../settings/store.js";
 import { GoogleDriveSchema, SENSITIVE_KEYS, type GoogleDriveSettings } from "../settings/schemas.js";
 import { emit } from "../events/bus.js";
@@ -40,17 +41,40 @@ interface DriveResponse {
 }
 
 const DEFAULT_FOLDERS = {
-  rechnungen: "Rechnungen/{YYYY}/{MM}",
-  angebote: "Angebote/{YYYY}/{MM}",
-  dokumente: "Dokumente/{YYYY}/{MM}",
-  protokollUebergabe: "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}",
-  protokollSchluessel: "Protokolle/Schlüsselübergabe/{YYYY}/{MM}",
+  rechnungen: "Rechnungen/{YYYY}/{MM}_{MMMM}",
+  angebote: "Angebote/{YYYY}/{MM}_{MMMM}",
+  dokumente: "Dokumente/{YYYY}/{MM}_{MMMM}",
+  protokollUebergabe: "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}_{MMMM}",
+  protokollSchluessel: "Protokolle/Schlüsselübergabe/{YYYY}/{MM}_{MMMM}",
 };
 const DEFAULT_FILES = {
   rechnung: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
   angebot: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
   protokoll: "{nummer} {kunde} {leistung} {DD}-{MM}-{YYYY}",
 };
+
+// Alte Default-Pfade (vor Einführung von {MMMM}) — werden beim Laden auf
+// die neuen Defaults gehoben, solange der User das Feld nicht selbst angepasst hat.
+const LEGACY_FOLDER_DEFAULTS: Record<keyof typeof DEFAULT_FOLDERS, string> = {
+  rechnungen: "Rechnungen/{YYYY}/{MM}",
+  angebote: "Angebote/{YYYY}/{MM}",
+  dokumente: "Dokumente/{YYYY}/{MM}",
+  protokollUebergabe: "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}",
+  protokollSchluessel: "Protokolle/Schlüsselübergabe/{YYYY}/{MM}",
+};
+function upgradeFolders(
+  schema: Partial<typeof DEFAULT_FOLDERS> | undefined,
+): typeof DEFAULT_FOLDERS {
+  const out = { ...DEFAULT_FOLDERS };
+  if (!schema) return out;
+  for (const k of Object.keys(DEFAULT_FOLDERS) as (keyof typeof DEFAULT_FOLDERS)[]) {
+    const cur = schema[k];
+    if (!cur) continue;
+    // Alten Default automatisch durch neuen ersetzen — User-Anpassungen bleiben.
+    out[k] = cur === LEGACY_FOLDER_DEFAULTS[k] ? DEFAULT_FOLDERS[k] : cur;
+  }
+  return out;
+}
 
 function defaultRedirectUri(req?: { protocol?: string; hostname?: string }): string {
   // WICHTIG: redirect_uri ist IMMER localhost (siehe backend/src/drive/oauth.ts).
@@ -66,7 +90,7 @@ function buildResponse(req?: { protocol?: string; hostname?: string }): DriveRes
     verbundenAm: undefined,
     rootOrdnerName: s.rootFolderName ?? "mycleancenter.cm",
     rootOrdnerId: s.rootOrdnerId,
-    unterordnerSchema: { ...DEFAULT_FOLDERS, ...(s.unterordnerSchema ?? {}) },
+    unterordnerSchema: upgradeFolders(s.unterordnerSchema),
     dateinameSchema: { ...DEFAULT_FILES, ...(s.dateinameSchema ?? {}) },
     autoUpload: s.autoUpload ?? true,
     letzteSynchronisation: s.letzteSynchronisation,
@@ -124,6 +148,10 @@ export async function driveRoutes(app: FastifyInstance): Promise<void> {
       // Geräteübergreifende Live-Aktualisierung: alle verbundenen Clients
       // invalidieren ihren Drive-Status sofort via SSE.
       emit("einstellung:geaendert", { key: "googleDrive", userId: null });
+      // Backfill: alle bestehenden Belege/Dokumente nachsynchronisieren.
+      void backfillAll()
+        .then(() => void tickDriveQueue(10).catch(() => undefined))
+        .catch((err) => console.error("drive backfill (after connect)", err));
       return reply.redirect(redirect("ok"));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -270,6 +298,42 @@ export async function driveRoutes(app: FastifyInstance): Promise<void> {
       if (!retry(req.params.id)) { reply.status(404); return { error: "not-found" }; }
       void tickDriveQueue(1).catch(() => undefined);
       return { ok: true };
+    });
+
+    // „Jetzt in Drive sichern" pro Beleg/Dokument — enqueued frischen Upload-Eintrag.
+    scoped.post("/drive/uploads/enqueue", async (req, reply) => {
+      const body = z.object({
+        belegArt: z.enum(["angebot", "rechnung", "dokument"]),
+        belegId: z.string().min(1).max(64),
+      }).safeParse(req.body ?? {});
+      if (!body.success) { reply.status(422); return { error: "validation", issues: body.error.issues }; }
+      const s = loadDriveSettings();
+      if (!s.refreshTokenIsSet) {
+        reply.status(409);
+        return {
+          error: "drive-not-connected",
+          message: "Google Drive ist nicht verbunden — bitte zuerst in Einstellungen verbinden.",
+        };
+      }
+      const ok = await backfillOne(body.data.belegArt, body.data.belegId);
+      if (!ok) { reply.status(404); return { error: "not-found" }; }
+      void tickDriveQueue(1).catch(() => undefined);
+      return { ok: true };
+    });
+
+    // „Alles erneut prüfen" — enqueued alles, was noch nicht in Drive ist.
+    scoped.post("/drive/backfill", async (_req, reply) => {
+      const s = loadDriveSettings();
+      if (!s.refreshTokenIsSet) {
+        reply.status(409);
+        return {
+          error: "drive-not-connected",
+          message: "Google Drive ist nicht verbunden — bitte zuerst in Einstellungen verbinden.",
+        };
+      }
+      const result = await backfillAll();
+      void tickDriveQueue(10).catch(() => undefined);
+      return { ok: true, ...result };
     });
   });
 }

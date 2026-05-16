@@ -18,6 +18,33 @@ import { getObjekt } from "../kunden/repo.js";
 let started = false;
 let isRunning = false;
 
+/**
+ * Mappt typische Google-Drive-/OAuth-Fehler auf benutzerfreundliche Klartext-Hilfen.
+ * Die Originalnachricht bleibt im fehlerText erhalten — wir prefixen einen lesbaren Satz.
+ */
+export function freundlicherFehler(raw: string): string {
+  const m = raw.toLowerCase();
+  if (m.includes("invalid_grant") || m.includes("token has been expired") || m.includes("token expired") || m.includes("refresh_token") && m.includes("not")) {
+    return "Google-Verbindung abgelaufen. Bitte in Einstellungen → Google Drive neu verbinden.";
+  }
+  if (m.includes("storagequotaexceeded") || m.includes("storage quota") || m.includes("quota has been exceeded")) {
+    return "Google-Drive-Speicher ist voll. Bitte Platz schaffen und erneut versuchen.";
+  }
+  if (m.includes("insufficientpermissions") || m.includes("insufficient permission") || m.includes("forbidden") || (m.includes("403") && m.includes("access"))) {
+    return "Kein Schreibzugriff auf den Drive-Ordner. Bitte Konto-Berechtigung prüfen.";
+  }
+  if (m.includes("invalid_request") || m.includes("redirect_uri")) {
+    return "OAuth-Konfiguration ist ungültig. Bitte in Einstellungen → Google Drive erneut verbinden.";
+  }
+  if (m.includes("client-id") || m.includes("client_id") || m.includes("client secret")) {
+    return "Client-ID oder Secret fehlen. Bitte im Verbinden-Dialog hinterlegen.";
+  }
+  if (m.includes("network") || m.includes("etimedout") || m.includes("enotfound") || m.includes("econnreset")) {
+    return "Netzwerkproblem beim Hochladen — wird automatisch erneut versucht.";
+  }
+  return raw;
+}
+
 interface DriveUploaderHooks {
   uploadFn?: typeof uploadFile;
   ensureFolder?: typeof ensureFolderPath;
@@ -57,8 +84,8 @@ async function processBeleg(row: DriveUpload): Promise<void> {
   };
 
   const pathTemplate = row.belegArt === "angebot"
-    ? settings.unterordnerSchema?.angebote ?? "Angebote/{YYYY}/{MM}"
-    : settings.unterordnerSchema?.rechnungen ?? "Rechnungen/{YYYY}/{MM}";
+    ? settings.unterordnerSchema?.angebote ?? "Angebote/{YYYY}/{MM}_{MMMM}"
+    : settings.unterordnerSchema?.rechnungen ?? "Rechnungen/{YYYY}/{MM}_{MMMM}";
   const fileTemplate = row.belegArt === "angebot"
     ? settings.dateinameSchema?.angebot ?? "{nummer} {kunde} {leistung} {MM}-{YYYY}"
     : settings.dateinameSchema?.rechnung ?? "{nummer} {kunde} {leistung} {MM}-{YYYY}";
@@ -104,12 +131,12 @@ async function processDokument(row: DriveUpload): Promise<void> {
     leistung: protokoll ? objektName : (dok.titel ?? dok.dateiname ?? ""),
   };
 
-  let folderTemplate = settings.unterordnerSchema?.dokumente ?? "Dokumente/{YYYY}/{MM}";
+  let folderTemplate = settings.unterordnerSchema?.dokumente ?? "Dokumente/{YYYY}/{MM}_{MMMM}";
   let fileName = row.dateiName || dok.dateiname || "Dokument";
   if (protokoll) {
     folderTemplate = protokoll.kind === "schluessel"
-      ? (settings.unterordnerSchema?.protokollSchluessel ?? "Protokolle/Schlüsselübergabe/{YYYY}/{MM}")
-      : (settings.unterordnerSchema?.protokollUebergabe ?? "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}");
+      ? (settings.unterordnerSchema?.protokollSchluessel ?? "Protokolle/Schlüsselübergabe/{YYYY}/{MM}_{MMMM}")
+      : (settings.unterordnerSchema?.protokollUebergabe ?? "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}_{MMMM}");
     const fileTemplate = settings.dateinameSchema?.protokoll ?? "{nummer} {kunde} {leistung} {DD}-{MM}-{YYYY}";
     const baseName = applyFileNameTemplate(fileTemplate, ctx) || fileName.replace(/\.pdf$/i, "");
     fileName = `${baseName}.pdf`;
@@ -145,12 +172,13 @@ export async function tickDriveQueue(limit = 2): Promise<{ processed: number; ok
       try { await processOne(row); ok++; }
       catch (e) {
         failed++;
-        const msg = e instanceof Error ? e.message : String(e);
+        const raw = e instanceof Error ? e.message : String(e);
+        const msg = freundlicherFehler(raw);
         markFehler(row.id, msg);
         if (row.belegArt === "dokument") {
           setDriveStatus(row.belegId, { status: "fehler", fehlerText: msg });
         }
-        if (msg.includes("invalid_grant") || msg.includes("invalid_request")) setStatusError(msg);
+        if (raw.includes("invalid_grant") || raw.includes("invalid_request")) setStatusError(msg);
       }
     }
     return { processed: due.length, ok, failed };

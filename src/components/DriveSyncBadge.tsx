@@ -1,9 +1,9 @@
 // Kleine, dezente Status-Pille pro Beleg: zeigt an, ob das Beleg-PDF bereits in
 // Google Drive synchronisiert ist. Funktioniert auch ohne Drive-Verbindung —
 // dann steht dort „Nur lokal · Drive nicht verbunden" + Verbinden-Link.
-import { Cloud, CloudOff, CheckCircle2, AlertTriangle, Loader2, ExternalLink } from "lucide-react";
+import { Cloud, CloudOff, CheckCircle2, AlertTriangle, Loader2, ExternalLink, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
-import { useDriveUploads, useGoogleDrive, useRetryDriveUpload } from "@/hooks/useApi";
+import { useDriveUploads, useEnqueueDriveUpload, useGoogleDrive, useRetryDriveUpload } from "@/hooks/useApi";
 import { Button } from "@/components/ui/button";
 import { errorToMessage } from "@/lib/api/piClient";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,7 @@ export function DriveSyncBadge({ belegArt, belegId, compact = false, className }
   const { data: drive } = useGoogleDrive();
   const { data: uploads } = useDriveUploads({ belegArt, belegId, limit: 5 });
   const retry = useRetryDriveUpload();
+  const enqueueNow = useEnqueueDriveUpload();
 
   // Neuester Upload-Versuch zuerst
   const latest = uploads?.[0];
@@ -32,6 +33,15 @@ export function DriveSyncBadge({ belegArt, belegId, compact = false, className }
       toast.success("Synchronisation gestartet");
     } catch (err) {
       toast.error(errorToMessage(err, "Synchronisation fehlgeschlagen"));
+    }
+  };
+
+  const handleEnqueueNow = async () => {
+    try {
+      await enqueueNow.mutateAsync({ belegArt, belegId });
+      toast.success("Wird jetzt zu Drive hochgeladen…");
+    } catch (err) {
+      toast.error(errorToMessage(err, "Hochladen fehlgeschlagen"));
     }
   };
 
@@ -59,12 +69,24 @@ export function DriveSyncBadge({ belegArt, belegId, compact = false, className }
     );
   }
 
-  // 2) Verbunden, aber noch kein Upload-Eintrag → Beleg ist noch nicht in
-  // Sync-würdigem Status (z. B. Entwurf). Dezenter Hinweis.
+  // 2) Verbunden, aber noch kein Upload-Eintrag → User kann jetzt manuell anstoßen.
   if (!latest) {
     return (
       <Pill tone="muted" icon={<Cloud className="h-3.5 w-3.5" />} className={className}>
-        Wird bei Versand synchronisiert
+        <span>Noch nicht in Drive</span>
+        {!compact && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-6 px-2 text-xs"
+            onClick={handleEnqueueNow}
+            disabled={enqueueNow.isPending}
+          >
+            <UploadCloud className="mr-1 h-3 w-3" />
+            Jetzt sichern
+          </Button>
+        )}
       </Pill>
     );
   }
@@ -99,7 +121,7 @@ export function DriveSyncBadge({ belegArt, belegId, compact = false, className }
       return (
         <Pill tone="warning" icon={<AlertTriangle className="h-3.5 w-3.5" />} className={className}>
           <span title={latest.fehlerText ?? undefined}>
-            Sync fehlgeschlagen
+            {latest.fehlerText ?? "Sync fehlgeschlagen"}
           </span>
           {!compact && (
             <Button

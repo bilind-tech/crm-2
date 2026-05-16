@@ -25,11 +25,22 @@ function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
 
+const MONATSNAMEN_DE = [
+  "Januar", "Februar", "März", "April", "Mai", "Juni",
+  "Juli", "August", "September", "Oktober", "November", "Dezember",
+] as const;
+
+function monatsname(monat: number): string {
+  return MONATSNAMEN_DE[Math.max(1, Math.min(12, monat)) - 1] ?? "";
+}
+
 export function applyPathTemplate(template: string, ctx: NamingContext): string {
   const yyyy = String(ctx.jahr);
   const mm = pad2(ctx.monat);
+  const mmmm = monatsname(ctx.monat);
   return template
     .replace(/\{YYYY\}/g, yyyy)
+    .replace(/\{MMMM\}/g, mmmm)
     .replace(/\{MM\}/g, mm)
     .split("/")
     .map((seg) => sanitizeSegment(seg))
@@ -40,6 +51,7 @@ export function applyPathTemplate(template: string, ctx: NamingContext): string 
 export function applyFileNameTemplate(template: string, ctx: NamingContext): string {
   const yyyy = String(ctx.jahr);
   const mm = pad2(ctx.monat);
+  const mmmm = monatsname(ctx.monat);
   const dd = pad2(ctx.tag ?? 1);
   const datum = `${yyyy}-${mm}-${dd}`;
   const out = template
@@ -48,6 +60,7 @@ export function applyFileNameTemplate(template: string, ctx: NamingContext): str
     .replace(/\{leistung\}/g, ctx.leistung ?? "")
     .replace(/\{datum\}/g, datum)
     .replace(/\{DD\}/g, dd)
+    .replace(/\{MMMM\}/g, mmmm)
     .replace(/\{MM\}/g, mm)
     .replace(/\{YYYY\}/g, yyyy);
   return sanitizeSegment(out);

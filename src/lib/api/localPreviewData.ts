@@ -296,6 +296,13 @@ export function localPreviewMutate<T>(method: string, path: string, body?: unkno
   const store = readStore();
   const timestamp = new Date().toISOString();
 
+  if (method === "POST" && cleanPath === "/drive/backfill") {
+    return { ok: true, angebote: 0, rechnungen: 0, dokumente: 0, skipped: 0 } as T;
+  }
+  if (method === "POST" && cleanPath === "/drive/uploads/enqueue") {
+    return { ok: true } as T;
+  }
+
   if (method === "POST" && cleanPath === "/angebote") {
     const input = (body ?? {}) as Partial<Angebot>;
     const angebot: Angebot = {

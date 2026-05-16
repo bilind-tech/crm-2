@@ -34,6 +34,7 @@ import {
   useTestGoogleDrive,
   useDriveUploads,
   useRetryDriveUpload,
+  useDriveBackfill,
   type DriveUpload,
 } from "@/hooks/useApi";
 import type { GoogleDriveEinstellungen } from "@/lib/api/types";
@@ -43,13 +44,14 @@ import { useConfirm } from "@/hooks/useConfirm";
 import { getBackendUrl } from "@/lib/api/backendUrl";
 import { cn } from "@/lib/utils";
 
-const PFAD_PLATZHALTER = ["{YYYY}", "{MM}"];
+const PFAD_PLATZHALTER = ["{YYYY}", "{MM}", "{MMMM}"];
 const DATEI_PLATZHALTER = [
   "{nummer}",
   "{kunde}",
   "{leistung}",
   "{DD}",
   "{MM}",
+  "{MMMM}",
   "{YYYY}",
   "{datum}",
 ];
@@ -58,11 +60,11 @@ const DATEI_PLATZHALTER = [
 // gemergt, damit ein älteres Backend oder ein leerer Settings-State die
 // Seite nicht crashen lässt.
 const DEFAULT_FOLDERS = {
-  rechnungen: "Rechnungen/{YYYY}/{MM}",
-  angebote: "Angebote/{YYYY}/{MM}",
-  dokumente: "Dokumente/{YYYY}/{MM}",
-  protokollUebergabe: "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}",
-  protokollSchluessel: "Protokolle/Schlüsselübergabe/{YYYY}/{MM}",
+  rechnungen: "Rechnungen/{YYYY}/{MM}_{MMMM}",
+  angebote: "Angebote/{YYYY}/{MM}_{MMMM}",
+  dokumente: "Dokumente/{YYYY}/{MM}_{MMMM}",
+  protokollUebergabe: "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}_{MMMM}",
+  protokollSchluessel: "Protokolle/Schlüsselübergabe/{YYYY}/{MM}_{MMMM}",
 } as const;
 const DEFAULT_FILES = {
   rechnung: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
@@ -80,10 +82,16 @@ function normalize(data: GoogleDriveEinstellungen): GoogleDriveEinstellungen {
   };
 }
 
+const MONATE_DE = [
+  "Januar","Februar","März","April","Mai","Juni",
+  "Juli","August","September","Oktober","November","Dezember",
+];
+
 function pfadVorschau(template: string): string {
   const now = new Date();
   return template
     .replace(/\{YYYY\}/g, String(now.getFullYear()))
+    .replace(/\{MMMM\}/g, MONATE_DE[now.getMonth()])
     .replace(/\{MM\}/g, String(now.getMonth() + 1).padStart(2, "0"));
 }
 
@@ -103,6 +111,7 @@ function dateiVorschau(template: string, beleg: "rechnung" | "angebot" | "protok
       .replace(/\{kunde\}/g, "Mustermann GmbH")
       .replace(/\{leistung\}/g, beispiel.leistung)
       .replace(/\{DD\}/g, dd)
+      .replace(/\{MMMM\}/g, MONATE_DE[now.getMonth()])
       .replace(/\{MM\}/g, mm)
       .replace(/\{YYYY\}/g, yyyy)
       .replace(/\{datum\}/g, `${yyyy}-${mm}-${dd}`) + ".pdf"
@@ -650,6 +659,7 @@ function ConnectDialog({ open, onClose }: { open: boolean; onClose: () => void }
 function SynchronisationSection() {
   const { data: uploads = [], isLoading } = useDriveUploads();
   const retry = useRetryDriveUpload();
+  const backfill = useDriveBackfill();
   const [showAll, setShowAll] = useState(false);
 
   const counts = useMemo(() => {
@@ -668,6 +678,17 @@ function SynchronisationSection() {
     });
   };
 
+  const handleBackfill = () => {
+    backfill.mutate(undefined, {
+      onSuccess: (r) => {
+        const total = r.angebote + r.rechnungen + r.dokumente;
+        if (total === 0) toast.success("Alles bereits synchron.");
+        else toast.success(`${total} Belege/Dokumente zur Synchronisation eingereiht.`);
+      },
+      onError: (e) => toast.error((e as Error).message),
+    });
+  };
+
   return (
     <Section
       title="Synchronisation"
@@ -680,7 +701,8 @@ function SynchronisationSection() {
       ) : (
         <>
           {/* Counter-Zeile */}
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-2.5 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 px-4 py-2.5 text-xs">
+            <div className="flex flex-wrap items-center gap-3">
             <CounterPill
               icon={<Loader2 className="h-3 w-3" />}
               label="läuft"
@@ -691,6 +713,20 @@ function SynchronisationSection() {
             <CounterPill label="erfolgreich" value={counts.erfolg} tone="success" />
             <CounterPill label="manuell" value={counts.manuell} tone="warn" />
             {counts.fehler > 0 && <CounterPill label="Fehler" value={counts.fehler} tone="error" />}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleBackfill}
+              disabled={backfill.isPending}
+              className="h-8 px-2 text-xs"
+              title="Sucht alle Belege & Dokumente, die noch nicht in Drive liegen und reiht sie ein."
+            >
+              {backfill.isPending
+                ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+              Alles erneut prüfen
+            </Button>
           </div>
 
           {/* Problem-Liste oder Alles-OK */}
