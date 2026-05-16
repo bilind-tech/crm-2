@@ -36,6 +36,8 @@ export function isLocalPreviewFallbackAllowed(): boolean {
   if (typeof window === "undefined") return false;
   const host = window.location.hostname;
   if (host.endsWith(".lovableproject.com") || host.endsWith(".lovable.app")) return true;
+  // PROD-Build (vom Pi ausgeliefert) NIE mocken — auch nicht via localhost-Tunnel.
+  if (import.meta.env.PROD) return false;
   const fromEnv = (import.meta.env.VITE_API_BASE_URL ?? "").toString().trim();
   if (fromEnv) return false;
   return import.meta.env.DEV || host === "localhost" || host === "127.0.0.1";
