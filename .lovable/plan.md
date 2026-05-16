@@ -1,45 +1,58 @@
-## Problem
+## Was wirklich passiert
 
-Beim Öffnen von `/einstellungen` auf dem Pi (localhost:8787 über SSH-Tunnel) crasht die Seite mit:
+Du greifst per SSH-Tunnel als `http://localhost:8787` auf den Pi zu. Der Pi liefert dort den **echten** Production-Build aus — also nicht der Lovable-Vorschau-Mock. Trotzdem aktiviert das Frontend bei dir den lokalen Vorschau-Mock, weil `isLocalPreviewFallbackAllowed()` in `src/lib/api/backendUrl.ts` schon dann `true` zurückgibt, wenn der Hostname „localhost" lautet — **ohne** zu prüfen, ob es ein PROD-Build ist.
 
+Daraus folgt diese Kettenreaktion:
+
+1. Beim Seitenstart setzt `refreshMe()` in `src/lib/auth.tsx` (Zeile 59) den User stillschweigend auf `{ id: "preview-user" }` und Modus auf `logged-in` — **ohne** dass eine echte Login-Session am Pi existiert.
+2. `GET /einstellungen/google-drive` wird vom Mock beantwortet (`previewGoogleDrive`), also siehst du eine schöne, scheinbar funktionierende Drive-Seite.
+3. Sobald du auf **„Mit Google verbinden"** klickst, geht das `PATCH /einstellungen/google-drive` (zum Speichern von Client-ID/Secret) **nicht** durch den Mock — `localPreviewMutate` kennt diesen Pfad nicht und gibt `null` zurück. Der echte Request läuft, der Pi prüft die Session, findet keine — und antwortet `401 unauthenticated`.
+
+Das ist exakt der rote Toast, den du siehst. Google war nie beteiligt. Deine Client-ID, das Secret und der Web-Application-Typ sind alle korrekt.
+
+## Fix
+
+Genau eine Datei wird geändert: `src/lib/api/backendUrl.ts`.
+
+In `isLocalPreviewFallbackAllowed()` ganz am Anfang ergänzen, dass Production-Builds **niemals** den Mock-Fallback verwenden — selbst wenn der Hostname zufällig `localhost` ist (Pi via Tunnel). Der Mock bleibt weiterhin aktiv für:
+
+- die Lovable-Vorschau (`*.lovable.app`, `*.lovableproject.com`)
+- den Dev-Server (`bun run dev` lokal am Entwickler-Rechner)
+
+```ts
+export function isLocalPreviewFallbackAllowed(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  // Lovable-Preview/Published — immer Mock.
+  if (host.endsWith(".lovableproject.com") || host.endsWith(".lovable.app")) return true;
+  // PROD-Build (vom Pi ausgeliefert) NIE mocken — auch nicht via localhost-Tunnel.
+  if (import.meta.env.PROD) return false;
+  // Dev-Server am Entwickler-Rechner darf weiter mocken.
+  const fromEnv = (import.meta.env.VITE_API_BASE_URL ?? "").toString().trim();
+  if (fromEnv) return false;
+  return import.meta.env.DEV || host === "localhost" || host === "127.0.0.1";
+}
 ```
-TypeError: undefined is not an object (evaluating 't.unterordnerSchema.rechnungen')
-```
 
-## Ursache
+Mehr ist nicht nötig — `refreshMe()` und der piClient verzweigen automatisch in den richtigen Pfad, sobald die Funktion `false` zurückgibt:
 
-`GoogleDriveTab.tsx` greift direkt auf `form.unterordnerSchema.rechnungen`, `form.dateinameSchema.rechnung` usw. zu. Liefert das Backend (z. B. ältere Pi-Release-Version oder ein noch nie gespeicherter Settings-State) eines dieser Objekte als `undefined`, knallt der ganze Tab — und damit die komplette Settings-Seite — weg. Genau das passiert gerade: der bundle-Hash im Stack (`einstellungen-CpFwLczC.js`) gehört zu einer älteren Pi-Version, deren `/einstellungen/google-drive`-Response diese Felder noch nicht enthält.
+- `/auth/me` wird tatsächlich angefragt → 401 → LockScreen erscheint → du gibst dein Pi-Passwort ein → echte Session-Cookie steht.
+- Danach geht **„Mit Google verbinden"** wie geplant: PATCH speichert ID/Secret, POST `/connect` liefert die `authorizeUrl`, du landest bei Google, bestätigst, kommst zurück, und Drive zeigt „verbunden".
 
-Das hat nichts mit dem OAuth-Tunnel-Setup zu tun. Dein Tunnel auf `localhost:8787` ist genau der richtige Weg, weil Google nur `localhost` oder eine öffentliche Domain als Redirect-URI akzeptiert. Sobald die Seite nicht mehr crasht, kannst du normal verbinden.
+## Nach dem Deploy — was du tun musst
 
-## Lösung (rein Frontend, eine Datei)
+1. Neuen Pi-Build hochladen (Update-Mechanismus wie bisher).
+2. Tunnel öffnen: `ssh -L 8787:localhost:8787 pi@…`
+3. Browser: `http://localhost:8787` öffnen → **LockScreen erscheint** (anders als vorher).
+4. Pi-Passwort eingeben → Einstellungen → Google Drive → Verbinden klicken → Google-Login → fertig.
+5. In der Google Cloud Console im OAuth-Client unter **Authorized redirect URIs** muss exakt `http://localhost:8787/einstellungen/google-drive/callback` stehen (nichts anderes, keinen Trailing-Slash).
 
-### `src/components/einstellungen/GoogleDriveTab.tsx`
+## Zur Frage „nur Client-ID ohne Secret"
 
-1. Konstanten `DEFAULT_FOLDERS` und `DEFAULT_FILES` einführen (identisch zum Backend in `backend/src/routes/drive.ts`):
-   - `rechnungen: "Rechnungen/{YYYY}/{MM}"`, `angebote: "Angebote/{YYYY}/{MM}"`, `dokumente: "Dokumente/{YYYY}/{MM}"`, `protokollUebergabe`, `protokollSchluessel`
-   - `rechnung`, `angebot`, `protokoll`
-2. Kleine Helper-Funktion `normalize(data)`, die das eingehende `GoogleDriveEinstellungen`-Objekt unkaputtbar macht:
-   - `rootOrdnerName ??= "mycleancenter.cm"`
-   - `unterordnerSchema = { ...DEFAULT_FOLDERS, ...(data.unterordnerSchema ?? {}) }`
-   - `dateinameSchema = { ...DEFAULT_FILES, ...(data.dateinameSchema ?? {}) }`
-   - `autoUpload ??= true`
-3. Im `useEffect`, der `form` aus `data` setzt, durch `normalize(data)` ersetzen.
-4. `dirty`-Vergleich gegen die normalisierte Variante laufen lassen, damit kein Phantom-Dirty entsteht.
-5. Optional: alle JSX-Zugriffe zusätzlich mit `?.` absichern (`form.unterordnerSchema?.rechnungen ?? ""`), als zweiter Sicherheitsnetz für künftige Backend-Änderungen.
+Geht für deinen Anwendungsfall nicht. Das andere Programm hat den Browser-Token-Flow (Google Identity Services) genutzt — der liefert nur ein 1-Stunden-Access-Token und **kein** Refresh-Token. Der Pi muss aber jederzeit selbständig PDFs hochladen, auch wenn dein Browser zu ist. Dafür braucht der Server zwingend einen Refresh-Token, und Google gibt den nur raus, wenn der Code-Tausch **mit Client-Secret** läuft. Das Secret bleibt sicher: es liegt AES-GCM-verschlüsselt im SQLite-Setting auf dem Pi und wird nie ans Frontend zurückgegeben.
 
-### Keine Backend-Änderungen
+## Scope
 
-`backend/src/routes/drive.ts` liefert bereits sauber gemergte Defaults. Der Crash kommt von alten Pi-Builds — der Frontend-Fix verhindert ihn dauerhaft, egal welche Backend-Version läuft.
-
-## Was du danach tust
-
-1. Neuen Release-Build aufs Pi spielen (damit dieser Frontend-Fix wirkt).
-2. Tunnel zu `localhost:8787` aufmachen.
-3. Einstellungen → Google Drive → „Mit Google verbinden" — sollte jetzt ohne Crash durchlaufen.
-4. Redirect-URI in der Google Cloud Console: `http://localhost:8787/einstellungen/google-drive/callback` (kein zusätzlicher Port nötig — `8080` kannst du wieder rausnehmen, weil das Backend auf `8787` läuft und den Callback dort empfängt).
-
-## Scope-Grenzen
-
-- Nur `src/components/einstellungen/GoogleDriveTab.tsx` wird geändert.
-- Kein Daten-Verzeichnis, kein Backup-/Restore-/Update-Flow, kein E-Mail-Code wird berührt.
+- Eine einzige Code-Änderung in `src/lib/api/backendUrl.ts`.
+- Kein Backend-Code, kein Daten-Verzeichnis, keine Migrationen, keine Mails.
+- Verhalten in Lovable-Preview bleibt 1:1 wie vorher.
