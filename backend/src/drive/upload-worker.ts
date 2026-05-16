@@ -18,6 +18,33 @@ import { getObjekt } from "../kunden/repo.js";
 let started = false;
 let isRunning = false;
 
+/**
+ * Mappt typische Google-Drive-/OAuth-Fehler auf benutzerfreundliche Klartext-Hilfen.
+ * Die Originalnachricht bleibt im fehlerText erhalten — wir prefixen einen lesbaren Satz.
+ */
+export function freundlicherFehler(raw: string): string {
+  const m = raw.toLowerCase();
+  if (m.includes("invalid_grant") || m.includes("token has been expired") || m.includes("token expired") || m.includes("refresh_token") && m.includes("not")) {
+    return "Google-Verbindung abgelaufen. Bitte in Einstellungen → Google Drive neu verbinden.";
+  }
+  if (m.includes("storagequotaexceeded") || m.includes("storage quota") || m.includes("quota has been exceeded")) {
+    return "Google-Drive-Speicher ist voll. Bitte Platz schaffen und erneut versuchen.";
+  }
+  if (m.includes("insufficientpermissions") || m.includes("insufficient permission") || m.includes("forbidden") || (m.includes("403") && m.includes("access"))) {
+    return "Kein Schreibzugriff auf den Drive-Ordner. Bitte Konto-Berechtigung prüfen.";
+  }
+  if (m.includes("invalid_request") || m.includes("redirect_uri")) {
+    return "OAuth-Konfiguration ist ungültig. Bitte in Einstellungen → Google Drive erneut verbinden.";
+  }
+  if (m.includes("client-id") || m.includes("client_id") || m.includes("client secret")) {
+    return "Client-ID oder Secret fehlen. Bitte im Verbinden-Dialog hinterlegen.";
+  }
+  if (m.includes("network") || m.includes("etimedout") || m.includes("enotfound") || m.includes("econnreset")) {
+    return "Netzwerkproblem beim Hochladen — wird automatisch erneut versucht.";
+  }
+  return raw;
+}
+
 interface DriveUploaderHooks {
   uploadFn?: typeof uploadFile;
   ensureFolder?: typeof ensureFolderPath;
