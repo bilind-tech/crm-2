@@ -20,6 +20,8 @@ interface DateiEntry {
   progress: number;
   versuche: number;
   fehler?: string;
+  fehlerStatus?: number;
+  fehlerSchritt?: string;
 }
 
 const MAX_PARALLEL = 2;
