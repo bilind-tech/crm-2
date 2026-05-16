@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Camera, Trash2, Check, Loader2, FolderOpen, FileText, AlertTriangle, RotateCw, WifiOff } from "lucide-react";
+import { Camera, Trash2, Check, Loader2, FolderOpen, FileText, AlertTriangle, RotateCw, WifiOff, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { uploadDokumentToSessionMitProgress, MAX_BYTES } from "@/lib/dokument/upload";
 import { getBackendUrl } from "@/lib/api/backendUrl";
@@ -149,7 +149,10 @@ function MobileUploadPage() {
   }, [dateien, starteUpload]);
 
   function verarbeite(files: FileList | File[]) {
-    const list = Array.from(files);
+    // WICHTIG (iOS Safari): Datei-Liste SYNCHRON in ein echtes Array kopieren,
+    // bevor irgendetwas async passiert. Sonst kann iOS die Datei-Referenzen
+    // verlieren, wenn der Input zwischendurch geleert oder neu gerendert wird.
+    const list = Array.from(files as ArrayLike<File>);
     if (!list.length) return;
     const neue: DateiEntry[] = [];
     for (const f of list) {
@@ -158,10 +161,14 @@ function MobileUploadPage() {
         continue;
       }
       const istBild = f.type.startsWith("image/");
+      let previewUrl = "";
+      if (istBild) {
+        try { previewUrl = URL.createObjectURL(f); } catch { previewUrl = ""; }
+      }
       neue.push({
         id: Math.random().toString(36).slice(2),
         file: f,
-        previewUrl: istBild ? URL.createObjectURL(f) : "",
+        previewUrl,
         istBild,
         status: "wartet",
         progress: 0,
@@ -172,9 +179,16 @@ function MobileUploadPage() {
   }
 
   function onPick(e: ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    e.target.value = "";
-    if (files) verarbeite(files);
+    const input = e.target;
+    const files = input.files;
+    // ZUERST übernehmen, DANN Input leeren — sonst verliert iOS die FileList,
+    // bevor wir die Dateien synchron in unseren State kopiert haben.
+    if (files && files.length > 0) {
+      verarbeite(files);
+    } else {
+      toast.error("Keine Datei erhalten — bitte erneut auswählen.");
+    }
+    try { input.value = ""; } catch { /* iOS: stillschweigend ignorieren */ }
   }
 
   function entferne(id: string) {
