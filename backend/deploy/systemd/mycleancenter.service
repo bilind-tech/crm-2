@@ -23,8 +23,9 @@ Environment=CORS_ORIGINS=*
 # Cookies dürfen NICHT als Secure laufen, solange im LAN per HTTP zugegriffen
 # wird — sonst sendet der Browser sie nicht zurück und Logins wirken kaputt.
 Environment=COOKIE_SECURE=false
-# Google-OAuth-Redirect: bei Bedarf in der Google Cloud Console exakt eintragen.
-Environment=GOOGLE_OAUTH_REDIRECT=http://mycleancenter-pi.local:8787/einstellungen/google-drive/callback
+# Google-OAuth-Redirect: Google erlaubt http:// OAuth nur über localhost/127.0.0.1.
+# Exakt diese URI in der Google Cloud Console eintragen.
+Environment=GOOGLE_OAUTH_REDIRECT=http://localhost:8787/einstellungen/google-drive/callback
 ExecStart=/usr/bin/node dist/server.js
 Restart=on-failure
 RestartSec=3
