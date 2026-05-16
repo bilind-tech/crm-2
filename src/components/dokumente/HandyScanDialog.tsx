@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Smartphone, X, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,8 @@ export function HandyScanDialog({ open, onOpenChange }: Props) {
   const create = useCreateUploadSession();
   const beenden = useBeendeUploadSession();
   const live = useUploadSessionLive(session?.token);
+  const qc = useQueryClient();
+  const letzteAnzahl = useRef(0);
 
   const uploadUrl = useMemo(() => {
     if (!session || typeof window === "undefined") return "";
@@ -58,6 +61,15 @@ export function HandyScanDialog({ open, onOpenChange }: Props) {
 
   const dateien = live.data?.dateien ?? [];
   const status: "warten" | "aktiv" = dateien.length > 0 ? "aktiv" : "warten";
+
+  // Bei jedem neuen Dokument: Dokumente-Liste invalidieren, damit
+  // der Upload auch sofort im Dokumente-Bereich auftaucht.
+  useEffect(() => {
+    if (dateien.length > letzteAnzahl.current) {
+      qc.invalidateQueries({ queryKey: ["dokumente"] });
+    }
+    letzteAnzahl.current = dateien.length;
+  }, [dateien.length, qc]);
 
   async function copyUrl() {
     try {
