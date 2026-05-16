@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Camera, Trash2, Check, Loader2, FolderOpen, FileText, AlertTriangle, RotateCw } from "lucide-react";
+import { Camera, Trash2, Check, Loader2, FolderOpen, FileText, AlertTriangle, RotateCw, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { uploadDokumentToSessionMitProgress, MAX_BYTES } from "@/lib/dokument/upload";
+import { getBackendUrl } from "@/lib/api/backendUrl";
 
 export const Route = createFileRoute("/m/upload/$session")({
   component: MobileUploadPage,
@@ -73,6 +74,28 @@ function MobileUploadPage() {
   const [dateien, setDateien] = useState<DateiEntry[]>([]);
   const dateienRef = useRef<DateiEntry[]>([]);
   dateienRef.current = dateien;
+  const [sessionState, setSessionState] = useState<"prueft" | "ok" | "fehlt" | "offline">("prueft");
+
+  // Session beim Laden einmal validieren — sonst weiß der Nutzer nicht,
+  // ob der QR-Code überhaupt noch gültig ist.
+  useEffect(() => {
+    let abgebrochen = false;
+    (async () => {
+      try {
+        const res = await fetch(`${getBackendUrl()}/upload-sessions/${token}`, {
+          credentials: "include",
+        });
+        if (abgebrochen) return;
+        if (res.ok) setSessionState("ok");
+        else setSessionState("fehlt");
+      } catch {
+        if (!abgebrochen) setSessionState("offline");
+      }
+    })();
+    return () => {
+      abgebrochen = true;
+    };
+  }, [token]);
 
   const updateEntry = useCallback((id: string, patch: Partial<DateiEntry>) => {
     setDateien((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
@@ -178,6 +201,33 @@ function MobileUploadPage() {
   const allesFertig = total > 0 && fertig === total;
   const overallProgress = total === 0 ? 0 : (fertig + dateien.reduce((s, e) => s + (e.status === "laeuft" ? e.progress : 0), 0)) / total;
 
+  if (sessionState === "fehlt" || sessionState === "offline") {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-6 text-center">
+        {sessionState === "offline" ? (
+          <WifiOff className="h-10 w-10 text-muted-foreground" />
+        ) : (
+          <AlertTriangle className="h-10 w-10 text-destructive" />
+        )}
+        <h1 className="text-lg font-semibold">
+          {sessionState === "offline" ? "Keine Verbindung zum PC" : "Sitzung nicht mehr gültig"}
+        </h1>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          {sessionState === "offline"
+            ? "Bist du im selben WLAN wie der PC? Bitte Verbindung prüfen und Seite neu laden."
+            : "Bitte am PC erneut auf „Vom Handy scannen“ klicken und den neuen QR-Code scannen."}
+        </p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="mt-2 inline-flex h-10 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground"
+        >
+          <RotateCw className="h-4 w-4" /> Neu laden
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="border-b border-border bg-card px-4 py-3">
@@ -209,78 +259,107 @@ function MobileUploadPage() {
               <Check className="h-5 w-5" />
             </div>
             <div>
-              <p className="font-semibold">Fertig — am PC sichtbar.</p>
+              <p className="font-semibold">
+                {total === 1 ? "Datei gespeichert — am PC sichtbar." : `${total} Dateien gespeichert — am PC sichtbar.`}
+              </p>
               <p className="text-xs opacity-80">Du kannst weitere Dateien hinzufügen.</p>
             </div>
           </div>
         )}
 
         {total > 0 && (
-          <div className="space-y-2 pt-2">
+          <div className="space-y-3 pt-2">
             <p className="text-sm font-medium">
-              {total} Datei{total === 1 ? "" : "en"}
+              {total} Datei{total === 1 ? "" : "en"} · {fertig} gespeichert
+              {fehler > 0 ? ` · ${fehler} Fehler` : ""}
             </p>
-            <div className="grid grid-cols-3 gap-2">
-              {dateien.map((f) => (
-                <div
-                  key={f.id}
-                  className="relative aspect-square overflow-hidden rounded-xl border border-border bg-muted"
-                >
-                  {f.istBild ? (
-                    <img src={f.previewUrl} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center gap-1 p-2 text-center">
-                      <FileText className="h-7 w-7 text-muted-foreground" />
-                      <span className="line-clamp-2 break-all text-[10px] text-muted-foreground">
-                        {f.file.name}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Status-Overlay */}
-                  {f.status === "laeuft" && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-background/55 backdrop-blur-[1px]">
-                      <Loader2 className="h-6 w-6 animate-spin text-white drop-shadow" />
-                      <span className="text-[10px] font-medium text-white drop-shadow">
-                        {Math.round(f.progress * 100)}%
-                      </span>
-                    </div>
-                  )}
-                  {f.status === "wartet" && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-background/40">
-                      <Loader2 className="h-5 w-5 animate-spin text-white/80" />
-                    </div>
-                  )}
-                  {f.status === "fertig" && (
-                    <div className="absolute right-1 bottom-1 flex h-7 w-7 items-center justify-center rounded-full bg-success text-white shadow">
-                      <Check className="h-4 w-4" />
-                    </div>
-                  )}
-                  {f.status === "fehler" && (
-                    <button
-                      type="button"
-                      onClick={() => starteUpload(f.id)}
-                      className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-destructive/85 text-white"
-                      aria-label="Erneut versuchen"
-                    >
-                      <AlertTriangle className="h-5 w-5" />
-                      <span className="flex items-center gap-1 text-[10px] font-semibold">
-                        <RotateCw className="h-3 w-3" /> Erneut
-                      </span>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => entferne(f.id)}
-                    className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-background/90 text-destructive shadow"
-                    aria-label="Entfernen"
+            <ul className="space-y-3">
+              {dateien.map((f) => {
+                const statusLabel =
+                  f.status === "wartet"
+                    ? "Wartet…"
+                    : f.status === "laeuft"
+                      ? `Wird hochgeladen… ${Math.round(f.progress * 100)}%`
+                      : f.status === "fertig"
+                        ? "Gespeichert — am PC sichtbar"
+                        : f.fehler || "Upload fehlgeschlagen";
+                const statusColor =
+                  f.status === "fertig"
+                    ? "text-success"
+                    : f.status === "fehler"
+                      ? "text-destructive"
+                      : "text-muted-foreground";
+                return (
+                  <li
+                    key={f.id}
+                    className="overflow-hidden rounded-2xl border border-border bg-card"
                   >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
+                    <div className="relative aspect-[4/3] w-full bg-muted">
+                      {f.istBild && f.previewUrl ? (
+                        <img
+                          src={f.previewUrl}
+                          alt=""
+                          className="h-full w-full object-contain"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center">
+                          <FileText className="h-10 w-10 text-muted-foreground" />
+                          <span className="break-all text-xs text-muted-foreground">
+                            {f.file.name}
+                          </span>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => entferne(f.id)}
+                        className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-background/90 text-destructive shadow"
+                        aria-label="Entfernen"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                      {f.status === "fertig" && (
+                        <div className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-success text-white shadow">
+                          <Check className="h-5 w-5" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Status-Zeile + Fortschritt unter Bild — immer sichtbar. */}
+                    <div className="space-y-2 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className={`flex items-center gap-1.5 font-medium ${statusColor}`}>
+                          {f.status === "laeuft" || f.status === "wartet" ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : f.status === "fertig" ? (
+                            <Check className="h-3.5 w-3.5" />
+                          ) : (
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                          )}
+                          <span>{statusLabel}</span>
+                        </span>
+                        {f.status === "fehler" && (
+                          <button
+                            type="button"
+                            onClick={() => starteUpload(f.id)}
+                            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-[11px] font-semibold text-foreground"
+                          >
+                            <RotateCw className="h-3 w-3" /> Erneut
+                          </button>
+                        )}
+                      </div>
+                      {(f.status === "laeuft" || f.status === "wartet") && (
+                        <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full bg-primary transition-all duration-300"
+                            style={{ width: `${Math.round((f.status === "laeuft" ? f.progress : 0) * 100)}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         )}
       </main>
