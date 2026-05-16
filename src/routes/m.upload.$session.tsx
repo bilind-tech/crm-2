@@ -70,6 +70,74 @@ function FileButton({
 }
 
 function MobileUploadPage() {
+  return <MobileUploadInner />;
+}
+
+function DiagnoseBlock({
+  token,
+  entries,
+}: {
+  token: string;
+  entries: DateiEntry[];
+}) {
+  const [kopiert, setKopiert] = useState(false);
+  if (entries.length === 0) return null;
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "n/a";
+  const tokenKurz = token.slice(0, 6) + "…" + token.slice(-4);
+  const zeilen = entries.map((e) => {
+    return [
+      `Datei: ${e.file.name}`,
+      `Typ: ${e.file.type || "unbekannt"}`,
+      `Größe: ${Math.round(e.file.size / 1024)} KB`,
+      `Schritt: ${e.fehlerSchritt ?? "upload"}`,
+      `HTTP: ${e.fehlerStatus ?? 0}`,
+      `Fehler: ${e.fehler ?? "-"}`,
+    ].join(" | ");
+  });
+  const text =
+    `Handy-Upload-Fehler\n` +
+    `Zeit: ${new Date().toISOString()}\n` +
+    `Session: ${tokenKurz}\n` +
+    `Browser: ${ua}\n\n` +
+    zeilen.join("\n");
+  async function kopiere() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setKopiert(true);
+      setTimeout(() => setKopiert(false), 1500);
+    } catch {
+      toast.error("Kopieren nicht möglich — Text bitte markieren.");
+    }
+  }
+  return (
+    <div className="space-y-2 rounded-2xl border border-destructive/40 bg-destructive/5 p-3">
+      <div className="flex items-start gap-2 text-sm">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+        <div className="min-w-0">
+          <p className="font-semibold text-destructive">
+            {entries.length === 1 ? "Eine Datei ist nicht angekommen" : `${entries.length} Dateien sind nicht angekommen`}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Bitte einmal „Erneut“ versuchen. Falls es weiter nicht klappt: Fehlerdetails kopieren und an den Support schicken.
+          </p>
+        </div>
+      </div>
+      <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-all rounded-md border border-border bg-background p-2 text-[11px] text-muted-foreground">
+        {text}
+      </pre>
+      <button
+        type="button"
+        onClick={kopiere}
+        className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-xs font-semibold"
+      >
+        {kopiert ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+        {kopiert ? "Kopiert" : "Fehlerdetails kopieren"}
+      </button>
+    </div>
+  );
+}
+
+function MobileUploadInner() {
   const { session: token } = Route.useParams();
   const [dateien, setDateien] = useState<DateiEntry[]>([]);
   const dateienRef = useRef<DateiEntry[]>([]);
