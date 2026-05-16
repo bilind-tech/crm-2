@@ -43,13 +43,14 @@ import { useConfirm } from "@/hooks/useConfirm";
 import { getBackendUrl } from "@/lib/api/backendUrl";
 import { cn } from "@/lib/utils";
 
-const PFAD_PLATZHALTER = ["{YYYY}", "{MM}"];
+const PFAD_PLATZHALTER = ["{YYYY}", "{MM}", "{MMMM}"];
 const DATEI_PLATZHALTER = [
   "{nummer}",
   "{kunde}",
   "{leistung}",
   "{DD}",
   "{MM}",
+  "{MMMM}",
   "{YYYY}",
   "{datum}",
 ];
@@ -58,11 +59,11 @@ const DATEI_PLATZHALTER = [
 // gemergt, damit ein älteres Backend oder ein leerer Settings-State die
 // Seite nicht crashen lässt.
 const DEFAULT_FOLDERS = {
-  rechnungen: "Rechnungen/{YYYY}/{MM}",
-  angebote: "Angebote/{YYYY}/{MM}",
-  dokumente: "Dokumente/{YYYY}/{MM}",
-  protokollUebergabe: "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}",
-  protokollSchluessel: "Protokolle/Schlüsselübergabe/{YYYY}/{MM}",
+  rechnungen: "Rechnungen/{YYYY}/{MM}_{MMMM}",
+  angebote: "Angebote/{YYYY}/{MM}_{MMMM}",
+  dokumente: "Dokumente/{YYYY}/{MM}_{MMMM}",
+  protokollUebergabe: "Protokolle/Übergabe-Abnahme/{YYYY}/{MM}_{MMMM}",
+  protokollSchluessel: "Protokolle/Schlüsselübergabe/{YYYY}/{MM}_{MMMM}",
 } as const;
 const DEFAULT_FILES = {
   rechnung: "{nummer} {kunde} {leistung} {MM}-{YYYY}",
@@ -80,10 +81,16 @@ function normalize(data: GoogleDriveEinstellungen): GoogleDriveEinstellungen {
   };
 }
 
+const MONATE_DE = [
+  "Januar","Februar","März","April","Mai","Juni",
+  "Juli","August","September","Oktober","November","Dezember",
+];
+
 function pfadVorschau(template: string): string {
   const now = new Date();
   return template
     .replace(/\{YYYY\}/g, String(now.getFullYear()))
+    .replace(/\{MMMM\}/g, MONATE_DE[now.getMonth()])
     .replace(/\{MM\}/g, String(now.getMonth() + 1).padStart(2, "0"));
 }
 
@@ -103,6 +110,7 @@ function dateiVorschau(template: string, beleg: "rechnung" | "angebot" | "protok
       .replace(/\{kunde\}/g, "Mustermann GmbH")
       .replace(/\{leistung\}/g, beispiel.leistung)
       .replace(/\{DD\}/g, dd)
+      .replace(/\{MMMM\}/g, MONATE_DE[now.getMonth()])
       .replace(/\{MM\}/g, mm)
       .replace(/\{YYYY\}/g, yyyy)
       .replace(/\{datum\}/g, `${yyyy}-${mm}-${dd}`) + ".pdf"
