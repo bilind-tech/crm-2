@@ -241,56 +241,21 @@ export function hasKundeReferences(id: string): boolean {
   return false;
 }
 
-export function deleteKunde(
-  id: string,
-  opts: { force?: boolean } = {},
-): "soft" | "hard" | "missing" {
+// Soft-Delete: setzt `geloescht_am`. Der Datensatz verschwindet aus allen
+// normalen Listen/Detail-Views — bleibt aber komplett wiederherstellbar in
+// Einstellungen → Datenbank. Hart-Löschen passiert ausschließlich dort
+// (passwortgeschützt). Belegnummern-Zähler und Kürzel werden NICHT freigegeben,
+// damit ein Restore keine Doppel-Vergabe verursacht.
+export function deleteKunde(id: string): "ok" | "missing" {
   const db = getDatabase();
-  const exists = db.prepare(`SELECT 1 FROM kunde WHERE id = ?`).get(id);
-  if (!exists) return "missing";
-
-  if (!opts.force && hasKundeReferences(id)) {
-    db.prepare(`UPDATE kunde SET archiviert = 1, status = 'inaktiv' WHERE id = ?`).run(id);
-    return "soft";
+  const r = db
+    .prepare(`UPDATE kunde SET geloescht_am = datetime('now') WHERE id = ? AND geloescht_am IS NULL`)
+    .run(id);
+  if (r.changes === 0) {
+    const exists = db.prepare(`SELECT 1 FROM kunde WHERE id = ?`).get(id);
+    return exists ? "ok" : "missing";
   }
-
-  // Force-Delete: alle abhängigen Daten in einer Transaction kaskadierend löschen.
-  // Angebot/Rechnung haben ON DELETE RESTRICT auf kunde_id → wir müssen sie
-  // explizit zuerst löschen. Positionen/Zahlungen/Mahnungen hängen via CASCADE
-  // an Angebot/Rechnung und gehen automatisch mit. Dokumente/Protokolle/Upload-
-  // Sessions sind via SET NULL gekoppelt — wir markieren Dokumente als gelöscht
-  // (soft) und stellen Protokoll-Verknüpfungen automatisch auf NULL.
-  const tx = db.transaction(() => {
-    const tableExists = (name: string): boolean =>
-      !!db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(name);
-
-    if (tableExists("rechnung")) {
-      db.prepare(`DELETE FROM rechnung WHERE kunde_id = ?`).run(id);
-    }
-    if (tableExists("angebot")) {
-      db.prepare(`DELETE FROM angebot WHERE kunde_id = ?`).run(id);
-    }
-    if (tableExists("dokumente")) {
-      db.prepare(
-        `UPDATE dokumente
-           SET geloescht_am = datetime('now')
-         WHERE kunde_id = ? AND geloescht_am IS NULL`,
-      ).run(id);
-    }
-    if (tableExists("belegnummer_zaehler")) {
-      db.prepare(`DELETE FROM belegnummer_zaehler WHERE kunde_id = ?`).run(id);
-    }
-    if (tableExists("belegnummer_zaehler_v2")) {
-      db.prepare(`DELETE FROM belegnummer_zaehler_v2 WHERE kunde_id = ?`).run(id);
-    }
-    if (tableExists("belegnummer_reserviert")) {
-      db.prepare(`DELETE FROM belegnummer_reserviert WHERE kunde_id = ?`).run(id);
-    }
-    // Ansprechpartner, Objekte, Notizen löschen via ON DELETE CASCADE.
-    db.prepare(`DELETE FROM kunde WHERE id = ?`).run(id);
-  });
-  tx();
-  return "hard";
+  return "ok";
 }
 
 // ----------------------------- LOGO -----------------------------
