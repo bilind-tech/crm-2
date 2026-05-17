@@ -118,7 +118,7 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
     }
 
     setQueuedKey(currentKey);
-    const delay = pdfBuffer ? AUTO_REFRESH_DELAY_MS : INITIAL_BUILD_DELAY_MS;
+    const delay = forceRefreshRef.current ? 0 : pdfBuffer ? AUTO_REFRESH_DELAY_MS : INITIAL_BUILD_DELAY_MS;
     const timer = setTimeout(() => {
       if (pdfBuffer && !forceRefreshRef.current && (openHotspotIdRef.current || hasActiveTextEditor())) {
         return;
@@ -167,9 +167,13 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
       const buf = await blob.arrayBuffer();
       if (!mountedRef.current) return;
       const newUrl = URL.createObjectURL(blob);
-      const finalKey = latestKeyRef.current;
+      if (requestedKey !== latestKeyRef.current) {
+        URL.revokeObjectURL(newUrl);
+        setQueuedKey(latestKeyRef.current);
+        return;
+      }
 
-      builtKeyRef.current = finalKey;
+      builtKeyRef.current = requestedKey;
       const previousUrl = pdfUrlRef.current;
       pdfUrlRef.current = newUrl;
       setHotspots(hs);
