@@ -498,6 +498,13 @@ function Page() {
       </SlideOver>
       <KundeBearbeitenDialog kunde={k} open={openEdit} onOpenChange={setOpenEdit} />
       <KundeLoeschenDialog kunde={kundeSafe} open={openDelete} onOpenChange={setOpenDelete} />
+      <KundeLogoUploadDialog
+        kundeId={k.id}
+        hasLogo={!!k.hasLogo}
+        logoUpdatedAt={k.logoUpdatedAt}
+        open={openLogo}
+        onOpenChange={setOpenLogo}
+      />
     </div>
   );
 }
