@@ -31,6 +31,7 @@ import { startMahnScheduler } from "./mahnung/cron.js";
 import { driveRoutes } from "./routes/drive.js";
 import { emailRoutes } from "./routes/email.js";
 import { externRoutes } from "./routes/extern.js";
+import { datenbankRoutes } from "./routes/datenbank.js";
 import { seedOrUpdateDefaultVorlagen } from "./email/templates.js";
 import { startDriveWorker } from "./drive/upload-worker.js";
 import { wireDriveAutoEnqueue } from "./drive/auto-enqueue.js";
