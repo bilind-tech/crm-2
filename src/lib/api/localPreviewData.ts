@@ -1,6 +1,11 @@
 import type {
   Angebot,
   DashboardKennzahlen,
+  Dauerauftrag,
+  DauerauftragEinstellungen,
+  DauerauftragFrequenz,
+  DauerauftragLauf,
+  DauerauftragSonderposition,
   Firmendaten,
   Kunde,
   Nummernkreise,
@@ -139,6 +144,11 @@ const previewNummernkreise: Nummernkreise = {
 interface PreviewStore {
   angebote: Angebot[];
   rechnungen: Rechnung[];
+  dauerauftraege: Dauerauftrag[];
+  dauerauftragLaeufe: DauerauftragLauf[];
+  dauerauftragSonderpos: DauerauftragSonderposition[];
+  dauerauftragEinstellungen?: DauerauftragEinstellungen;
+  dauerauftragSeq?: number;
 }
 
 function clone<T>(value: T): T {
@@ -146,17 +156,24 @@ function clone<T>(value: T): T {
 }
 
 function readStore(): PreviewStore {
-  if (typeof window === "undefined") return { angebote: [], rechnungen: [] };
+  if (typeof window === "undefined") {
+    return { angebote: [], rechnungen: [], dauerauftraege: [], dauerauftragLaeufe: [], dauerauftragSonderpos: [] };
+  }
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { angebote: [], rechnungen: [] };
+    if (!raw) return { angebote: [], rechnungen: [], dauerauftraege: [], dauerauftragLaeufe: [], dauerauftragSonderpos: [] };
     const parsed = JSON.parse(raw) as Partial<PreviewStore>;
     return {
       angebote: Array.isArray(parsed.angebote) ? parsed.angebote : [],
       rechnungen: Array.isArray(parsed.rechnungen) ? parsed.rechnungen : [],
+      dauerauftraege: Array.isArray(parsed.dauerauftraege) ? parsed.dauerauftraege : [],
+      dauerauftragLaeufe: Array.isArray(parsed.dauerauftragLaeufe) ? parsed.dauerauftragLaeufe : [],
+      dauerauftragSonderpos: Array.isArray(parsed.dauerauftragSonderpos) ? parsed.dauerauftragSonderpos : [],
+      dauerauftragEinstellungen: parsed.dauerauftragEinstellungen,
+      dauerauftragSeq: typeof parsed.dauerauftragSeq === "number" ? parsed.dauerauftragSeq : 0,
     };
   } catch {
-    return { angebote: [], rechnungen: [] };
+    return { angebote: [], rechnungen: [], dauerauftraege: [], dauerauftragLaeufe: [], dauerauftragSonderpos: [] };
   }
 }
 
