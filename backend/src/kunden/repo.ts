@@ -194,15 +194,24 @@ export function updateKunde(id: string, patch: Record<string, unknown>): ApiKund
     const col = KUNDE_UPDATABLE[k];
     if (!col) continue;
     if (k === "tags") {
+      const arr = Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
       sets.push(`${col} = @${col}`);
-      params[col] = JSON.stringify(Array.isArray(v) ? v : []);
+      params[col] = JSON.stringify(arr);
     } else if (k === "archiviert") {
       sets.push(`${col} = @${col}`);
       params[col] = v ? 1 : 0;
     } else if (k === "kuerzel") {
       sets.push(`${col} = @${col}`);
       params[col] = normalizeKuerzel(v as string | null);
+    } else if (k === "notizen") {
+      // notizen ist eine reine Freitext-Spalte. Wenn der Caller (z. B. ein
+      // älterer Client) die Notiz-Objekt-Liste aus GET /kunden/:id zurück
+      // schickt, würde better-sqlite3 sonst mit „can only bind …" werfen.
+      sets.push(`${col} = @${col}`);
+      params[col] = typeof v === "string" ? v : v == null ? null : null;
     } else {
+      const allowed = v == null || ["string", "number", "boolean"].includes(typeof v);
+      if (!allowed) continue;
       sets.push(`${col} = @${col}`);
       params[col] = v ?? null;
     }
