@@ -198,7 +198,7 @@ function Page() {
               <Download className="mr-1.5 h-4 w-4" />
               PDF
             </Button>
-            <PrintButton url={pdf.url} variant="outline" size="default" />
+            <PrintButton blob={pdf.blob} url={pdf.url} variant="outline" size="default" />
             {istEntwurf && (
               <Button variant="outline" asChild className="rounded-lg">
                 <Link to="/protokolle/$id/bearbeiten" params={{ id }}>

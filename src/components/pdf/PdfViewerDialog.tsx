@@ -89,7 +89,13 @@ export function PdfViewerDialog({
                 <span className="hidden sm:inline">Öffnen</span>
               </a>
             )}
-            <PrintButton url={pdfUrl} variant="outline" size="sm" className="h-9 px-2 sm:px-3" />
+            <PrintButton
+              blob={pdfBlob ?? null}
+              url={pdfUrl}
+              variant="outline"
+              size="sm"
+              className="h-9 px-2 sm:px-3"
+            />
             {pdfUrl ? (
               <a
                 href={pdfUrl}
