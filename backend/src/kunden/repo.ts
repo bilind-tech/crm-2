@@ -49,6 +49,9 @@ export interface KundeFilter {
 export function listKunden(f: KundeFilter = {}): ApiKunde[] {
   const where: string[] = [];
   const params: unknown[] = [];
+  // Soft-Delete: gelöschte Kunden tauchen nirgends in der normalen UI auf.
+  // Wiederherstellung nur über die Datenbank-Seite.
+  where.push("geloescht_am IS NULL");
   if (f.status) {
     where.push("status = ?");
     params.push(f.status);
@@ -78,7 +81,7 @@ export function listKunden(f: KundeFilter = {}): ApiKunde[] {
 
 export function getKunde(id: string): ApiKunde | null {
   const row = getDatabase()
-    .prepare(`SELECT ${KUNDE_COLS} FROM kunde WHERE id = ?`)
+    .prepare(`SELECT ${KUNDE_COLS} FROM kunde WHERE id = ? AND geloescht_am IS NULL`)
     .get(id) as DbKunde | undefined;
   return row ? kundeRowToApi(row) : null;
 }
