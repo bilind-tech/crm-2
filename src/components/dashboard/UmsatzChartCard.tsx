@@ -24,8 +24,8 @@ interface State {
   wert: Wert;
 }
 
-const STORAGE_KEY = "dashboard.umsatzChart";
-const DEFAULT_STATE: State = { zeitraum: "6m", typ: "bar", wert: "brutto" };
+const STORAGE_KEY = "dashboard.umsatzChart.v2";
+const DEFAULT_STATE: State = { zeitraum: "6m", typ: "area", wert: "brutto" };
 
 function loadState(): State {
   if (typeof window === "undefined") return DEFAULT_STATE;
