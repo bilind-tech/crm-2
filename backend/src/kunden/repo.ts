@@ -238,16 +238,97 @@ export function hasKundeReferences(id: string): boolean {
   return false;
 }
 
-export function deleteKunde(id: string): "soft" | "hard" | "missing" {
+export function deleteKunde(
+  id: string,
+  opts: { force?: boolean } = {},
+): "soft" | "hard" | "missing" {
   const db = getDatabase();
   const exists = db.prepare(`SELECT 1 FROM kunde WHERE id = ?`).get(id);
   if (!exists) return "missing";
-  if (hasKundeReferences(id)) {
+
+  if (!opts.force && hasKundeReferences(id)) {
     db.prepare(`UPDATE kunde SET archiviert = 1, status = 'inaktiv' WHERE id = ?`).run(id);
     return "soft";
   }
-  db.prepare(`DELETE FROM kunde WHERE id = ?`).run(id);
+
+  // Force-Delete: alle abhängigen Daten in einer Transaction kaskadierend löschen.
+  // Angebot/Rechnung haben ON DELETE RESTRICT auf kunde_id → wir müssen sie
+  // explizit zuerst löschen. Positionen/Zahlungen/Mahnungen hängen via CASCADE
+  // an Angebot/Rechnung und gehen automatisch mit. Dokumente/Protokolle/Upload-
+  // Sessions sind via SET NULL gekoppelt — wir markieren Dokumente als gelöscht
+  // (soft) und stellen Protokoll-Verknüpfungen automatisch auf NULL.
+  const tx = db.transaction(() => {
+    const tableExists = (name: string): boolean =>
+      !!db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(name);
+
+    if (tableExists("rechnung")) {
+      db.prepare(`DELETE FROM rechnung WHERE kunde_id = ?`).run(id);
+    }
+    if (tableExists("angebot")) {
+      db.prepare(`DELETE FROM angebot WHERE kunde_id = ?`).run(id);
+    }
+    if (tableExists("dokumente")) {
+      db.prepare(
+        `UPDATE dokumente
+           SET geloescht_am = datetime('now')
+         WHERE kunde_id = ? AND geloescht_am IS NULL`,
+      ).run(id);
+    }
+    if (tableExists("belegnummer_zaehler")) {
+      db.prepare(`DELETE FROM belegnummer_zaehler WHERE kunde_id = ?`).run(id);
+    }
+    if (tableExists("belegnummer_zaehler_v2")) {
+      db.prepare(`DELETE FROM belegnummer_zaehler_v2 WHERE kunde_id = ?`).run(id);
+    }
+    if (tableExists("belegnummer_reserviert")) {
+      db.prepare(`DELETE FROM belegnummer_reserviert WHERE kunde_id = ?`).run(id);
+    }
+    // Ansprechpartner, Objekte, Notizen löschen via ON DELETE CASCADE.
+    db.prepare(`DELETE FROM kunde WHERE id = ?`).run(id);
+  });
+  tx();
   return "hard";
+}
+
+// ----------------------------- LOGO -----------------------------
+
+export function setKundeLogo(id: string, buf: Buffer, mime: string): boolean {
+  const db = getDatabase();
+  const exists = db.prepare(`SELECT 1 FROM kunde WHERE id = ?`).get(id);
+  if (!exists) return false;
+  db.prepare(
+    `UPDATE kunde
+        SET logo_blob = @blob,
+            logo_mime = @mime,
+            logo_updated_at = datetime('now')
+      WHERE id = @id`,
+  ).run({ id, blob: buf, mime });
+  return true;
+}
+
+export function clearKundeLogo(id: string): boolean {
+  const db = getDatabase();
+  const r = db
+    .prepare(
+      `UPDATE kunde
+          SET logo_blob = NULL,
+              logo_mime = NULL,
+              logo_updated_at = NULL
+        WHERE id = ?`,
+    )
+    .run(id);
+  return r.changes > 0;
+}
+
+export function getKundeLogo(id: string): { blob: Buffer; mime: string; updatedAt: string } | null {
+  const row = getDatabase()
+    .prepare(
+      `SELECT logo_blob AS blob, logo_mime AS mime, logo_updated_at AS updated_at
+         FROM kunde WHERE id = ?`,
+    )
+    .get(id) as { blob: Buffer | null; mime: string | null; updated_at: string | null } | undefined;
+  if (!row || !row.blob || !row.mime) return null;
+  return { blob: row.blob, mime: row.mime, updatedAt: row.updated_at ?? "" };
 }
 
 // =============================================================================
