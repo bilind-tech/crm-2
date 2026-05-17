@@ -6,7 +6,6 @@ import { useDauerauftragLaeufe } from "@/hooks/useDauerauftraege";
 import { formatEUR, formatDate } from "@/lib/format";
 import {
   Building2,
-  ClipboardList,
   Euro,
   FileText,
   Bell,
