@@ -310,14 +310,14 @@ const AP_COLS = `
 
 export function listAnsprechpartner(kundeId: string): ApiAnsprechpartner[] {
   const rows = getDatabase()
-    .prepare(`SELECT ${AP_COLS} FROM ansprechpartner WHERE kunde_id = ? ORDER BY primaer DESC, erstellt_am ASC`)
+    .prepare(`SELECT ${AP_COLS} FROM ansprechpartner WHERE kunde_id = ? AND geloescht_am IS NULL ORDER BY primaer DESC, erstellt_am ASC`)
     .all(kundeId) as DbAnsprechpartner[];
   return rows.map(ansprechpartnerRowToApi);
 }
 
 export function getAnsprechpartner(id: string): ApiAnsprechpartner | null {
   const row = getDatabase()
-    .prepare(`SELECT ${AP_COLS} FROM ansprechpartner WHERE id = ?`)
+    .prepare(`SELECT ${AP_COLS} FROM ansprechpartner WHERE id = ? AND geloescht_am IS NULL`)
     .get(id) as DbAnsprechpartner | undefined;
   return row ? ansprechpartnerRowToApi(row) : null;
 }
