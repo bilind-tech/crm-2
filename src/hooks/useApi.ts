@@ -3,6 +3,8 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
 import { piApi, PiApiError } from "@/lib/api/piClient";
+import { getBackendUrl } from "@/lib/api/backendUrl";
+import { postWithProgress } from "@/lib/api/piClient";
 import type {
   Aktivitaet,
   Angebot,
@@ -196,6 +198,40 @@ export const useDeleteKunde = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.kunden });
       qc.invalidateQueries({ queryKey: qk.dashboard.kennzahlen });
+    },
+  });
+};
+
+// ---------- Kunden-Logo ----------
+/** Liefert die absolute URL zum Logo (mit Cache-Bust). Frontend benutzt das direkt als <img src>. */
+export function kundeLogoUrl(id: string, logoUpdatedAt?: string): string {
+  const base = getBackendUrl();
+  const bust = logoUpdatedAt ? `?v=${encodeURIComponent(logoUpdatedAt)}` : "";
+  return `${base}/kunden/${id}/logo${bust}`;
+}
+
+export const useUploadKundeLogo = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => {
+      const fd = new FormData();
+      fd.append("file", file, file.name);
+      return postWithProgress<Kunde>(`/kunden/${id}/logo`, fd);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.kunde(id) });
+      qc.invalidateQueries({ queryKey: qk.kunden });
+    },
+  });
+};
+
+export const useDeleteKundeLogo = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete<void>(`/kunden/${id}/logo`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.kunde(id) });
+      qc.invalidateQueries({ queryKey: qk.kunden });
     },
   });
 };
