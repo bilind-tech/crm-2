@@ -46,3 +46,29 @@ export function zahlungSummeCt(db: Database.Database, rechnungId: string): numbe
     .get(rechnungId) as { s: number };
   return row.s;
 }
+
+/** Netto in Cent — analog Brutto, aber ohne Steueraufschlag. */
+export function rechnungNettoCt(db: Database.Database, rechnungId: string): number {
+  const head = db
+    .prepare(`SELECT rabatt_gesamt FROM rechnung WHERE id = ?`)
+    .get(rechnungId) as { rabatt_gesamt: number } | undefined;
+  if (!head) return 0;
+  const rows = db
+    .prepare(
+      `SELECT menge, einzelpreis_netto_ct, steuersatz, rabatt, modus, pauschalpreis_netto_ct
+         FROM rechnung_position WHERE rechnung_id = ?`,
+    )
+    .all(rechnungId) as PosRow[];
+  const rabattGesamt = head.rabatt_gesamt || 0;
+  let nettoSum = 0;
+  for (const p of rows) {
+    const nettoBase =
+      p.modus === "pauschal" && p.pauschalpreis_netto_ct != null
+        ? p.pauschalpreis_netto_ct
+        : Math.round(p.menge * p.einzelpreis_netto_ct);
+    const nachPosRabatt = nettoBase * (1 - (p.rabatt || 0) / 100);
+    const nachGesamtRabatt = nachPosRabatt * (1 - rabattGesamt / 100);
+    nettoSum += nachGesamtRabatt;
+  }
+  return Math.round(nettoSum);
+}
