@@ -149,7 +149,7 @@ const ANGEBOT_UPDATABLE: Record<string, string> = {
 
 export function updateAngebot(id: string, patch: Record<string, unknown>): ApiAngebot | null {
   const db = getDatabase();
-  const cur = db.prepare(`SELECT status FROM angebot WHERE id = ?`).get(id) as
+  const cur = db.prepare(`SELECT status FROM angebot WHERE id = ? AND geloescht_am IS NULL`).get(id) as
     | { status: string }
     | undefined;
   if (!cur) return null;
@@ -216,7 +216,7 @@ export function deleteAngebot(id: string): "ok" | "missing" {
 
 export function sendeAngebot(id: string): ApiAngebot | null {
   const db = getDatabase();
-  const cur = db.prepare(`SELECT status FROM angebot WHERE id = ?`).get(id) as
+  const cur = db.prepare(`SELECT status FROM angebot WHERE id = ? AND geloescht_am IS NULL`).get(id) as
     | { status: string }
     | undefined;
   if (!cur) return null;
