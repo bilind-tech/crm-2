@@ -56,10 +56,15 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
   const [numPages, setNumPages] = useState(0);
   const [rendering, setRendering] = useState(false);
   const [showLoader, setShowLoader] = useState(false);
+  const [queuedKey, setQueuedKey] = useState<string | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [buildError, setBuildError] = useState<string | null>(null);
   const [viewerError, setViewerError] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const pdfUrlRef = useRef<string | null>(null);
+  const openHotspotIdRef = useRef<string | null>(null);
+  const forceRefreshRef = useRef(false);
+  openHotspotIdRef.current = openHotspotId;
 
   useEffect(() => {
     const el = containerRef.current;
@@ -86,6 +91,7 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
 
   const draftKey = useMemo(() => semKey(draft), [draft]);
   const ctxKey = useMemo(() => semKey({ kunde, objekt, firma }), [kunde, objekt, firma]);
+  const currentKey = useMemo(() => `${draftKey}|${ctxKey}`, [draftKey, ctxKey]);
   // Build-Queue: nur der jüngste Eingabe-Stand wird gerendert.
   // - inFlightRef verhindert parallele Builds
   // - latestKeyRef hält den zuletzt angeforderten Stand fest
