@@ -244,6 +244,76 @@ export function previewUmsatz(): UmsatzPunkt[] {
   return [{ monat: month, netto: 850, brutto: 1011.5 }];
 }
 
+// ---------- Daueraufträge (Preview-Mock) ----------
+
+const DA_DEFAULT_EINSTELLUNGEN: DauerauftragEinstellungen = {
+  laufzeitTagBeforeFaellig: 5,
+  autoVersand: false,
+};
+
+function mapRhythmusZuFrequenz(rh: string | undefined): DauerauftragFrequenz {
+  if (rh === "quartalsweise" || rh === "halbjaehrlich" || rh === "jaehrlich") return rh;
+  return "monatlich";
+}
+
+function periodeFuerFrequenz(freq: DauerauftragFrequenz, d: Date): string {
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1;
+  if (freq === "monatlich") return `${y}-${String(m).padStart(2, "0")}`;
+  if (freq === "quartalsweise") return `${y}-Q${Math.ceil(m / 3)}`;
+  if (freq === "halbjaehrlich") return `${y}-H${m <= 6 ? 1 : 2}`;
+  return `${y}`;
+}
+
+function nextDauerauftragNummer(store: PreviewStore): string {
+  const seq = (store.dauerauftragSeq ?? 0) + 1;
+  store.dauerauftragSeq = seq;
+  return `DA-${now.getFullYear()}-${String(seq).padStart(3, "0")}`;
+}
+
+function createPreviewDauerauftrag(
+  store: PreviewStore,
+  input: {
+    kundeId: string;
+    objektId?: string | null;
+    ansprechpartnerId?: string | null;
+    bezeichnung?: string;
+    frequenz: DauerauftragFrequenz;
+    positionen: Rechnung["positionen"];
+    rabattGesamt: number;
+    steuersatz: number;
+    rechnungsdatum?: string;
+    introText?: string;
+    outroText?: string;
+    notizen?: string | null;
+  },
+  timestamp: string,
+): Dauerauftrag {
+  const da: Dauerauftrag = {
+    id: `preview-da-${crypto.randomUUID()}`,
+    nummer: nextDauerauftragNummer(store),
+    kundeId: input.kundeId,
+    objektId: input.objektId ?? undefined,
+    ansprechpartnerId: input.ansprechpartnerId ?? undefined,
+    bezeichnung: (input.bezeichnung ?? "Dauerauftrag").trim() || "Dauerauftrag",
+    frequenz: input.frequenz,
+    stichtag: { typ: "monatstag", wert: 1 },
+    laufzeitVon: input.rechnungsdatum ?? today,
+    positionen: clone(input.positionen ?? []),
+    rabattGesamt: input.rabattGesamt ?? 0,
+    steuersatz: input.steuersatz ?? 19,
+    betreffVorlage: "{{lauf.zeitraum}}",
+    textVorlage: input.introText ?? "",
+    modus: "entwurf",
+    status: "aktiv",
+    notizen: input.notizen ?? undefined,
+    erstelltAm: timestamp,
+    geaendertAm: timestamp,
+  };
+  store.dauerauftraege.push(da);
+  return da;
+}
+
 export function localPreviewGet<T>(path: string): T | null {
   const [cleanPath, query = ""] = path.split("?");
   const params = new URLSearchParams(query);
