@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { DetailSkeleton } from "@/components/layout/DetailSkeleton";
 import { NotFoundState } from "@/components/layout/NotFoundState";
 import { useState } from "react";
-import { Download, Send, FileCheck2, ThumbsUp, ThumbsDown, Pencil } from "lucide-react";
+import { Download, Send, FileCheck2, ThumbsUp, ThumbsDown, Pencil, Trash2 } from "lucide-react";
 import {
   useAngebot,
   useAngebotInRechnung,
@@ -26,6 +26,7 @@ import { summenRechnung } from "@/lib/belege/summen";
 import { DauerauftragVerwaltungCard } from "@/components/dauerauftrag/DauerauftragVerwaltungCard";
 import { toast } from "sonner";
 import { useNavigate, Link, Outlet, useMatches } from "@tanstack/react-router";
+import { BelegLoeschenDialog } from "@/components/forms/BelegLoeschenDialog";
 
 export const Route = createFileRoute("/angebote/$id")({ component: RouteShell });
 
@@ -49,6 +50,7 @@ function Page() {
   const pdf = useAngebotPdf(a);
   const { data: alleRechnungen = [] } = useRechnungen();
   const [emailOpen, setEmailOpen] = useState(false);
+  const [delOpen, setDelOpen] = useState(false);
 
   if (isLoading) return <DetailSkeleton variant="beleg" />;
   if (!a) {
@@ -148,6 +150,14 @@ function Page() {
               <Link to="/angebote/$id/bearbeiten" params={{ id: a.id }}>
                 <Pencil className="mr-1.5 h-4 w-4" /> PDF bearbeiten
               </Link>
+            </Button>
+            <Button
+              variant="outline"
+              className="rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setDelOpen(true)}
+              title="Löschen"
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" /> Löschen
             </Button>
             {renderPrimaryAction()}
           </>
