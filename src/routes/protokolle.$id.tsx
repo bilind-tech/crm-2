@@ -305,6 +305,7 @@ function Page() {
           status={pdf.status}
           errorMessage={pdf.error}
           pdfUrl={pdf.url}
+          pdfBlob={pdf.blob}
           fileName={dateiname}
           viewButton={
             <Button
