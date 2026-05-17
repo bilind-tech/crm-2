@@ -1,37 +1,45 @@
 ## Ziel
-Die PDF-Vorschau bei Übergabeprotokoll und Schlüsselübergabe darf beim Bearbeiten nicht mehr ständig an/aus gehen. Die sichtbare PDF bleibt stabil stehen; Aktualisierungen passieren kontrolliert im Hintergrund.
+Das Flackern bei Übergabeprotokoll und Schlüsselübergabe wird nicht nur gedämpft, sondern technisch verhindert: Die sichtbare PDF wird beim Schreiben nicht mehr ständig neu gerendert.
+
+## Ursache
+Auch mit nur einem PDF-Viewer flackert `react-pdf`, sobald die PDF-Daten während des Tippens ausgetauscht werden. PDF.js löscht/rendert Canvas-Seiten neu — dadurch wirkt die Vorschau wie „an/aus“. Solange die Vorschau wirklich live bei jeder Texteingabe neu gebaut wird, kann dieses Flackern wiederkommen.
 
 ## Plan
-1. **Live-Aktualisierung entschärfen**
-   - Die Protokoll-PDF wird nicht mehr bei jedem kleinen Tastendruck sofort neu geladen.
-   - Stattdessen wird der Draft ruhig gesammelt und erst nach kurzer Pause neu gerendert.
-   - Während der Eingabe bleibt die alte PDF sichtbar, ohne weißen Wechsel oder Neu-Mount-Flackern.
+1. **Live-Rendering beim Tippen stoppen**
+   - `ProtokollLivePreview` rendert nicht mehr bei jeder Draft-Änderung sofort neu.
+   - Stattdessen bleibt die letzte fertige PDF stabil sichtbar.
+   - Während Eingaben geändert werden, erscheint nur ein dezenter Status wie „Änderungen warten“.
 
-2. **PDF-Viewer stabilisieren**
-   - Den versteckten zweiten `<Document>`-Preloader entfernen, weil genau dieses doppelte Laden sehr wahrscheinlich das schnelle An/Aus verursacht.
-   - Neue PDF-Daten nur noch über eine stabile Viewer-Version tauschen.
-   - `numPages`, `loadAttempt` und Buffer-Keys so trennen, dass React-PDF nicht in eine Neu-Lade-Schleife kommt.
+2. **Kontrollierte Aktualisierung einbauen**
+   - Neue PDF wird erst nach einer längeren Ruhezeit aktualisiert, z. B. 2,5–3 Sekunden nach der letzten Änderung.
+   - Zusätzlich bekommt die Vorschau einen kleinen Button „Vorschau aktualisieren“, damit der Nutzer sofort bewusst refreshen kann.
+   - Kein weißes Neuladen, kein schnelles An/Aus beim Tippen.
 
-3. **Nur echte Änderungen rendern**
-   - Den Protokoll-Key robuster machen, damit leere/gleiche Daten, Timestamps oder API-Echos keinen neuen PDF-Build starten.
-   - Wenn bereits ein Build läuft, wird nicht parallel neu gestartet; es wird nur der letzte Stand nachgezogen.
+3. **Viewer während Bearbeitung einfrieren**
+   - Wenn ein Hotspot-Popover oder Textfeld aktiv ist, wird die PDF nicht neu ersetzt.
+   - Erst wenn die Bearbeitung beendet/geschlossen wird oder genug Ruhezeit vergangen ist, wird neu gebaut.
+   - Das macht es praktisch wie Word: Dokument bleibt stehen, Eingabe bleibt ruhig.
 
-4. **Bearbeiten bleibt live, aber ruhig**
-   - Hotspot-/Inline-Editoren bleiben nutzbar.
-   - Die Vorschau zeigt bei schnellen Eingaben maximal dezent „aktualisiert …“, aber sie verschwindet nicht.
-   - Tabellen/Schlüsselzeilen und Textfelder bleiben übersichtlich editierbar.
+4. **PDF.js-Neumount minimieren**
+   - `Document` und `Page` bekommen stabile Keys, damit nicht unnötig alles neu gemountet wird.
+   - Seitenanzahl wird beim Neuladen nicht auf 0 gesetzt; die alte Seite bleibt sichtbar, bis neue Daten fertig sind.
 
-5. **Aufräumen kleiner Textreste**
-   - Im Hotspot „Kunde“ steht noch „Stammdaten öffnen“, obwohl Stammdaten entfernt wurden. Das wird auf „Inhalt öffnen“ geändert.
+5. **Autosave entkoppeln**
+   - Autosave darf weiter speichern, aber darf die PDF-Vorschau nicht sofort neu triggern.
+   - Server-Echos/Refetches werden ignoriert, solange der lokale Draft gerade bearbeitet wird.
 
-## Technische Umsetzung
-- Betroffene Dateien:
-  - `src/components/protokoll-editor/ProtokollLivePreview.tsx`
-  - `src/components/protokoll-editor/ProtokollHotspotEditor.tsx`
-- Kernänderung:
-  - Single-Viewer-Strategie statt sichtbares Document plus verstecktes Pending-Document.
-  - Stable render version/sequence statt Buffer-Länge oder Pending-Document-Key.
-  - Alter PDF-Buffer bleibt aktiv, bis der neue Buffer vollständig erzeugt wurde.
+## Dateien
+- `src/components/protokoll-editor/ProtokollLivePreview.tsx`
+- `src/components/protokoll-editor/ProtokollEditorLayout.tsx`
+- optional klein: `src/hooks/useProtokollEditor.ts`, falls Server-Echos den Draft/Preview-Key weiter anstoßen
 
 ## Ergebnis
-Die Protokoll-PDF flackert nicht mehr extrem beim Erstellen oder Bearbeiten; sie bleibt stabil sichtbar und aktualisiert sich kontrolliert im Hintergrund.
+Beim Schreiben bleibt die PDF sichtbar und ruhig. Sie aktualisiert sich kontrolliert nach Pause oder per Button — nicht mehr extrem schnell live bei jedem Tastendruck.
+
+<presentation-actions>
+  <presentation-open-history>View History</presentation-open-history>
+</presentation-actions>
+
+<presentation-actions>
+<presentation-link url="https://docs.lovable.dev/tips-tricks/troubleshooting">Troubleshooting docs</presentation-link>
+</presentation-actions>

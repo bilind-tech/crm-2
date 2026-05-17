@@ -10,19 +10,27 @@ import "react-pdf/dist/Page/TextLayer.css";
 import { configurePdfWorker } from "@/lib/pdf/pdfjsWorker";
 
 configurePdfWorker();
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { generateProtokollPdf } from "@/lib/pdf/werkzeugePdf";
 import type { Protokoll, Kunde, Objekt, Firmendaten } from "@/lib/api/types";
 import { PdfFieldOverlay } from "@/components/pdf-editor/PdfFieldOverlay";
 import { protokollMetaForId, FALLBACK_HOTSPOTS_PROTOKOLL_SEITE_1 } from "@/lib/pdf/fieldMap";
 import { A4, type RuntimeHotspot } from "@/lib/pdf/hotspotTracker";
 
-const DEBOUNCE_MS = 800;
+const INITIAL_BUILD_DELAY_MS = 80;
+const AUTO_REFRESH_DELAY_MS = 3000;
 const LOADER_DELAY_MS = 250;
 
 const VOLATILE = new Set(["aktualisiertAm", "erstelltAm", "updatedAt", "createdAt"]);
 function semKey<T>(o: T) {
   return JSON.stringify(o, (k, v) => (VOLATILE.has(k) ? undefined : v));
+}
+
+function hasActiveTextEditor() {
+  if (typeof document === "undefined" || typeof HTMLElement === "undefined") return false;
+  const el = document.activeElement;
+  if (!(el instanceof HTMLElement)) return false;
+  return el.matches('input, textarea, select, [contenteditable="true"], [role="textbox"]');
 }
 
 interface Props {
@@ -48,10 +56,15 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
   const [numPages, setNumPages] = useState(0);
   const [rendering, setRendering] = useState(false);
   const [showLoader, setShowLoader] = useState(false);
+  const [queuedKey, setQueuedKey] = useState<string | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [buildError, setBuildError] = useState<string | null>(null);
   const [viewerError, setViewerError] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const pdfUrlRef = useRef<string | null>(null);
+  const openHotspotIdRef = useRef<string | null>(null);
+  const forceRefreshRef = useRef(false);
+  openHotspotIdRef.current = openHotspotId;
 
   useEffect(() => {
     const el = containerRef.current;
@@ -78,6 +91,7 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
 
   const draftKey = useMemo(() => semKey(draft), [draft]);
   const ctxKey = useMemo(() => semKey({ kunde, objekt, firma }), [kunde, objekt, firma]);
+  const currentKey = useMemo(() => `${draftKey}|${ctxKey}`, [draftKey, ctxKey]);
   // Build-Queue: nur der jüngste Eingabe-Stand wird gerendert.
   // - inFlightRef verhindert parallele Builds
   // - latestKeyRef hält den zuletzt angeforderten Stand fest
@@ -97,63 +111,94 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
   }, []);
 
   useEffect(() => {
-    const combinedKey = `${draftKey}|${ctxKey}`;
-    latestKeyRef.current = combinedKey;
-    if (builtKeyRef.current === combinedKey) return;
+    latestKeyRef.current = currentKey;
+    if (builtKeyRef.current === currentKey) {
+      setQueuedKey(null);
+      return;
+    }
 
-    const runBuild = async () => {
-      if (inFlightRef.current) return;
-      inFlightRef.current = true;
-      setRendering(true);
-      setBuildError(null);
-      try {
-        // Schleife: solange der Ziel-Key sich ändert, neu bauen — immer den jüngsten Stand.
-        while (mountedRef.current && builtKeyRef.current !== latestKeyRef.current) {
-          const targetKey = latestKeyRef.current;
-          const { draft: d, kunde: k, objekt: o, firma: f } = dataRef.current;
-          const { blob, hotspots: hs } = await generateProtokollPdf(d, k, o, f);
-          if (!mountedRef.current) return;
-          if (!(blob instanceof Blob) || blob.size === 0) {
-            throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
-          }
-          const buf = await blob.arrayBuffer();
-          if (!mountedRef.current) return;
-          const newUrl = URL.createObjectURL(blob);
-
-          if (targetKey !== latestKeyRef.current) {
-            URL.revokeObjectURL(newUrl);
-            continue;
-          }
-
-          builtKeyRef.current = targetKey;
-          const previousUrl = pdfUrlRef.current;
-          pdfUrlRef.current = newUrl;
-          setHotspots(hs);
-          setPdfBuffer(buf);
-          setPdfUrl(newUrl);
-          setLoadAttempt(0);
-          setViewerSeq((n) => n + 1);
-          if (previousUrl) URL.revokeObjectURL(previousUrl);
-          setViewerError(null);
-        }
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error("[ProtokollLivePreview] build failed", e);
-        if (mountedRef.current) setBuildError(e instanceof Error ? e.message : "PDF-Fehler");
-      } finally {
-        inFlightRef.current = false;
-        if (mountedRef.current) setRendering(false);
-      }
-    };
-
+    setQueuedKey(currentKey);
+    const delay = forceRefreshRef.current ? 0 : pdfBuffer ? AUTO_REFRESH_DELAY_MS : INITIAL_BUILD_DELAY_MS;
     const timer = setTimeout(() => {
-      void runBuild();
-    }, DEBOUNCE_MS);
+      if (pdfBuffer && !forceRefreshRef.current && (openHotspotIdRef.current || hasActiveTextEditor())) {
+        return;
+      }
+      forceRefreshRef.current = false;
+      void runBuild(currentKey);
+    }, delay);
 
-    return () => {
-      clearTimeout(timer);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentKey, refreshNonce]);
+
+  useEffect(() => {
+    if (!queuedKey || queuedKey === builtKeyRef.current || openHotspotId || hasActiveTextEditor()) return;
+    const timer = setTimeout(() => {
+      if (!openHotspotIdRef.current && !hasActiveTextEditor()) void runBuild(latestKeyRef.current);
+    }, 250);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queuedKey, openHotspotId]);
+
+  useEffect(() => {
+    const refreshAfterBlur = () => {
+      window.setTimeout(() => {
+        if (queuedKey && !openHotspotIdRef.current && !hasActiveTextEditor()) void runBuild(latestKeyRef.current);
+      }, 250);
     };
-  }, [draftKey, ctxKey]);
+    window.addEventListener("focusout", refreshAfterBlur);
+    return () => window.removeEventListener("focusout", refreshAfterBlur);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queuedKey]);
+
+  const runBuild = async (requestedKey = latestKeyRef.current) => {
+    latestKeyRef.current = requestedKey;
+    if (inFlightRef.current || builtKeyRef.current === requestedKey) return;
+    inFlightRef.current = true;
+    setRendering(true);
+    setBuildError(null);
+    try {
+      const { draft: d, kunde: k, objekt: o, firma: f } = dataRef.current;
+      const { blob, hotspots: hs } = await generateProtokollPdf(d, k, o, f);
+      if (!mountedRef.current) return;
+      if (!(blob instanceof Blob) || blob.size === 0) {
+        throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
+      }
+      const buf = await blob.arrayBuffer();
+      if (!mountedRef.current) return;
+      const newUrl = URL.createObjectURL(blob);
+      if (requestedKey !== latestKeyRef.current) {
+        URL.revokeObjectURL(newUrl);
+        setQueuedKey(latestKeyRef.current);
+        return;
+      }
+
+      builtKeyRef.current = requestedKey;
+      const previousUrl = pdfUrlRef.current;
+      pdfUrlRef.current = newUrl;
+      setHotspots(hs);
+      setPdfBuffer(buf);
+      setPdfUrl(newUrl);
+      setQueuedKey(null);
+      setLoadAttempt(0);
+      setViewerSeq((n) => n + 1);
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
+      setViewerError(null);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("[ProtokollLivePreview] build failed", e);
+      if (mountedRef.current) setBuildError(e instanceof Error ? e.message : "PDF-Fehler");
+    } finally {
+      inFlightRef.current = false;
+      if (mountedRef.current) {
+        setRendering(false);
+        if (latestKeyRef.current !== builtKeyRef.current) {
+          setQueuedKey(latestKeyRef.current);
+          setRefreshNonce((n) => n + 1);
+        }
+      }
+    }
+  };
 
   // Snap auf 20-px-Schritte: kein Re-Render bei Scrollbar-Wackler.
   const renderWidthRaw = useMemo(() => {
@@ -188,6 +233,23 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
         <div className="pointer-events-none sticky top-2 z-20 ml-auto flex w-fit items-center gap-1.5 rounded-full bg-background/80 px-2 py-0.5 text-[10px] text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur">
           <Loader2 className="h-2.5 w-2.5 animate-spin" />
           aktualisiert …
+        </div>
+      )}
+
+      {queuedKey && !rendering && pdfBuffer && (
+        <div className="sticky top-2 z-20 ml-auto mb-2 flex w-fit items-center gap-2 rounded-full bg-background/90 px-2 py-1 text-[10px] text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur">
+          <span>Änderungen warten</span>
+          <button
+            type="button"
+            onClick={() => {
+              forceRefreshRef.current = true;
+              setRefreshNonce((n) => n + 1);
+            }}
+            className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 font-medium text-primary-foreground transition hover:opacity-90"
+          >
+            <RefreshCw className="h-2.5 w-2.5" />
+            Vorschau aktualisieren
+          </button>
         </div>
       )}
 
