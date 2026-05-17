@@ -3,7 +3,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { Smartphone, Receipt, AlertTriangle, X, Upload } from "lucide-react";
 import { useDokumente, useKunden, useObjekte } from "@/hooks/useApi";
 import { formatEUR, formatDate } from "@/lib/format";
-import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { FilterBar } from "@/routes/angebote";
 import {
