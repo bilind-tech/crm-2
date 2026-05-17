@@ -31,7 +31,6 @@ import { Route as ObjekteNeuRouteImport } from './routes/objekte.neu'
 import { Route as ObjekteIdRouteImport } from './routes/objekte.$id'
 import { Route as KundenNeuRouteImport } from './routes/kunden.neu'
 import { Route as KundenIdRouteImport } from './routes/kunden.$id'
-import { Route as EinstellungenDatenbankRouteImport } from './routes/einstellungen.datenbank'
 import { Route as AngeboteNeuRouteImport } from './routes/angebote.neu'
 import { Route as AngeboteIdRouteImport } from './routes/angebote.$id'
 import { Route as RechnungenIdBearbeitenRouteImport } from './routes/rechnungen.$id.bearbeiten'
@@ -151,11 +150,6 @@ const KundenIdRoute = KundenIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => KundenRoute,
 } as any)
-const EinstellungenDatenbankRoute = EinstellungenDatenbankRouteImport.update({
-  id: '/datenbank',
-  path: '/datenbank',
-  getParentRoute: () => EinstellungenRoute,
-} as any)
 const AngeboteNeuRoute = AngeboteNeuRouteImport.update({
   id: '/neu',
   path: '/neu',
@@ -192,7 +186,7 @@ export interface FileRoutesByFullPath {
   '/aktivitaet': typeof AktivitaetRoute
   '/angebote': typeof AngeboteRouteWithChildren
   '/dokumente': typeof DokumenteRoute
-  '/einstellungen': typeof EinstellungenRouteWithChildren
+  '/einstellungen': typeof EinstellungenRoute
   '/kunden': typeof KundenRouteWithChildren
   '/objekte': typeof ObjekteRouteWithChildren
   '/protokolle': typeof ProtokolleRouteWithChildren
@@ -202,7 +196,6 @@ export interface FileRoutesByFullPath {
   '/werkzeuge': typeof WerkzeugeRouteWithChildren
   '/angebote/$id': typeof AngeboteIdRouteWithChildren
   '/angebote/neu': typeof AngeboteNeuRoute
-  '/einstellungen/datenbank': typeof EinstellungenDatenbankRoute
   '/kunden/$id': typeof KundenIdRoute
   '/kunden/neu': typeof KundenNeuRoute
   '/objekte/$id': typeof ObjekteIdRoute
@@ -223,7 +216,7 @@ export interface FileRoutesByTo {
   '/aktivitaet': typeof AktivitaetRoute
   '/angebote': typeof AngeboteRouteWithChildren
   '/dokumente': typeof DokumenteRoute
-  '/einstellungen': typeof EinstellungenRouteWithChildren
+  '/einstellungen': typeof EinstellungenRoute
   '/kunden': typeof KundenRouteWithChildren
   '/objekte': typeof ObjekteRouteWithChildren
   '/protokolle': typeof ProtokolleRouteWithChildren
@@ -232,7 +225,6 @@ export interface FileRoutesByTo {
   '/stundenzettel': typeof StundenzettelRoute
   '/angebote/$id': typeof AngeboteIdRouteWithChildren
   '/angebote/neu': typeof AngeboteNeuRoute
-  '/einstellungen/datenbank': typeof EinstellungenDatenbankRoute
   '/kunden/$id': typeof KundenIdRoute
   '/kunden/neu': typeof KundenNeuRoute
   '/objekte/$id': typeof ObjekteIdRoute
@@ -254,7 +246,7 @@ export interface FileRoutesById {
   '/aktivitaet': typeof AktivitaetRoute
   '/angebote': typeof AngeboteRouteWithChildren
   '/dokumente': typeof DokumenteRoute
-  '/einstellungen': typeof EinstellungenRouteWithChildren
+  '/einstellungen': typeof EinstellungenRoute
   '/kunden': typeof KundenRouteWithChildren
   '/objekte': typeof ObjekteRouteWithChildren
   '/protokolle': typeof ProtokolleRouteWithChildren
@@ -264,7 +256,6 @@ export interface FileRoutesById {
   '/werkzeuge': typeof WerkzeugeRouteWithChildren
   '/angebote/$id': typeof AngeboteIdRouteWithChildren
   '/angebote/neu': typeof AngeboteNeuRoute
-  '/einstellungen/datenbank': typeof EinstellungenDatenbankRoute
   '/kunden/$id': typeof KundenIdRoute
   '/kunden/neu': typeof KundenNeuRoute
   '/objekte/$id': typeof ObjekteIdRoute
@@ -297,7 +288,6 @@ export interface FileRouteTypes {
     | '/werkzeuge'
     | '/angebote/$id'
     | '/angebote/neu'
-    | '/einstellungen/datenbank'
     | '/kunden/$id'
     | '/kunden/neu'
     | '/objekte/$id'
@@ -327,7 +317,6 @@ export interface FileRouteTypes {
     | '/stundenzettel'
     | '/angebote/$id'
     | '/angebote/neu'
-    | '/einstellungen/datenbank'
     | '/kunden/$id'
     | '/kunden/neu'
     | '/objekte/$id'
@@ -358,7 +347,6 @@ export interface FileRouteTypes {
     | '/werkzeuge'
     | '/angebote/$id'
     | '/angebote/neu'
-    | '/einstellungen/datenbank'
     | '/kunden/$id'
     | '/kunden/neu'
     | '/objekte/$id'
@@ -380,7 +368,7 @@ export interface RootRouteChildren {
   AktivitaetRoute: typeof AktivitaetRoute
   AngeboteRoute: typeof AngeboteRouteWithChildren
   DokumenteRoute: typeof DokumenteRoute
-  EinstellungenRoute: typeof EinstellungenRouteWithChildren
+  EinstellungenRoute: typeof EinstellungenRoute
   KundenRoute: typeof KundenRouteWithChildren
   ObjekteRoute: typeof ObjekteRouteWithChildren
   ProtokolleRoute: typeof ProtokolleRouteWithChildren
@@ -547,13 +535,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KundenIdRouteImport
       parentRoute: typeof KundenRoute
     }
-    '/einstellungen/datenbank': {
-      id: '/einstellungen/datenbank'
-      path: '/datenbank'
-      fullPath: '/einstellungen/datenbank'
-      preLoaderRoute: typeof EinstellungenDatenbankRouteImport
-      parentRoute: typeof EinstellungenRoute
-    }
     '/angebote/neu': {
       id: '/angebote/neu'
       path: '/neu'
@@ -623,18 +604,6 @@ const AngeboteRouteChildren: AngeboteRouteChildren = {
 
 const AngeboteRouteWithChildren = AngeboteRoute._addFileChildren(
   AngeboteRouteChildren,
-)
-
-interface EinstellungenRouteChildren {
-  EinstellungenDatenbankRoute: typeof EinstellungenDatenbankRoute
-}
-
-const EinstellungenRouteChildren: EinstellungenRouteChildren = {
-  EinstellungenDatenbankRoute: EinstellungenDatenbankRoute,
-}
-
-const EinstellungenRouteWithChildren = EinstellungenRoute._addFileChildren(
-  EinstellungenRouteChildren,
 )
 
 interface KundenRouteChildren {
@@ -734,7 +703,7 @@ const rootRouteChildren: RootRouteChildren = {
   AktivitaetRoute: AktivitaetRoute,
   AngeboteRoute: AngeboteRouteWithChildren,
   DokumenteRoute: DokumenteRoute,
-  EinstellungenRoute: EinstellungenRouteWithChildren,
+  EinstellungenRoute: EinstellungenRoute,
   KundenRoute: KundenRouteWithChildren,
   ObjekteRoute: ObjekteRouteWithChildren,
   ProtokolleRoute: ProtokolleRouteWithChildren,
