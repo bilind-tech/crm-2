@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useUpdateAngebot, useUpdateRechnung } from "@/hooks/useApi";
 import { useInvalidateBelegPdf } from "@/hooks/useBelegPdf";
-import type { Angebot, Rechnung } from "@/lib/api/types";
+import type { Angebot, Position, PositionModus, Rechnung } from "@/lib/api/types";
 
 type BelegKind = "angebot" | "rechnung";
 
@@ -48,6 +48,113 @@ export function useBelegEditor<T extends Angebot | Rechnung>(kind: BelegKind, be
   const set = useCallback(<K extends keyof T>(key: K, value: T[K]) => {
     setDraft((prev) => ({ ...prev, [key]: value }));
   }, []);
+
+  // ── Positions-Helfer ────────────────────────────────────────────────────
+  const makeEmptyPosition = (modus: PositionModus = "einzel"): Position => ({
+    id:
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `pos-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    beschreibung: "",
+    menge: modus === "pauschal" ? 1 : 1,
+    einheit: modus === "stunden" ? "h" : modus === "pauschal" ? "pauschal" : "stk",
+    einzelpreisNetto: 0,
+    steuersatz: 19,
+    rabatt: 0,
+    modus,
+    pauschalpreisNetto: modus === "pauschal" ? 0 : undefined,
+  });
+
+  const mutatePositions = useCallback(
+    (fn: (list: Position[]) => Position[]) => {
+      setDraft((prev) => ({ ...prev, positionen: fn(prev.positionen.slice()) }));
+    },
+    [],
+  );
+
+  const updatePosition = useCallback(
+    (id: string, patch: Partial<Position>) => {
+      mutatePositions((list) => {
+        const idx = list.findIndex((p) => p.id === id);
+        if (idx < 0) return list;
+        list[idx] = { ...list[idx], ...patch };
+        return list;
+      });
+    },
+    [mutatePositions],
+  );
+
+  const movePosition = useCallback(
+    (id: string, dir: "up" | "down") => {
+      mutatePositions((list) => {
+        const idx = list.findIndex((p) => p.id === id);
+        if (idx < 0) return list;
+        const j = dir === "up" ? idx - 1 : idx + 1;
+        if (j < 0 || j >= list.length) return list;
+        [list[idx], list[j]] = [list[j], list[idx]];
+        return list;
+      });
+    },
+    [mutatePositions],
+  );
+
+  const insertPositionAfter = useCallback(
+    (id: string, modus?: PositionModus): string => {
+      const newPos = makeEmptyPosition(modus);
+      mutatePositions((list) => {
+        const idx = list.findIndex((p) => p.id === id);
+        if (idx < 0) {
+          list.push(newPos);
+          return list;
+        }
+        list.splice(idx + 1, 0, newPos);
+        return list;
+      });
+      return newPos.id;
+    },
+    [mutatePositions],
+  );
+
+  const duplicatePosition = useCallback(
+    (id: string): string | null => {
+      let newId: string | null = null;
+      mutatePositions((list) => {
+        const idx = list.findIndex((p) => p.id === id);
+        if (idx < 0) return list;
+        const copy: Position = {
+          ...list[idx],
+          id:
+            typeof crypto !== "undefined" && "randomUUID" in crypto
+              ? crypto.randomUUID()
+              : `pos-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        };
+        newId = copy.id;
+        list.splice(idx + 1, 0, copy);
+        return list;
+      });
+      return newId;
+    },
+    [mutatePositions],
+  );
+
+  const removePosition = useCallback(
+    (id: string) => {
+      mutatePositions((list) => list.filter((p) => p.id !== id));
+    },
+    [mutatePositions],
+  );
+
+  const addEmptyPosition = useCallback(
+    (modus?: PositionModus): string => {
+      const newPos = makeEmptyPosition(modus);
+      mutatePositions((list) => {
+        list.push(newPos);
+        return list;
+      });
+      return newPos.id;
+    },
+    [mutatePositions],
+  );
 
   const setOption = useCallback(
     <K extends keyof NonNullable<T["optionen"]>>(key: K, value: NonNullable<T["optionen"]>[K]) => {
@@ -126,5 +233,12 @@ export function useBelegEditor<T extends Angebot | Rechnung>(kind: BelegKind, be
     discard,
     focusField,
     saving: updateAngebot.isPending || updateRechnung.isPending,
+    // Positions-Aktionen
+    updatePosition,
+    movePosition,
+    insertPositionAfter,
+    duplicatePosition,
+    removePosition,
+    addEmptyPosition,
   };
 }
