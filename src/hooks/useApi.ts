@@ -314,7 +314,11 @@ export const useUpdateAngebot = (id: string) => {
 export const useDeleteAngebot = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.delete<void>(`/angebote/${id}`),
+    mutationFn: (arg: string | { id: string; force?: boolean }) => {
+      const id = typeof arg === "string" ? arg : arg.id;
+      const force = typeof arg === "string" ? false : !!arg.force;
+      return api.delete<void>(`/angebote/${id}${force ? "?force=1" : ""}`);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["angebote"] }),
   });
 };
@@ -412,7 +416,11 @@ export const useUpdateRechnung = (id: string) => {
 export const useDeleteRechnung = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.delete<void>(`/rechnungen/${id}`),
+    mutationFn: (arg: string | { id: string; force?: boolean }) => {
+      const id = typeof arg === "string" ? arg : arg.id;
+      const force = typeof arg === "string" ? false : !!arg.force;
+      return api.delete<void>(`/rechnungen/${id}${force ? "?force=1" : ""}`);
+    },
     onSuccess: () => invalidateRechnungScope(qc),
   });
 };

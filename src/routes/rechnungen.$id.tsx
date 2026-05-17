@@ -1,10 +1,11 @@
-import { createFileRoute, Link, Outlet, useMatches } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useMatches, useNavigate } from "@tanstack/react-router";
 import { DetailSkeleton } from "@/components/layout/DetailSkeleton";
 import { NotFoundState } from "@/components/layout/NotFoundState";
 import { useState } from "react";
 import { Download, Send, CheckCircle2, Wallet, Trash2, Pencil } from "lucide-react";
 import { useRechnung, useAngebot, useKunde, useDeleteZahlung } from "@/hooks/useApi";
 import { useConfirm } from "@/hooks/useConfirm";
+import { BelegLoeschenDialog } from "@/components/forms/BelegLoeschenDialog";
 import { useRechnungPdf } from "@/hooks/useBelegPdf";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -41,6 +42,8 @@ function Page() {
   const pdf = useRechnungPdf(r);
   const [zahlungOpen, setZahlungOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
+  const [delOpen, setDelOpen] = useState(false);
+  const navigate = useNavigate();
   const { data: quellAngebot } = useAngebot(r?.quellAngebotId ?? "");
   const { data: kunde } = useKunde(r?.kundeId ?? "");
   const delZahlung = useDeleteZahlung(id);
@@ -116,6 +119,14 @@ function Page() {
               <Link to="/rechnungen/$id/bearbeiten" params={{ id: r.id }}>
                 <Pencil className="mr-1.5 h-4 w-4" /> PDF bearbeiten
               </Link>
+            </Button>
+            <Button
+              variant="outline"
+              className="rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setDelOpen(true)}
+              title="Löschen"
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" /> Löschen
             </Button>
             {renderPrimaryAction()}
           </>
@@ -318,6 +329,17 @@ function Page() {
         rechnung={r}
         pdfBlobUrl={pdf.url}
         pdfDateiname={`${r.nummer}.pdf`}
+      />
+      <BelegLoeschenDialog
+        art="rechnung"
+        id={r.id}
+        nummer={r.nummer}
+        status={r.status}
+        open={delOpen}
+        onOpenChange={setDelOpen}
+        onDeleted={(mode) => {
+          if (mode === "hard") navigate({ to: "/rechnungen" });
+        }}
       />
       {confirmDialog}
     </div>

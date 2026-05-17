@@ -245,18 +245,27 @@ export function updateRechnung(id: string, patch: Record<string, unknown>): ApiR
   return getRechnung(id);
 }
 
-export function deleteRechnung(id: string): "soft" | "hard" | "missing" {
+export function deleteRechnung(
+  id: string,
+  opts: { force?: boolean } = {},
+): "soft" | "hard" | "missing" {
   const db = getDatabase();
   const cur = db.prepare(`SELECT versendet_am, status FROM rechnung WHERE id = ?`).get(id) as
     | { versendet_am: string | null; status: string }
     | undefined;
   if (!cur) return "missing";
-  if (cur.versendet_am || cur.status !== "entwurf") {
+  if (!opts.force && (cur.versendet_am || cur.status !== "entwurf")) {
     db.prepare(`UPDATE rechnung SET archiviert = 1 WHERE id = ?`).run(id);
     emitBelegMutated("rechnung", id);
     return "soft";
   }
-  db.prepare(`DELETE FROM rechnung WHERE id = ?`).run(id);
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM email_versand WHERE beleg_art='rechnung' AND beleg_id = ?`).run(id);
+    db.prepare(`DELETE FROM drive_upload_queue WHERE beleg_art='rechnung' AND beleg_id = ?`).run(id);
+    db.prepare(`DELETE FROM mahn_lauf_eintraege WHERE rechnung_id = ?`).run(id);
+    db.prepare(`DELETE FROM rechnung WHERE id = ?`).run(id);
+  });
+  tx();
   emitBelegMutated("rechnung", id);
   return "hard";
 }
