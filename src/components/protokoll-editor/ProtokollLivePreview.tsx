@@ -52,6 +52,7 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
   const [showLoader, setShowLoader] = useState(false);
   const [buildError, setBuildError] = useState<string | null>(null);
   const [viewerError, setViewerError] = useState<string | null>(null);
+  const [pendingSeq, setPendingSeq] = useState(0);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -78,44 +79,64 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
 
   const draftKey = useMemo(() => semKey(draft), [draft]);
   const ctxKey = useMemo(() => semKey({ kunde, objekt, firma }), [kunde, objekt, firma]);
+  // Build-Queue: nur der jüngste Eingabe-Stand wird gerendert.
+  // - inFlightRef verhindert parallele Builds
+  // - latestKeyRef hält den zuletzt angeforderten Stand fest
+  // - hasFirstBufferRef vermeidet Re-Render-Loops über pdfBuffer-Dep
   const inFlightRef = useRef(false);
+  const latestKeyRef = useRef<string>("");
+  const builtKeyRef = useRef<string>("");
+  const hasFirstBufferRef = useRef(false);
+  // Aktuelle Daten als Ref, damit der Build-Loop immer den frischesten Stand nimmt.
+  const dataRef = useRef({ draft, kunde, objekt, firma });
+  dataRef.current = { draft, kunde, objekt, firma };
 
   useEffect(() => {
+    const combinedKey = `${draftKey}|${ctxKey}`;
+    latestKeyRef.current = combinedKey;
+    if (builtKeyRef.current === combinedKey) return;
+
     let cancelled = false;
-    const timer = setTimeout(async () => {
-      if (inFlightRef.current) {
-        // Vorheriger Build noch nicht fertig — kurz warten, dann nächster Effekt erledigt es.
-        return;
-      }
+
+    const runBuild = async () => {
+      if (inFlightRef.current) return;
       inFlightRef.current = true;
       setRendering(true);
       setBuildError(null);
       try {
-        const { blob, hotspots: hs } = await generateProtokollPdf(draft, kunde, objekt, firma);
-        if (cancelled) return;
-        if (!(blob instanceof Blob) || blob.size === 0) {
-          throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
+        // Schleife: solange der Ziel-Key sich ändert, neu bauen — immer den jüngsten Stand.
+        while (!cancelled && builtKeyRef.current !== latestKeyRef.current) {
+          const targetKey = latestKeyRef.current;
+          const { draft: d, kunde: k, objekt: o, firma: f } = dataRef.current;
+          const { blob, hotspots: hs } = await generateProtokollPdf(d, k, o, f);
+          if (cancelled) return;
+          if (!(blob instanceof Blob) || blob.size === 0) {
+            throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
+          }
+          const buf = await blob.arrayBuffer();
+          if (cancelled) return;
+          const newUrl = URL.createObjectURL(blob);
+          builtKeyRef.current = targetKey;
+
+          if (!hasFirstBufferRef.current) {
+            hasFirstBufferRef.current = true;
+            setHotspots(hs);
+            setPdfBuffer(buf);
+            setPdfUrl((prev) => {
+              if (prev) URL.revokeObjectURL(prev);
+              return newUrl;
+            });
+          } else {
+            setPendingHotspots(hs);
+            setPendingBuffer(buf);
+            setPendingUrl((prev) => {
+              if (prev) URL.revokeObjectURL(prev);
+              return newUrl;
+            });
+            setPendingSeq((n) => n + 1);
+          }
+          setViewerError(null);
         }
-        const buf = await blob.arrayBuffer();
-        if (cancelled) return;
-        const newUrl = URL.createObjectURL(blob);
-        // Beim allerersten Build keinen Pending-Pfad → schneller initialer Sichtbar-Moment.
-        if (!pdfBuffer) {
-          setHotspots(hs);
-          setPdfBuffer(buf);
-          setPdfUrl((prev) => {
-            if (prev) URL.revokeObjectURL(prev);
-            return newUrl;
-          });
-        } else {
-          setPendingHotspots(hs);
-          setPendingBuffer(buf);
-          setPendingUrl((prev) => {
-            if (prev) URL.revokeObjectURL(prev);
-            return newUrl;
-          });
-        }
-        setViewerError(null);
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error("[ProtokollLivePreview] build failed", e);
@@ -124,12 +145,16 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
         inFlightRef.current = false;
         if (!cancelled) setRendering(false);
       }
+    };
+
+    const timer = setTimeout(() => {
+      void runBuild();
     }, DEBOUNCE_MS);
+
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey, ctxKey]);
 
   useEffect(() => {
@@ -168,7 +193,7 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
   );
   const pendingFileSource = useMemo(
     () => (pendingBuffer ? { data: new Uint8Array(pendingBuffer.slice(0)) } : null),
-    [pendingBuffer],
+    [pendingBuffer, pendingSeq],
   );
 
   return (
@@ -262,7 +287,7 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
       {pendingFileSource && pendingBuffer !== pdfBuffer && (
         <div className="pointer-events-none absolute -z-10 h-0 w-0 overflow-hidden opacity-0">
           <Document
-            key={`pending#${pendingBuffer?.byteLength}`}
+            key={`pending-${pendingSeq}`}
             file={pendingFileSource}
             onLoadSuccess={() => {
               // numPages NICHT hier setzen — sichtbares Document setzt es nach dem Swap,
