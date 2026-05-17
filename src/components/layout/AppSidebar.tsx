@@ -74,9 +74,14 @@ export function AppSidebar() {
   const isActive = (url: string, exact = false) =>
     exact ? path === url : path === url || path.startsWith(url + "/");
 
-  const renderGroup = (key: string, items: NavItem[], withSeparator: boolean) => (
+  const renderGroup = (
+    key: string,
+    items: NavItem[],
+    withSeparatorTop: boolean,
+    withSeparatorBottom = false,
+  ) => (
     <SidebarGroup>
-      {withSeparator && (
+      {withSeparatorTop && (
         <div
           aria-hidden
           className={cn(
@@ -151,6 +156,15 @@ export function AppSidebar() {
           })}
         </SidebarMenu>
       </SidebarGroupContent>
+      {withSeparatorBottom && (
+        <div
+          aria-hidden
+          className={cn(
+            "h-px bg-sidebar-foreground/15",
+            collapsed ? "mx-2 my-1" : "mx-3 my-1",
+          )}
+        />
+      )}
     </SidebarGroup>
   );
 
@@ -171,8 +185,8 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent className="gap-1 py-2">
         {renderGroup("uebersicht", uebersicht, false)}
-        {renderGroup("stammdaten", stammdaten, true)}
-        {renderGroup("vertrieb", vertrieb, true)}
+        {renderGroup("stammdaten", stammdaten, true, true)}
+        {renderGroup("vertrieb", vertrieb, false)}
 
         {/* Einstellungen — einklappbare Gruppe mit Sub-Items */}
         <SidebarGroup>
