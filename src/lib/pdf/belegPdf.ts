@@ -11,6 +11,7 @@ import type {
   Ansprechpartner,
 } from "@/lib/api/types";
 import logoUrl from "@/assets/logo.png";
+import { kundeLogoUrl } from "@/hooks/useApi";
 import { A4, createHotspotTracker, type RuntimeHotspot } from "./hotspotTracker";
 
 // ───────── Mock-LRU-Cache (nur Lovable-Preview) ────────────────────────────
@@ -90,6 +91,25 @@ async function getPdfMake(): Promise<AnyPdfMake> {
 async function logoDataUrl(): Promise<string | null> {
   try {
     const res = await fetch(logoUrl);
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function fetchKundenLogoDataUrl(kunde: Kunde): Promise<string | null> {
+  if (!kunde.hasLogo) return null;
+  try {
+    const res = await fetch(kundeLogoUrl(kunde.id, kunde.logoUpdatedAt), {
+      credentials: "include",
+    });
+    if (!res.ok) return null;
     const blob = await res.blob();
     return await new Promise<string>((resolve, reject) => {
       const r = new FileReader();
@@ -532,11 +552,32 @@ async function buildDoc(
   outro: string,
   signatur: string[],
   logoOverride: string | null,
+  kundenLogo: string | null,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   pageBreakBefore?: (currentNode: any) => boolean,
 ) {
   const logo = await resolveLogo(ctx.firma, logoOverride);
   const t = totals(beleg.positionen, beleg.rabattGesamt, beleg.steuersatz);
+  const kundeColumn = {
+    id: "kunde",
+    width: "*",
+    stack: [
+      ...(kundenLogo
+        ? [
+            {
+              image: kundenLogo,
+              fit: [85, 40],
+              margin: [0, 0, 0, 6] as [number, number, number, number],
+            },
+          ]
+        : []),
+      ...kundeAdresse(ctx.kunde).map((l, i) => ({
+        text: l,
+        fontSize: 10,
+        bold: i === 0,
+      })),
+    ],
+  };
   return {
     pageSize: "A4" as const,
     pageMargins: [55, 155, 55, 100] as [number, number, number, number],
@@ -548,15 +589,7 @@ async function buildDoc(
       {
         margin: [0, 0, 0, 0],
         columns: [
-          {
-            id: "kunde",
-            width: "*",
-            stack: kundeAdresse(ctx.kunde).map((l, i) => ({
-              text: l,
-              fontSize: 10,
-              bold: i === 0,
-            })),
-          },
+          kundeColumn,
           metaBox(meta, metaVariant, metaNote),
         ],
         columnGap: 20,
@@ -641,6 +674,7 @@ export async function generateAngebotPdf(
   };
   const effFirma = mergeFirma(firma, angebot.optionen?.firmaOverride);
   const tracker = createHotspotTracker(A4);
+  const kundenLogo = await fetchKundenLogoDataUrl(kunde);
   const doc = await buildDoc(
     { firma: effFirma, kunde, ansprechpartner },
     `Angebot ${angebot.titel || ""}`.trim(),
@@ -656,6 +690,7 @@ export async function generateAngebotPdf(
     defaultOutroAngebot(angebot, opts),
     signaturFromFirma(effFirma),
     angebot.optionen?.logoOverride ?? null,
+    kundenLogo,
     tracker.pageBreakBefore,
   );
   const result = await renderPdf(doc, []);
@@ -682,6 +717,7 @@ export async function generateRechnungPdf(
   };
   const effFirma = mergeFirma(firma, rechnung.optionen?.firmaOverride);
   const tracker = createHotspotTracker(A4);
+  const kundenLogo = await fetchKundenLogoDataUrl(kunde);
   const t = totals(rechnung.positionen, rechnung.rabattGesamt, rechnung.steuersatz);
   // Tage zwischen Rechnungsdatum und Fälligkeit
   let tage = 14;
@@ -719,6 +755,7 @@ export async function generateRechnungPdf(
     fullOutro,
     signaturFromFirma(effFirma),
     rechnung.optionen?.logoOverride ?? null,
+    kundenLogo,
     tracker.pageBreakBefore,
   );
   const result = await renderPdf(doc, []);

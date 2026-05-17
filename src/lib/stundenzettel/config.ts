@@ -6,6 +6,7 @@
 import { useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api/client";
+import { getBackendUrl } from "@/lib/api/backendUrl";
 
 const STORAGE_KEY = "mcc.stundenzettel.url";
 const MIGRATION_MARKER = "mcc_stundenzettel_migrated_v1";
@@ -86,4 +87,16 @@ export function useSetStundenzettelUrl() {
       qc.invalidateQueries({ queryKey: QUERY_KEY });
     },
   });
+}
+
+/**
+ * Liefert die Embed-URL über den Backend-Reverse-Proxy. Dadurch lädt das iframe
+ * über dieselbe Origin wie das CRM, X-Frame-Options/CSP des externen Servers
+ * werden vom Backend entfernt, und LAN-Adressen funktionieren auch aus der
+ * Cloud-Preview.
+ */
+export function useStundenzettelEmbedUrl(): string {
+  const { url } = useStundenzettelUrl();
+  if (!url) return "";
+  return `${getBackendUrl()}/extern/stundenzettel/`;
 }
