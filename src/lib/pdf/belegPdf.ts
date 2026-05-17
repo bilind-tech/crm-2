@@ -348,7 +348,9 @@ function leistungstabelle(
     { text: eur(totalsT.brutto), fontSize: 10, alignment: "right", bold: true },
   ]);
 
-  const widths = showStunden ? TABLE_COL_WIDTHS_STUNDEN : TABLE_COL_WIDTHS_STANDARD;
+  const widths = showStunden
+    ? [...TABLE_COL_WIDTHS_STUNDEN]
+    : [...TABLE_COL_WIDTHS_STANDARD];
 
   return {
     id: "tabelle",
