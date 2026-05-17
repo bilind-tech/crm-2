@@ -1,37 +1,37 @@
-Ziel: Beim Erstellen und Bearbeiten von Übergabeprotokoll und Schlüsselübergabe darf die PDF-Vorschau nicht mehr flackern, und die rechte Bearbeitung wird klarer, weil „Stammdaten“ und „Inhalt“ nicht mehr doppelt denselben Inhalt anzeigen.
+## Ziel
+Die PDF-Vorschau bei Übergabeprotokoll und Schlüsselübergabe darf beim Bearbeiten nicht mehr ständig an/aus gehen. Die sichtbare PDF bleibt stabil stehen; Aktualisierungen passieren kontrolliert im Hintergrund.
 
-Plan:
+## Plan
+1. **Live-Aktualisierung entschärfen**
+   - Die Protokoll-PDF wird nicht mehr bei jedem kleinen Tastendruck sofort neu geladen.
+   - Stattdessen wird der Draft ruhig gesammelt und erst nach kurzer Pause neu gerendert.
+   - Während der Eingabe bleibt die alte PDF sichtbar, ohne weißen Wechsel oder Neu-Mount-Flackern.
 
-1. PDF-Flackern wirklich abstellen
-- Die Protokoll-PDF wird beim Tippen nicht mehr sofort bei jedem Zeichen neu in die sichtbare Vorschau getauscht.
-- Die bestehende PDF bleibt stabil sichtbar, bis die neue PDF vollständig im Hintergrund geladen ist.
-- Falls während eines PDF-Builds weitere Eingaben kommen, wird danach garantiert der neueste Stand gebaut, statt dass Updates verloren gehen oder gegeneinander laufen.
-- Der Ladehinweis bleibt dezent und darf die PDF nicht ständig neu mounten.
+2. **PDF-Viewer stabilisieren**
+   - Den versteckten zweiten `<Document>`-Preloader entfernen, weil genau dieses doppelte Laden sehr wahrscheinlich das schnelle An/Aus verursacht.
+   - Neue PDF-Daten nur noch über eine stabile Viewer-Version tauschen.
+   - `numPages`, `loadAttempt` und Buffer-Keys so trennen, dass React-PDF nicht in eine Neu-Lade-Schleife kommt.
 
-2. Ursache für Flacker-Loop entschärfen
-- Die Vorschau bekommt eine stabile PDF-Quelle, damit React-PDF/PDF.js nicht bei unnötigen State-Änderungen neu startet.
-- `loadAttempt` wird nur noch für echte Fehler-Retry-Fälle genutzt, nicht als normaler Re-Render-Auslöser.
-- Pending-PDFs werden mit einem stabilen Schlüssel geladen, damit gleiche Dateigrößen nicht zu falschen Swaps oder Wiederholungen führen.
-- Objekt-URLs und Buffer werden sauber aufgeräumt, ohne die sichtbare Vorschau während der Eingabe kurz leer zu machen.
+3. **Nur echte Änderungen rendern**
+   - Den Protokoll-Key robuster machen, damit leere/gleiche Daten, Timestamps oder API-Echos keinen neuen PDF-Build starten.
+   - Wenn bereits ein Build läuft, wird nicht parallel neu gestartet; es wird nur der letzte Stand nachgezogen.
 
-3. „Stammdaten“ und „Inhalt“ zusammenlegen
-- Der doppelte Tab wird entfernt.
-- Es bleibt ein klarer Haupttab, z. B. „Inhalt“, der Kunde/Objekt, Datum/Uhrzeit und die eigentlichen Protokolldaten enthält.
-- Hotspot-Klicks auf Kunde/Meta springen auf diesen Haupttab.
-- Tabs danach: „Inhalt“, „Unterschriften“, „Optionen“.
+4. **Bearbeiten bleibt live, aber ruhig**
+   - Hotspot-/Inline-Editoren bleiben nutzbar.
+   - Die Vorschau zeigt bei schnellen Eingaben maximal dezent „aktualisiert …“, aber sie verschwindet nicht.
+   - Tabellen/Schlüsselzeilen und Textfelder bleiben übersichtlich editierbar.
 
-4. Inline-Bearbeitung bleibt kompatibel
-- Hotspots in der PDF öffnen weiter die passenden kleinen Editoren.
-- Schlüssel-Liste, Pfand, Leistungsumfang, Bemerkungen und Unterschriften bleiben direkt bearbeitbar.
-- Der rechte Editor bleibt übersichtlich als Fallback für vollständige Bearbeitung.
+5. **Aufräumen kleiner Textreste**
+   - Im Hotspot „Kunde“ steht noch „Stammdaten öffnen“, obwohl Stammdaten entfernt wurden. Das wird auf „Inhalt öffnen“ geändert.
 
-Technische Umsetzung:
-- Anpassen von `ProtokollLivePreview.tsx`: Build-Queue/latest-key, stabilere `fileSource`-Memoisierung, atomarer Pending-Swap, sauberer Retry-Key.
-- Anpassen von `ProtokollEditorLayout.tsx`: Tab-Typ und Tabs vereinfachen; doppelte `TabsContent` entfernen; Hotspot-Mapping berücksichtigen.
-- Anpassen von `fieldMap.ts`: Protokoll-Tabs von `stammdaten|inhalt|...` auf die neue Struktur mappen.
-- Falls nötig kleine Korrektur in `useProtokollPdf.ts`, damit PDF-Erstellung außerhalb des Editors ebenfalls nicht unnötig durch volatile/context-Referenzen neu startet.
+## Technische Umsetzung
+- Betroffene Dateien:
+  - `src/components/protokoll-editor/ProtokollLivePreview.tsx`
+  - `src/components/protokoll-editor/ProtokollHotspotEditor.tsx`
+- Kernänderung:
+  - Single-Viewer-Strategie statt sichtbares Document plus verstecktes Pending-Document.
+  - Stable render version/sequence statt Buffer-Länge oder Pending-Document-Key.
+  - Alter PDF-Buffer bleibt aktiv, bis der neue Buffer vollständig erzeugt wurde.
 
-Validierung:
-- Prüfen, dass Übergabeprotokoll und Schlüsselübergabe beim Tippen die sichtbare PDF stabil behalten.
-- Prüfen, dass der entfernte doppelte Tab keine Hotspot-Navigation kaputt macht.
-- Prüfen, dass Abschließen weiterhin die finale PDF mit dem neuesten Draft erzeugt.
+## Ergebnis
+Die Protokoll-PDF flackert nicht mehr extrem beim Erstellen oder Bearbeiten; sie bleibt stabil sichtbar und aktualisiert sich kontrolliert im Hintergrund.

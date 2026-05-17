@@ -17,7 +17,7 @@ import { PdfFieldOverlay } from "@/components/pdf-editor/PdfFieldOverlay";
 import { protokollMetaForId, FALLBACK_HOTSPOTS_PROTOKOLL_SEITE_1 } from "@/lib/pdf/fieldMap";
 import { A4, type RuntimeHotspot } from "@/lib/pdf/hotspotTracker";
 
-const DEBOUNCE_MS = 450;
+const DEBOUNCE_MS = 800;
 const LOADER_DELAY_MS = 250;
 
 const VOLATILE = new Set(["aktualisiertAm", "erstelltAm", "updatedAt", "createdAt"]);
@@ -40,19 +40,18 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
 
   const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [pendingBuffer, setPendingBuffer] = useState<ArrayBuffer | null>(null);
-  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
   const [hotspots, setHotspots] = useState<RuntimeHotspot[]>([]);
-  const [pendingHotspots, setPendingHotspots] = useState<RuntimeHotspot[] | null>(null);
   const [openHotspotId, setOpenHotspotId] = useState<string | null>(null);
 
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [viewerSeq, setViewerSeq] = useState(0);
   const [numPages, setNumPages] = useState(0);
   const [rendering, setRendering] = useState(false);
   const [showLoader, setShowLoader] = useState(false);
   const [buildError, setBuildError] = useState<string | null>(null);
   const [viewerError, setViewerError] = useState<string | null>(null);
-  const [pendingSeq, setPendingSeq] = useState(0);
+  const mountedRef = useRef(true);
+  const pdfUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     const el = containerRef.current;
