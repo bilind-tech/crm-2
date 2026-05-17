@@ -253,6 +253,7 @@ async function main(): Promise<void> {
   await app.register(driveRoutes);
   await app.register(emailRoutes);
   await app.register(externRoutes);
+  await app.register(datenbankRoutes);
 
   // Frontend-Statics — nur wenn FRONTEND_DIR existiert (Prod / Pi-Bundle).
   // Im Dev läuft das Frontend separat über Vite, daher hier kein Fehler.
