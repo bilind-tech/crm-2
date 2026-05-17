@@ -3,7 +3,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { Smartphone, Receipt, AlertTriangle, X, Upload } from "lucide-react";
 import { useDokumente, useKunden, useObjekte } from "@/hooks/useApi";
 import { formatEUR, formatDate } from "@/lib/format";
-import { PageHeader, KpiCard } from "@/components/layout/PageHeader";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { PrimaryAction } from "@/components/layout/PrimaryAction";
 import { FilterBar } from "@/routes/angebote";
 import {
@@ -71,24 +71,6 @@ function Page() {
     }
     return m;
   }, [kunden]);
-
-  const counts = useMemo(() => {
-    const ueberfaellig = alle.filter((d) => fristStatus(d) === "ueberfaellig").length;
-    const offen = alle.filter((d) => {
-      const s = fristStatus(d);
-      return s === "offen" || s === "bald" || s === "ueberfaellig";
-    }).length;
-    const steuer = alle.filter(
-      (d) => d.steuerrelevant && d.dokumentdatum?.startsWith(String(jahr)),
-    );
-    return {
-      gesamt: alle.length,
-      offen,
-      ueberfaellig,
-      steuerrelevant: steuer.length,
-      summe: steuer.reduce((a, d) => a + (d.betrag ?? 0), 0),
-    };
-  }, [alle, jahr]);
 
   const tabCounts = useMemo(
     () => ({
@@ -171,26 +153,6 @@ function Page() {
           </div>
         }
       />
-
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <KpiCard label="Dokumente gesamt" value={counts.gesamt} tone="primary" />
-        <KpiCard
-          label="Offen"
-          value={counts.offen}
-          tone={counts.offen > 0 ? "warning" : "default"}
-        />
-        <KpiCard
-          label="Überfällig"
-          value={counts.ueberfaellig}
-          tone={counts.ueberfaellig > 0 ? "danger" : "default"}
-        />
-        <KpiCard
-          label={`Steuerrelevant ${jahr}`}
-          value={counts.steuerrelevant}
-          tone="success"
-          sublabel={formatEUR(counts.summe)}
-        />
-      </div>
 
       <div ref={uploadPanelRef}>
         <DokumentUploadPanel ref={uploadRef} />
