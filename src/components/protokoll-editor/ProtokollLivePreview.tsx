@@ -111,63 +111,64 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
   }, []);
 
   useEffect(() => {
-    const combinedKey = `${draftKey}|${ctxKey}`;
-    latestKeyRef.current = combinedKey;
-    if (builtKeyRef.current === combinedKey) return;
+    latestKeyRef.current = currentKey;
+    if (builtKeyRef.current === currentKey) {
+      setQueuedKey(null);
+      return;
+    }
 
-    const runBuild = async () => {
-      if (inFlightRef.current) return;
-      inFlightRef.current = true;
-      setRendering(true);
-      setBuildError(null);
-      try {
-        // Schleife: solange der Ziel-Key sich ändert, neu bauen — immer den jüngsten Stand.
-        while (mountedRef.current && builtKeyRef.current !== latestKeyRef.current) {
-          const targetKey = latestKeyRef.current;
-          const { draft: d, kunde: k, objekt: o, firma: f } = dataRef.current;
-          const { blob, hotspots: hs } = await generateProtokollPdf(d, k, o, f);
-          if (!mountedRef.current) return;
-          if (!(blob instanceof Blob) || blob.size === 0) {
-            throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
-          }
-          const buf = await blob.arrayBuffer();
-          if (!mountedRef.current) return;
-          const newUrl = URL.createObjectURL(blob);
-
-          if (targetKey !== latestKeyRef.current) {
-            URL.revokeObjectURL(newUrl);
-            continue;
-          }
-
-          builtKeyRef.current = targetKey;
-          const previousUrl = pdfUrlRef.current;
-          pdfUrlRef.current = newUrl;
-          setHotspots(hs);
-          setPdfBuffer(buf);
-          setPdfUrl(newUrl);
-          setLoadAttempt(0);
-          setViewerSeq((n) => n + 1);
-          if (previousUrl) URL.revokeObjectURL(previousUrl);
-          setViewerError(null);
-        }
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error("[ProtokollLivePreview] build failed", e);
-        if (mountedRef.current) setBuildError(e instanceof Error ? e.message : "PDF-Fehler");
-      } finally {
-        inFlightRef.current = false;
-        if (mountedRef.current) setRendering(false);
-      }
-    };
-
+    setQueuedKey(currentKey);
+    const delay = pdfBuffer ? AUTO_REFRESH_DELAY_MS : INITIAL_BUILD_DELAY_MS;
     const timer = setTimeout(() => {
-      void runBuild();
-    }, DEBOUNCE_MS);
+      if (pdfBuffer && !forceRefreshRef.current && (openHotspotIdRef.current || hasActiveTextEditor())) {
+        return;
+      }
+      forceRefreshRef.current = false;
+      void runBuild(currentKey);
+    }, delay);
 
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [draftKey, ctxKey]);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentKey, refreshNonce]);
+
+  const runBuild = async (requestedKey = latestKeyRef.current) => {
+    latestKeyRef.current = requestedKey;
+    if (inFlightRef.current || builtKeyRef.current === requestedKey) return;
+    inFlightRef.current = true;
+    setRendering(true);
+    setBuildError(null);
+    try {
+      const { draft: d, kunde: k, objekt: o, firma: f } = dataRef.current;
+      const { blob, hotspots: hs } = await generateProtokollPdf(d, k, o, f);
+      if (!mountedRef.current) return;
+      if (!(blob instanceof Blob) || blob.size === 0) {
+        throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
+      }
+      const buf = await blob.arrayBuffer();
+      if (!mountedRef.current) return;
+      const newUrl = URL.createObjectURL(blob);
+      const finalKey = latestKeyRef.current;
+
+      builtKeyRef.current = finalKey;
+      const previousUrl = pdfUrlRef.current;
+      pdfUrlRef.current = newUrl;
+      setHotspots(hs);
+      setPdfBuffer(buf);
+      setPdfUrl(newUrl);
+      setQueuedKey(null);
+      setLoadAttempt(0);
+      setViewerSeq((n) => n + 1);
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
+      setViewerError(null);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("[ProtokollLivePreview] build failed", e);
+      if (mountedRef.current) setBuildError(e instanceof Error ? e.message : "PDF-Fehler");
+    } finally {
+      inFlightRef.current = false;
+      if (mountedRef.current) setRendering(false);
+    }
+  };
 
   // Snap auf 20-px-Schritte: kein Re-Render bei Scrollbar-Wackler.
   const renderWidthRaw = useMemo(() => {
