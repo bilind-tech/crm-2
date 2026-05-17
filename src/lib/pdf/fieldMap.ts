@@ -36,7 +36,7 @@ export function metaForId(id: string): HotspotMeta {
 
 // ───────────── Protokoll-Hotspots ────────────────────────────────────────────
 
-export type ProtokollEditorTabId = "stammdaten" | "inhalt" | "unterschriften" | "optionen";
+export type ProtokollEditorTabId = "inhalt" | "unterschriften" | "optionen";
 
 export interface ProtokollHotspotMeta {
   label: string;
@@ -45,8 +45,8 @@ export interface ProtokollHotspotMeta {
 }
 
 export const PROTOKOLL_FIELD_META: Record<string, ProtokollHotspotMeta> = {
-  kunde: { label: "Empfänger-Adresse", tab: "stammdaten", fieldId: "kunde" },
-  meta: { label: "Datum / Uhrzeit / Nummer", tab: "stammdaten", fieldId: "datum" },
+  kunde: { label: "Empfänger-Adresse", tab: "inhalt", fieldId: "kunde" },
+  meta: { label: "Datum / Uhrzeit / Nummer", tab: "inhalt", fieldId: "datum" },
   titel: { label: "Titel & Untertitel", tab: "optionen", fieldId: "titel" },
   leistungsumfang: { label: "Leistungsumfang", tab: "inhalt", fieldId: "leistungsumfang" },
   bemerkungen: { label: "Mängel / Bemerkungen", tab: "inhalt", fieldId: "bemerkungen" },
@@ -59,7 +59,7 @@ export const PROTOKOLL_FIELD_META: Record<string, ProtokollHotspotMeta> = {
 };
 
 export function protokollMetaForId(id: string): ProtokollHotspotMeta {
-  return PROTOKOLL_FIELD_META[id] ?? { label: "Bearbeiten", tab: "stammdaten", fieldId: id };
+  return PROTOKOLL_FIELD_META[id] ?? { label: "Bearbeiten", tab: "inhalt", fieldId: id };
 }
 
 /** Fallback-Hotspots für Protokolle (Seite 1, prozentual), falls Tracker leer. */

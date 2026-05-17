@@ -45,7 +45,7 @@ export function ProtokollEditorLayout({ protokoll }: Props) {
   const objekt = draft.objektId ? objekteQ.data?.find((o) => o.id === draft.objektId) : undefined;
   const abschliessen = useAbschliessenProtokoll(draft.id);
   const [mobileView, setMobileView] = useState<"editor" | "preview">("editor");
-  const [activeTab, setActiveTab] = useState<ProtokollEditorTabId>("stammdaten");
+  const [activeTab, setActiveTab] = useState<ProtokollEditorTabId>("inhalt");
   const [busy, setBusy] = useState(false);
 
   const titlePrefix = protokollTitel(draft);
@@ -127,9 +127,6 @@ export function ProtokollEditorLayout({ protokoll }: Props) {
       className="flex h-full flex-col"
     >
       <TabsList className="no-scrollbar mx-3 mt-3 flex h-10 justify-start gap-1 overflow-x-auto rounded-full bg-muted p-1">
-        <TabsTrigger value="stammdaten" className="shrink-0 rounded-full px-3">
-          Stammdaten
-        </TabsTrigger>
         <TabsTrigger value="inhalt" className="shrink-0 rounded-full px-3">
           Inhalt
         </TabsTrigger>
@@ -141,9 +138,6 @@ export function ProtokollEditorLayout({ protokoll }: Props) {
         </TabsTrigger>
       </TabsList>
       <div className="flex-1 overflow-y-auto px-4 py-4">
-        <TabsContent value="stammdaten" className="m-0">
-          {inhaltsPanel}
-        </TabsContent>
         <TabsContent value="inhalt" className="m-0">
           {inhaltsPanel}
         </TabsContent>
