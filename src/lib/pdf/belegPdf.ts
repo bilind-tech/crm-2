@@ -11,6 +11,7 @@ import type {
   Ansprechpartner,
 } from "@/lib/api/types";
 import logoUrl from "@/assets/logo.png";
+import { kundeLogoUrl } from "@/hooks/useApi";
 import { A4, createHotspotTracker, type RuntimeHotspot } from "./hotspotTracker";
 
 // ───────── Mock-LRU-Cache (nur Lovable-Preview) ────────────────────────────
@@ -90,6 +91,25 @@ async function getPdfMake(): Promise<AnyPdfMake> {
 async function logoDataUrl(): Promise<string | null> {
   try {
     const res = await fetch(logoUrl);
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function fetchKundenLogoDataUrl(kunde: Kunde): Promise<string | null> {
+  if (!kunde.hasLogo) return null;
+  try {
+    const res = await fetch(kundeLogoUrl(kunde.id, kunde.logoUpdatedAt), {
+      credentials: "include",
+    });
+    if (!res.ok) return null;
     const blob = await res.blob();
     return await new Promise<string>((resolve, reject) => {
       const r = new FileReader();
