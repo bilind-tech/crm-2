@@ -68,7 +68,8 @@ export const useDeleteDauerauftrag = () => {
 export const useSofortLauf = (id: string) => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api.post<DauerauftragLauf>(`/dauerauftraege/${id}/sofort-lauf`),
+    mutationFn: (periode?: string) =>
+      api.post<DauerauftragLauf>(`/dauerauftraege/${id}/sofort-lauf`, { periode }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qkDA.detail(id) });
       qc.invalidateQueries({ queryKey: qkDA.laeufe() });
@@ -85,9 +86,13 @@ export const useSofortLauf = (id: string) => {
 export const useSofortLaufBulk = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (ids: string[]) => {
+    mutationFn: async (input: string[] | { ids: string[]; periode?: string }) => {
+      const ids = Array.isArray(input) ? input : input.ids;
+      const periode = Array.isArray(input) ? undefined : input.periode;
       const results = await Promise.allSettled(
-        ids.map((id) => api.post<DauerauftragLauf>(`/dauerauftraege/${id}/sofort-lauf`)),
+        ids.map((id) =>
+          api.post<DauerauftragLauf>(`/dauerauftraege/${id}/sofort-lauf`, { periode }),
+        ),
       );
       let erfolge = 0;
       let fehler = 0;
