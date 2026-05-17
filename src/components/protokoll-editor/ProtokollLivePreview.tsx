@@ -131,6 +131,26 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentKey, refreshNonce]);
 
+  useEffect(() => {
+    if (!queuedKey || queuedKey === builtKeyRef.current || openHotspotId || hasActiveTextEditor()) return;
+    const timer = setTimeout(() => {
+      if (!openHotspotIdRef.current && !hasActiveTextEditor()) void runBuild(latestKeyRef.current);
+    }, 250);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queuedKey, openHotspotId]);
+
+  useEffect(() => {
+    const refreshAfterBlur = () => {
+      window.setTimeout(() => {
+        if (queuedKey && !openHotspotIdRef.current && !hasActiveTextEditor()) void runBuild(latestKeyRef.current);
+      }, 250);
+    };
+    window.addEventListener("focusout", refreshAfterBlur);
+    return () => window.removeEventListener("focusout", refreshAfterBlur);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queuedKey]);
+
   const runBuild = async (requestedKey = latestKeyRef.current) => {
     latestKeyRef.current = requestedKey;
     if (inFlightRef.current || builtKeyRef.current === requestedKey) return;
