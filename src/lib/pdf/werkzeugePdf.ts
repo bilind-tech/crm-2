@@ -4,7 +4,13 @@
 // Firmendaten. Damit fühlen sich die Protokolle wie ein Beleg an.
 
 import logoFallback from "@/assets/logo.png";
-import type { Firmendaten, Kunde, Objekt } from "@/lib/api/types";
+import type { Firmendaten, Kunde, Objekt, ProtokollOptionen } from "@/lib/api/types";
+import { A4, createHotspotTracker, type RuntimeHotspot } from "./hotspotTracker";
+
+export interface PdfBuildResult {
+  blob: Blob;
+  hotspots: RuntimeHotspot[];
+}
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type AnyPdfMake = any;
@@ -82,7 +88,7 @@ function absenderzeile(f?: Firmendaten): string {
   return teile.join(" – ");
 }
 
-function header(firma: Firmendaten | undefined, logo: string | null) {
+function header(firma: Firmendaten | undefined, logo: string | null, logoSichtbar = true) {
   return {
     margin: [55, 30, 55, 0] as [number, number, number, number],
     columns: [
@@ -98,7 +104,7 @@ function header(firma: Firmendaten | undefined, logo: string | null) {
           },
         ],
       },
-      logo
+      logo && logoSichtbar
         ? { width: 270, image: logo, fit: [270, 120], alignment: "right" }
         : {
             width: 270,
@@ -166,6 +172,7 @@ function metaBox(meta: { label: string; wert: string }[]) {
     },
   ]);
   return {
+    id: "meta",
     width: 235,
     table: { widths: ["auto", "*"], body },
     layout: {
@@ -279,6 +286,7 @@ export interface UebergabeprotokollData {
   kunde?: Kunde;
   objekt?: Objekt;
   firma?: Firmendaten;
+  optionen?: ProtokollOptionen;
 }
 
 const PROTOKOLL_ART_LABEL: Record<ProtokollArt, string> = {
@@ -287,9 +295,15 @@ const PROTOKOLL_ART_LABEL: Record<ProtokollArt, string> = {
   beides: "Übergabe- und Abnahmeprotokoll",
 };
 
-export async function generateUebergabeprotokollPdf(data: UebergabeprotokollData): Promise<Blob> {
-  const titel = PROTOKOLL_ART_LABEL[data.art];
+export async function generateUebergabeprotokollPdf(
+  data: UebergabeprotokollData,
+): Promise<PdfBuildResult> {
+  const opt = data.optionen ?? {};
+  const titel = (opt.titelOverride && opt.titelOverride.trim()) || PROTOKOLL_ART_LABEL[data.art];
   const logo = await logoDataUrl(data.firma?.logoUrl);
+  const tracker = createHotspotTracker(A4);
+  const sektTitel = (key: "leistung" | "bemerkungen" | "ergebnis", fb: string) =>
+    (opt.sektionsTitel?.[key] && opt.sektionsTitel[key]!.trim()) || fb;
 
   const meta: { label: string; wert: string }[] = [];
   if (data.nummer) meta.push({ label: "Protokoll-Nr.", wert: data.nummer });
@@ -303,12 +317,14 @@ export async function generateUebergabeprotokollPdf(data: UebergabeprotokollData
     pageSize: "A4" as const,
     pageMargins: [55, 155, 55, 100] as [number, number, number, number],
     defaultStyle: { font: "Roboto", fontSize: 10, color: COLOR_TEXT, lineHeight: 1.25 },
-    header: header(data.firma, logo),
-    footer: footer(data.firma),
+    header: header(data.firma, logo, opt.logoSichtbar !== false),
+    footer: opt.footerSichtbar === false ? undefined : footer(data.firma),
+    pageBreakBefore: tracker.pageBreakBefore,
     content: [
       {
         columns: [
           {
+            id: "kunde",
             width: "*",
             stack: adresse.map((l, i) => ({ text: l, fontSize: 10, bold: i === 0 })),
           },
@@ -316,38 +332,77 @@ export async function generateUebergabeprotokollPdf(data: UebergabeprotokollData
         ],
         columnGap: 20,
       },
-      { text: titel, fontSize: 22, bold: true, color: COLOR_TEXT, margin: [0, 30, 0, 14] },
-
-      sectionTitle("Leistungsumfang"),
-      thinLine(),
-      { text: data.leistungsumfang || "—", fontSize: 10, margin: [0, 6, 0, 0] },
-
-      sectionTitle("Mängel / Bemerkungen"),
-      thinLine(),
-      { text: data.bemerkungen || "Keine.", fontSize: 10, margin: [0, 6, 0, 0] },
-
-      sectionTitle("Ergebnis"),
-      thinLine(),
       {
-        text: data.ohneVorbehalt
-          ? "Die Leistung wird ohne Vorbehalt abgenommen."
-          : "Die Leistung wird mit den oben genannten Vorbehalten / Mängeln abgenommen.",
-        fontSize: 10,
-        margin: [0, 6, 0, 0],
+        id: "titel",
+        stack: [
+          { text: titel, fontSize: 22, bold: true, color: COLOR_TEXT, margin: [0, 30, 0, 0] },
+          ...(opt.untertitel && opt.untertitel.trim()
+            ? [{ text: opt.untertitel, fontSize: 11, color: COLOR_MUTED, margin: [0, 4, 0, 0] }]
+            : []),
+          { text: "", margin: [0, 0, 0, 14] },
+        ],
       },
 
-      sectionTitle("Anwesende Personen / Unterschriften"),
-      thinLine(),
-      unterschriftenBlock(
-        "Unterschrift Auftraggeber",
-        data.vertreterAuftraggeber,
-        "Unterschrift Auftragnehmer",
-        data.vertreterAuftragnehmer,
-      ),
+      {
+        id: "leistungsumfang",
+        stack: [
+          sectionTitle(sektTitel("leistung", "Leistungsumfang")),
+          thinLine(),
+          { text: data.leistungsumfang || "—", fontSize: 10, margin: [0, 6, 0, 0] },
+        ],
+      },
+      {
+        id: "bemerkungen",
+        stack: [
+          sectionTitle(sektTitel("bemerkungen", "Mängel / Bemerkungen")),
+          thinLine(),
+          { text: data.bemerkungen || "Keine.", fontSize: 10, margin: [0, 6, 0, 0] },
+        ],
+      },
+      {
+        id: "ergebnis",
+        stack: [
+          sectionTitle(sektTitel("ergebnis", "Ergebnis")),
+          thinLine(),
+          {
+            text: data.ohneVorbehalt
+              ? "Die Leistung wird ohne Vorbehalt abgenommen."
+              : "Die Leistung wird mit den oben genannten Vorbehalten / Mängeln abgenommen.",
+            fontSize: 10,
+            margin: [0, 6, 0, 0],
+          },
+        ],
+      },
+      ...(opt.zusatzKlausel && opt.zusatzKlausel.trim()
+        ? [
+            {
+              id: "klausel",
+              stack: [
+                sectionTitle("Zusatzklausel"),
+                thinLine(),
+                { text: opt.zusatzKlausel, fontSize: 10, margin: [0, 6, 0, 0] },
+              ],
+            },
+          ]
+        : []),
+      {
+        id: "unterschriften",
+        stack: [
+          sectionTitle("Anwesende Personen / Unterschriften"),
+          thinLine(),
+          unterschriftenBlock(
+            "Unterschrift Auftraggeber",
+            data.vertreterAuftraggeber,
+            "Unterschrift Auftragnehmer",
+            data.vertreterAuftragnehmer,
+          ),
+        ],
+      },
     ],
   };
 
-  return await renderToBlob(doc);
+  const blob = await renderToBlob(doc);
+  return { blob, hotspots: tracker.build() };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -376,12 +431,23 @@ export interface SchluesseluebergabeData {
   kunde?: Kunde;
   objekt?: Objekt;
   firma?: Firmendaten;
+  optionen?: ProtokollOptionen;
 }
 
-export async function generateSchluesseluebergabePdf(data: SchluesseluebergabeData): Promise<Blob> {
+export async function generateSchluesseluebergabePdf(
+  data: SchluesseluebergabeData,
+): Promise<PdfBuildResult> {
+  const opt = data.optionen ?? {};
   const titel =
-    data.richtung === "ausgabe" ? "Schlüsselübergabe — Ausgabe" : "Schlüsselübergabe — Rücknahme";
+    (opt.titelOverride && opt.titelOverride.trim()) ||
+    (data.richtung === "ausgabe"
+      ? "Schlüsselübergabe — Ausgabe"
+      : "Schlüsselübergabe — Rücknahme");
   const logo = await logoDataUrl(data.firma?.logoUrl);
+  const tracker = createHotspotTracker(A4);
+  const lineWidth = opt.druckfreundlich ? 0.3 : 0.6;
+  const sektTitel = (key: "schluessel" | "bestaetigung", fb: string) =>
+    (opt.sektionsTitel?.[key] && opt.sektionsTitel[key]!.trim()) || fb;
 
   const meta: { label: string; wert: string }[] = [];
   if (data.nummer) meta.push({ label: "Beleg-Nr.", wert: data.nummer });
@@ -397,6 +463,7 @@ export async function generateSchluesseluebergabePdf(data: SchluesseluebergabeDa
       : [{ bezeichnung: "—", anzahl: 0, schluesselNr: "", bemerkung: "" } as SchluesselZeile];
 
   const tabelle = {
+    id: "schluessel.tabelle",
     table: {
       headerRows: 1,
       widths: ["*", 50, 90, "*"],
@@ -416,8 +483,8 @@ export async function generateSchluesseluebergabePdf(data: SchluesseluebergabeDa
       ],
     },
     layout: {
-      hLineWidth: () => 0.6,
-      vLineWidth: () => 0.6,
+      hLineWidth: () => lineWidth,
+      vLineWidth: () => lineWidth,
       hLineColor: () => COLOR_TEXT,
       vLineColor: () => COLOR_TEXT,
       paddingTop: () => 6,
@@ -432,12 +499,14 @@ export async function generateSchluesseluebergabePdf(data: SchluesseluebergabeDa
     pageSize: "A4" as const,
     pageMargins: [55, 155, 55, 100] as [number, number, number, number],
     defaultStyle: { font: "Roboto", fontSize: 10, color: COLOR_TEXT, lineHeight: 1.25 },
-    header: header(data.firma, logo),
-    footer: footer(data.firma),
+    header: header(data.firma, logo, opt.logoSichtbar !== false),
+    footer: opt.footerSichtbar === false ? undefined : footer(data.firma),
+    pageBreakBefore: tracker.pageBreakBefore,
     content: [
       {
         columns: [
           {
+            id: "kunde",
             width: "*",
             stack: adresse.map((l, i) => ({ text: l, fontSize: 10, bold: i === 0 })),
           },
@@ -445,43 +514,72 @@ export async function generateSchluesseluebergabePdf(data: SchluesseluebergabeDa
         ],
         columnGap: 20,
       },
-      { text: titel, fontSize: 22, bold: true, color: COLOR_TEXT, margin: [0, 30, 0, 14] },
-
-      sectionTitle("Übergebene Schlüssel"),
+      {
+        id: "titel",
+        stack: [
+          { text: titel, fontSize: 22, bold: true, color: COLOR_TEXT, margin: [0, 30, 0, 0] },
+          ...(opt.untertitel && opt.untertitel.trim()
+            ? [{ text: opt.untertitel, fontSize: 11, color: COLOR_MUTED, margin: [0, 4, 0, 0] }]
+            : []),
+          { text: "", margin: [0, 0, 0, 14] },
+        ],
+      },
+      sectionTitle(sektTitel("schluessel", "Übergebene Schlüssel")),
       tabelle,
-
-      ...(data.pfandEur && data.pfandEur > 0
+      {
+        id: "pfand",
+        text:
+          data.pfandEur && data.pfandEur > 0
+            ? `Hinterlegtes Pfand: ${data.pfandEur.toLocaleString("de-DE", { minimumFractionDigits: 2 })} EUR`
+            : "Kein Pfand hinterlegt.",
+        fontSize: 10,
+        color: data.pfandEur && data.pfandEur > 0 ? COLOR_TEXT : COLOR_MUTED,
+        margin: [0, 8, 0, 0],
+      },
+      {
+        id: "bestaetigung",
+        stack: [
+          sectionTitle(sektTitel("bestaetigung", "Bestätigung")),
+          thinLine(),
+          {
+            text: data.bestaetigt
+              ? data.richtung === "ausgabe"
+                ? "Der Auftraggeber bestätigt den Erhalt der oben genannten Schlüssel."
+                : "Der Auftragnehmer bestätigt die Rückgabe der oben genannten Schlüssel."
+              : "Empfang/Rückgabe noch nicht bestätigt.",
+            fontSize: 10,
+            margin: [0, 6, 0, 0],
+          },
+        ],
+      },
+      ...(opt.zusatzKlausel && opt.zusatzKlausel.trim()
         ? [
             {
-              text: `Hinterlegtes Pfand: ${data.pfandEur.toLocaleString("de-DE", { minimumFractionDigits: 2 })} EUR`,
-              fontSize: 10,
-              margin: [0, 8, 0, 0] as [number, number, number, number],
+              id: "klausel",
+              stack: [
+                sectionTitle("Zusatzklausel"),
+                thinLine(),
+                { text: opt.zusatzKlausel, fontSize: 10, margin: [0, 6, 0, 0] },
+              ],
             },
           ]
         : []),
-
-      sectionTitle("Bestätigung"),
-      thinLine(),
       {
-        text: data.bestaetigt
-          ? data.richtung === "ausgabe"
-            ? "Der Auftraggeber bestätigt den Erhalt der oben genannten Schlüssel."
-            : "Der Auftragnehmer bestätigt die Rückgabe der oben genannten Schlüssel."
-          : "Empfang/Rückgabe noch nicht bestätigt.",
-        fontSize: 10,
-        margin: [0, 6, 0, 0],
+        id: "unterschriften",
+        stack: [
+          unterschriftenBlock(
+            "Unterschrift Auftraggeber",
+            data.vertreterAuftraggeber,
+            "Unterschrift Auftragnehmer",
+            data.vertreterAuftragnehmer,
+          ),
+        ],
       },
-
-      unterschriftenBlock(
-        "Unterschrift Auftraggeber",
-        data.vertreterAuftraggeber,
-        "Unterschrift Auftragnehmer",
-        data.vertreterAuftragnehmer,
-      ),
     ],
   };
 
-  return await renderToBlob(doc);
+  const blob = await renderToBlob(doc);
+  return { blob, hotspots: tracker.build() };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -552,7 +650,7 @@ export async function generateProtokollPdf(
   kunde: KundeT | undefined,
   objekt: ObjektT | undefined,
   firma: FirmaT | undefined,
-): Promise<Blob> {
+): Promise<PdfBuildResult> {
   if (p.kind === "schluessel") {
     const s = p as SchluesselProtokoll;
     return generateSchluesseluebergabePdf({
@@ -568,6 +666,7 @@ export async function generateProtokollPdf(
       kunde,
       objekt,
       firma,
+      optionen: s.optionen,
     });
   }
   const u = p as UebergabeProtokoll;
@@ -584,6 +683,7 @@ export async function generateProtokollPdf(
     kunde,
     objekt,
     firma,
+    optionen: u.optionen,
   });
 }
 

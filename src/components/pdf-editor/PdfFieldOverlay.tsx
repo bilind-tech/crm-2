@@ -6,7 +6,7 @@
 import { Pencil } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { RuntimeHotspot } from "@/lib/pdf/hotspotTracker";
-import { metaForId } from "@/lib/pdf/fieldMap";
+import { metaForId as defaultMetaForId } from "@/lib/pdf/fieldMap";
 
 interface Props {
   hotspots: RuntimeHotspot[];
@@ -17,13 +17,23 @@ interface Props {
   onOpenChange: (id: string | null) => void;
   /** Inline-Editor, gerendert im Popover-Inhalt für den offenen Hotspot. */
   renderEditor: (fieldId: string, close: () => void) => React.ReactNode;
+  /** Optional: alternative Lookup-Funktion (z. B. für Protokolle). */
+  metaForId?: (id: string) => { label: string };
 }
 
-export function PdfFieldOverlay({ hotspots, scale, openId, onOpenChange, renderEditor }: Props) {
+export function PdfFieldOverlay({
+  hotspots,
+  scale,
+  openId,
+  onOpenChange,
+  renderEditor,
+  metaForId,
+}: Props) {
+  const lookup = metaForId ?? defaultMetaForId;
   return (
     <div className="pointer-events-none absolute inset-0">
       {hotspots.map((h) => {
-        const meta = metaForId(h.id);
+        const meta = lookup(h.id);
         const isOpen = openId === h.id;
         return (
           <Popover key={h.id} open={isOpen} onOpenChange={(o) => onOpenChange(o ? h.id : null)}>

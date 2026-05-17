@@ -2,7 +2,7 @@
 // debounced bei Änderungen, zeigt alle Seiten untereinander, mit klickbaren
 // Hotspots pro Seite (Pixel-genau aus dem pdfmake-Layout-Tracker).
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
@@ -140,10 +140,11 @@ export function LivePdfPreview(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const renderWidth = useMemo(
-    () => Math.min(Math.max(containerWidth - 16, 280), 900),
-    [containerWidth],
-  );
+  const renderWidthRaw = useMemo(() => {
+    const raw = Math.min(Math.max(containerWidth - 16, 280), 900);
+    return Math.round(raw / 20) * 20;
+  }, [containerWidth]);
+  const renderWidth = useDeferredValue(renderWidthRaw);
   const scale = renderWidth / A4.width;
 
   // Frische Kopie pro Render — sonst detacht PDF.js-Worker den Buffer.

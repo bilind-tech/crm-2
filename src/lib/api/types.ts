@@ -387,6 +387,25 @@ export interface SchluesselZeile {
   bemerkung: string;
 }
 
+export interface ProtokollOptionen {
+  /** Überschreibt den automatischen Titel (z. B. „Übergabeprotokoll"). */
+  titelOverride?: string;
+  /** Optionale Untertitel-Zeile direkt unter dem Titel. */
+  untertitel?: string;
+  /** Freitext-Klausel, die am Ende vor den Unterschriften eingefügt wird. */
+  zusatzKlausel?: string;
+  /** Logo im Header zeigen (Default: true). */
+  logoSichtbar?: boolean;
+  /** Footer mit Firmendaten zeigen (Default: true). */
+  footerSichtbar?: boolean;
+  /** Druckfreundlich: dünnere Tabellenlinien. */
+  druckfreundlich?: boolean;
+  /** Eigene Sektions-Überschriften. Leere Strings = Default. */
+  sektionsTitel?: Partial<
+    Record<"leistung" | "bemerkungen" | "ergebnis" | "schluessel" | "bestaetigung", string>
+  >;
+}
+
 export interface ProtokollBase {
   id: ID;
   nummer: string;
@@ -400,6 +419,7 @@ export interface ProtokollBase {
   dokumentId?: ID;
   erstelltAm: ISODateTime;
   aktualisiertAm: ISODateTime;
+  optionen?: ProtokollOptionen;
 }
 
 export interface UebergabeProtokoll extends ProtokollBase {

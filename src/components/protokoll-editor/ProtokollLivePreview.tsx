@@ -3,7 +3,7 @@
 // "Unexpected server response (0)" beim Worker-Fetch der blob:-URL
 // auf dem Pi-Backend.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
@@ -13,6 +13,9 @@ configurePdfWorker();
 import { Loader2 } from "lucide-react";
 import { generateProtokollPdf } from "@/lib/pdf/werkzeugePdf";
 import type { Protokoll, Kunde, Objekt, Firmendaten } from "@/lib/api/types";
+import { PdfFieldOverlay } from "@/components/pdf-editor/PdfFieldOverlay";
+import { protokollMetaForId, FALLBACK_HOTSPOTS_PROTOKOLL_SEITE_1 } from "@/lib/pdf/fieldMap";
+import { A4, type RuntimeHotspot } from "@/lib/pdf/hotspotTracker";
 
 const DEBOUNCE_MS = 350;
 const LOADER_DELAY_MS = 250;
@@ -27,9 +30,11 @@ interface Props {
   kunde?: Kunde;
   objekt?: Objekt;
   firma?: Firmendaten;
+  /** Inline-Editor pro Hotspot (Render-Prop, identisch zu LivePdfPreview). */
+  renderEditor?: (fieldId: string, close: () => void) => React.ReactNode;
 }
 
-export function ProtokollLivePreview({ draft, kunde, objekt, firma }: Props) {
+export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
@@ -37,6 +42,9 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma }: Props) {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pendingBuffer, setPendingBuffer] = useState<ArrayBuffer | null>(null);
   const [pendingUrl, setPendingUrl] = useState<string | null>(null);
+  const [hotspots, setHotspots] = useState<RuntimeHotspot[]>([]);
+  const [pendingHotspots, setPendingHotspots] = useState<RuntimeHotspot[] | null>(null);
+  const [openHotspotId, setOpenHotspotId] = useState<string | null>(null);
 
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [numPages, setNumPages] = useState(0);
@@ -76,7 +84,7 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma }: Props) {
       setRendering(true);
       setBuildError(null);
       try {
-        const blob = await generateProtokollPdf(draft, kunde, objekt, firma);
+        const { blob, hotspots: hs } = await generateProtokollPdf(draft, kunde, objekt, firma);
         if (cancelled) return;
         if (!(blob instanceof Blob) || blob.size === 0) {
           throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
@@ -84,6 +92,7 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma }: Props) {
         const buf = await blob.arrayBuffer();
         if (cancelled) return;
         const newUrl = URL.createObjectURL(blob);
+        setPendingHotspots(hs);
         setPendingBuffer(buf);
         setPendingUrl((prev) => {
           if (prev) URL.revokeObjectURL(prev);
@@ -113,10 +122,26 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const renderWidth = useMemo(
-    () => Math.min(Math.max(containerWidth - 16, 280), 900),
-    [containerWidth],
-  );
+  // Snap auf 20-px-Schritte: kein Re-Render bei Scrollbar-Wackler.
+  const renderWidthRaw = useMemo(() => {
+    const raw = Math.min(Math.max(containerWidth - 16, 280), 900);
+    return Math.round(raw / 20) * 20;
+  }, [containerWidth]);
+  const renderWidth = useDeferredValue(renderWidthRaw);
+  const scale = renderWidth / A4.width;
+
+  // Fallback, falls Tracker leer (selten).
+  const effectiveHotspots: RuntimeHotspot[] = useMemo(() => {
+    if (hotspots.length > 0) return hotspots;
+    return FALLBACK_HOTSPOTS_PROTOKOLL_SEITE_1.map((f) => ({
+      id: f.id,
+      page: f.page,
+      x: f.box.x * A4.width,
+      y: f.box.y * A4.height,
+      w: f.box.w * A4.width,
+      h: f.box.h * A4.height,
+    }));
+  }, [hotspots]);
 
   // Frische Kopie pro Load — PDF.js detacht den Buffer im Worker.
   const fileSource = useMemo(
@@ -186,19 +211,32 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma }: Props) {
           error={<div className="text-sm text-destructive">PDF kann nicht angezeigt werden.</div>}
           className="flex flex-col items-center gap-4"
         >
-          {Array.from({ length: numPages }, (_, i) => i + 1).map((n) => (
-            <div
-              key={n}
-              className="relative overflow-hidden rounded-md bg-background shadow-sm ring-1 ring-border"
-            >
-              <Page
-                pageNumber={n}
-                width={renderWidth}
-                renderAnnotationLayer={false}
-                renderTextLayer={false}
-              />
-            </div>
-          ))}
+          {Array.from({ length: numPages }, (_, i) => i + 1).map((n) => {
+            const pageHotspots = effectiveHotspots.filter((h) => h.page === n);
+            return (
+              <div
+                key={n}
+                className="relative overflow-hidden rounded-md bg-background shadow-sm ring-1 ring-border"
+              >
+                <Page
+                  pageNumber={n}
+                  width={renderWidth}
+                  renderAnnotationLayer={false}
+                  renderTextLayer={false}
+                />
+                {renderEditor && (
+                  <PdfFieldOverlay
+                    hotspots={pageHotspots}
+                    scale={scale}
+                    openId={openHotspotId}
+                    onOpenChange={setOpenHotspotId}
+                    renderEditor={renderEditor}
+                    metaForId={protokollMetaForId}
+                  />
+                )}
+              </div>
+            );
+          })}
         </Document>
       )}
 
@@ -211,6 +249,7 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma }: Props) {
             onLoadSuccess={({ numPages }) => {
               setNumPages(numPages);
               setPdfBuffer(pendingBuffer);
+              if (pendingHotspots) setHotspots(pendingHotspots);
               setLoadAttempt(0);
               setPdfUrl((prev) => {
                 if (prev) URL.revokeObjectURL(prev);
@@ -218,11 +257,13 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma }: Props) {
               });
               setPendingBuffer(null);
               setPendingUrl(null);
+              setPendingHotspots(null);
             }}
             onLoadError={() => {
               if (pendingUrl) URL.revokeObjectURL(pendingUrl);
               setPendingBuffer(null);
               setPendingUrl(null);
+              setPendingHotspots(null);
             }}
             loading={null}
           >

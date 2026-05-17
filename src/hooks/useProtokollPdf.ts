@@ -30,7 +30,7 @@ export function useProtokollPdf(
     setError(null);
     (async () => {
       try {
-        const b = await generateProtokollPdf(protokoll, kunde, objekt, firma);
+        const { blob: b } = await generateProtokollPdf(protokoll, kunde, objekt, firma);
         if (cancelled) return;
         if (!(b instanceof Blob) || b.size === 0) {
           throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
