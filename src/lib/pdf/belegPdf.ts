@@ -552,11 +552,32 @@ async function buildDoc(
   outro: string,
   signatur: string[],
   logoOverride: string | null,
+  kundenLogo: string | null,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   pageBreakBefore?: (currentNode: any) => boolean,
 ) {
   const logo = await resolveLogo(ctx.firma, logoOverride);
   const t = totals(beleg.positionen, beleg.rabattGesamt, beleg.steuersatz);
+  const kundeColumn = {
+    id: "kunde",
+    width: "*",
+    stack: [
+      ...(kundenLogo
+        ? [
+            {
+              image: kundenLogo,
+              fit: [85, 40],
+              margin: [0, 0, 0, 6] as [number, number, number, number],
+            },
+          ]
+        : []),
+      ...kundeAdresse(ctx.kunde).map((l, i) => ({
+        text: l,
+        fontSize: 10,
+        bold: i === 0,
+      })),
+    ],
+  };
   return {
     pageSize: "A4" as const,
     pageMargins: [55, 155, 55, 100] as [number, number, number, number],
@@ -568,15 +589,7 @@ async function buildDoc(
       {
         margin: [0, 0, 0, 0],
         columns: [
-          {
-            id: "kunde",
-            width: "*",
-            stack: kundeAdresse(ctx.kunde).map((l, i) => ({
-              text: l,
-              fontSize: 10,
-              bold: i === 0,
-            })),
-          },
+          kundeColumn,
           metaBox(meta, metaVariant, metaNote),
         ],
         columnGap: 20,
