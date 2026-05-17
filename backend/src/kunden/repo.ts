@@ -454,8 +454,8 @@ const OBJEKT_COLS = `
 
 export function listObjekte(kundeId?: string): ApiObjekt[] {
   const sql = kundeId
-    ? `SELECT ${OBJEKT_COLS} FROM objekt WHERE kunde_id = ? ORDER BY archiviert ASC, geaendert_am DESC`
-    : `SELECT ${OBJEKT_COLS} FROM objekt ORDER BY archiviert ASC, geaendert_am DESC LIMIT 500`;
+    ? `SELECT ${OBJEKT_COLS} FROM objekt WHERE kunde_id = ? AND geloescht_am IS NULL ORDER BY archiviert ASC, geaendert_am DESC`
+    : `SELECT ${OBJEKT_COLS} FROM objekt WHERE geloescht_am IS NULL ORDER BY archiviert ASC, geaendert_am DESC LIMIT 500`;
   const rows = (kundeId
     ? getDatabase().prepare(sql).all(kundeId)
     : getDatabase().prepare(sql).all()) as DbObjekt[];
@@ -464,7 +464,7 @@ export function listObjekte(kundeId?: string): ApiObjekt[] {
 
 export function getObjekt(id: string): ApiObjekt | null {
   const row = getDatabase()
-    .prepare(`SELECT ${OBJEKT_COLS} FROM objekt WHERE id = ?`)
+    .prepare(`SELECT ${OBJEKT_COLS} FROM objekt WHERE id = ? AND geloescht_am IS NULL`)
     .get(id) as DbObjekt | undefined;
   return row ? objektRowToApi(row) : null;
 }
