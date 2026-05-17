@@ -31,6 +31,11 @@ export interface DbKunde {
   geaendert_am: string;
 }
 
+export interface DbKundeWithLogoMeta extends DbKunde {
+  has_logo: number;
+  logo_updated_at: string | null;
+}
+
 export interface ApiKunde {
   id: string;
   nummer: string;
@@ -57,6 +62,8 @@ export interface ApiKunde {
   tags: string[];
   status: string;
   archiviert: boolean;
+  hasLogo: boolean;
+  logoUpdatedAt?: string;
   erstelltAm: string;
   geaendertAm: string;
 }
@@ -103,6 +110,13 @@ export function kundeRowToApi(r: DbKunde): ApiKunde {
     tags: parseTags(r.tags),
     status: r.status,
     archiviert: r.archiviert === 1,
+    hasLogo:
+      typeof (r as Partial<DbKundeWithLogoMeta>).has_logo === "number"
+        ? (r as DbKundeWithLogoMeta).has_logo === 1
+        : false,
+    logoUpdatedAt: (r as Partial<DbKundeWithLogoMeta>).logo_updated_at
+      ? isoFromSqlite((r as DbKundeWithLogoMeta).logo_updated_at!)
+      : undefined,
     erstelltAm: isoFromSqlite(r.erstellt_am),
     geaendertAm: isoFromSqlite(r.geaendert_am),
   };

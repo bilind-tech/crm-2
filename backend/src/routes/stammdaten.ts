@@ -21,6 +21,9 @@ import {
   updateAnsprechpartner,
   updateKunde,
   updateObjekt,
+  setKundeLogo,
+  clearKundeLogo,
+  getKundeLogo,
 } from "../kunden/repo.js";
 import { findKuerzelOwner, isKuerzelFormatOk, normalizeKuerzel } from "../kunden/kuerzel.js";
 import { listAngebote } from "../belege/angebote-repo.js";
@@ -129,23 +132,140 @@ export async function stammdatenRoutes(app: FastifyInstance): Promise<void> {
         }
         body.kuerzel = k;
       }
-      const result = updateKunde(req.params.id, body);
-      if (!result) {
-        reply.status(404);
-        return { error: "not-found" };
+      try {
+        const result = updateKunde(req.params.id, body);
+        if (!result) {
+          reply.status(404);
+          return { error: "not-found" };
+        }
+        audit({ userId: req.user?.id, action: "kunde.update", detail: { id: result.id }, ip: req.ip });
+        return result;
+      } catch (err) {
+        req.log.error({ err }, "kunde.update failed");
+        reply.status(422);
+        return {
+          error: "validation",
+          message: err instanceof Error ? err.message : "Aktualisierung fehlgeschlagen",
+        };
       }
-      audit({ userId: req.user?.id, action: "kunde.update", detail: { id: result.id }, ip: req.ip });
-      return result;
     });
 
-    scoped.delete<{ Params: { id: string } }>("/kunden/:id", async (req, reply) => {
-      const mode = deleteKunde(req.params.id);
-      if (mode === "missing") {
+    scoped.delete<{ Params: { id: string }; Querystring: { force?: string } }>(
+      "/kunden/:id",
+      async (req, reply) => {
+        const force = req.query?.force === "1" || req.query?.force === "true";
+        try {
+          const mode = deleteKunde(req.params.id, { force });
+          if (mode === "missing") {
+            reply.status(404);
+            return { error: "not-found" };
+          }
+          audit({
+            userId: req.user?.id,
+            action: "kunde.delete",
+            detail: { id: req.params.id, mode, force },
+            ip: req.ip,
+          });
+          return { ok: true, mode };
+        } catch (err) {
+          req.log.error({ err }, "kunde.delete failed");
+          reply.status(409);
+          return {
+            error: "delete-failed",
+            message: err instanceof Error ? err.message : "Löschen fehlgeschlagen",
+          };
+        }
+      },
+    );
+
+    // ---------------- LOGO ----------------
+    const LOGO_MAX_BYTES = 2 * 1024 * 1024; // 2 MB
+    const LOGO_MIMES = new Set([
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "image/svg+xml",
+    ]);
+
+    scoped.get<{ Params: { id: string } }>("/kunden/:id/logo", async (req, reply) => {
+      const logo = getKundeLogo(req.params.id);
+      if (!logo) {
+        reply.status(404);
+        return { error: "no-logo" };
+      }
+      return reply
+        .header("Content-Type", logo.mime)
+        .header("Cache-Control", "private, max-age=0, must-revalidate")
+        .header("ETag", `"${logo.updatedAt}"`)
+        .send(logo.blob);
+    });
+
+    scoped.post<{ Params: { id: string } }>("/kunden/:id/logo", async (req, reply) => {
+      if (!getKunde(req.params.id)) {
         reply.status(404);
         return { error: "not-found" };
       }
-      audit({ userId: req.user?.id, action: "kunde.delete", detail: { id: req.params.id, mode }, ip: req.ip });
-      return { ok: true, mode };
+      if (!req.isMultipart()) {
+        reply.status(400);
+        return { error: "multipart-required" };
+      }
+      const parts = (req as unknown as { parts: () => AsyncIterable<unknown> }).parts();
+      let buf: Buffer | null = null;
+      let mime = "application/octet-stream";
+      let truncated = false;
+      for await (const partRaw of parts) {
+        const part = partRaw as {
+          type: "file" | "field";
+          fieldname: string;
+          mimetype?: string;
+          file?: NodeJS.ReadableStream & { truncated: boolean };
+        };
+        if (part.type === "file" && part.file) {
+          const chunks: Buffer[] = [];
+          let total = 0;
+          for await (const chunk of part.file) {
+            const b = chunk as Buffer;
+            total += b.length;
+            if (total > LOGO_MAX_BYTES) {
+              truncated = true;
+            } else {
+              chunks.push(b);
+            }
+          }
+          buf = Buffer.concat(chunks);
+          mime = part.mimetype ?? mime;
+          if (part.file.truncated) truncated = true;
+        }
+      }
+      if (!buf) {
+        reply.status(400);
+        return { error: "no-file" };
+      }
+      if (truncated) {
+        reply.status(413);
+        return { error: "file-too-large", maxBytes: LOGO_MAX_BYTES };
+      }
+      if (!LOGO_MIMES.has(mime)) {
+        reply.status(415);
+        return { error: "mime-not-allowed", mime };
+      }
+      const ok = setKundeLogo(req.params.id, buf, mime);
+      if (!ok) {
+        reply.status(404);
+        return { error: "not-found" };
+      }
+      audit({ userId: req.user?.id, action: "kunde.logo.set", detail: { id: req.params.id, mime, bytes: buf.length }, ip: req.ip });
+      return getKunde(req.params.id);
+    });
+
+    scoped.delete<{ Params: { id: string } }>("/kunden/:id/logo", async (req, reply) => {
+      if (!getKunde(req.params.id)) {
+        reply.status(404);
+        return { error: "not-found" };
+      }
+      clearKundeLogo(req.params.id);
+      audit({ userId: req.user?.id, action: "kunde.logo.clear", detail: { id: req.params.id }, ip: req.ip });
+      return getKunde(req.params.id);
     });
 
     // ---------------- ANSPRECHPARTNER ----------------

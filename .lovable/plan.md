@@ -1,85 +1,86 @@
-## Ziel
 
-Google-Drive-Synchronisierung sauberer, vollständiger und benutzerfreundlicher machen:
-- Monats-Ordner mit Nummer **und** Name (z. B. `05_Mai`)
-- Beim erstmaligen Verbinden: alle bestehenden Angebote, Rechnungen und Dokumente automatisch nachsynchronisieren
-- Auf jedem Beleg/Dokument ein „Jetzt in Drive sichern"-Knopf
-- Statusanzeige nur grün („in Drive gespeichert"), wenn der Upload wirklich erfolgreich war — und Fehler in Klartext erklärt
+## 1. „Internal Server Error" beim Kunde-Speichern beheben
 
----
+**Ursache:** `KundeBearbeitenDialog` initialisiert `setNotizen(kunde.notizen ?? "")`. In der neueren API kommt `kunde.notizen` als **Array von Notiz-Objekten** zurück (Tab „Notizen"). Beim Speichern schickt der Dialog dieses Array als `notizen` mit. Backend `updateKunde` reicht den Wert 1:1 an SQLite weiter → better-sqlite3 wirft, weil es Objekte nicht binden kann → 500.
 
-## 1. Monatsordner mit Name (`05_Mai`)
+**Fix (frontend, klein):**
+- In `KundeBearbeitenDialog.tsx`: `notizen` nur noch als Freitext-Feld behandeln. Wenn `kunde.notizen` kein String ist, initial mit `""` füllen und das Feld nicht an PATCH senden (oder nur senden, wenn der User getippt hat).
+- Backend zur Sicherheit härten: in `backend/src/kunden/repo.ts → updateKunde` Wert für `notizen` mit `typeof v === "string" ? v : null` einschränken; bei Tags identisch absichern; im Fastify-Handler `try/catch` mit `reply.status(422).send({ error: "validation" })`, damit nie wieder ein nackter 500 ankommt.
 
-**Backend** `backend/src/drive/naming.ts`
-- `applyPathTemplate`/`applyFileNameTemplate` um Platzhalter `{MMMM}` erweitern (deutscher Monatsname: Januar … Dezember) und `{MM-MMMM}` (z. B. `05_Mai`).
-- Default-Templates in `backend/src/routes/drive.ts` (`DEFAULT_FOLDERS`) ändern:
-  - `Rechnungen/{YYYY}/{MM}_{MMMM}` usw.
-- Für bereits gespeicherte Settings: Migration nicht nötig — wir normalisieren beim Laden (`buildResponse`): wenn der Wert dem alten Default `…/{MM}` entspricht, auf neuen Default heben.
+## 2. Kunden-Logo hochladen, anzeigen, ändern, entfernen
 
-**Frontend** `src/components/einstellungen/GoogleDriveTab.tsx`
-- `DEFAULT_FOLDERS` und `pfadVorschau` analog erweitern.
-- `PFAD_PLATZHALTER` um `{MMMM}` ergänzen.
+**Datenmodell:** Migration `017_kunden_logo.sql` — neue Spalten in `kunde`:
+`logo_blob BLOB`, `logo_mime TEXT`, `logo_updated_at TEXT`.
 
-**Folder-Cache** `backend/src/drive/folders.ts`
-- `folderCache` enthält alte Pfade als Keys. Bei Template-Wechsel wird der neue Pfad einfach neu angelegt. Wir fügen einen einmaligen „Soft-Reset" hinzu: wenn ein Cache-Eintrag auf einen Ordner zeigt, dessen Name nicht zum aktuell aufgelösten Segment passt, wird er übersprungen. Alte Ordner in Drive bleiben unangetastet (keine Datenverluste).
+**Backend-Routen (in `stammdaten.ts`):**
+- `POST /kunden/:id/logo` — multipart-Upload (max 2 MB, nur `image/png|jpeg|webp|svg+xml`); im Repo `setKundeLogo()` (resize/normalize entfällt — pi-Backend hält das Original).
+- `DELETE /kunden/:id/logo` — Spalten auf NULL setzen.
+- `GET /kunden/:id/logo` — liefert Blob mit korrektem MIME, `Cache-Control: private, max-age=0, must-revalidate` + ETag = `logo_updated_at`.
 
-## 2. Backfill bei Verbindung
+**API-Hooks:** `useUploadKundeLogo(id)`, `useDeleteKundeLogo(id)` in `src/hooks/useApi.ts`; `Kunde.logoUrl` per Helper `kundeLogoUrl(id, updatedAt)` (URL mit `?v=<ts>` für Cache-Busting).
 
-Neuer Service `backend/src/drive/backfill.ts`:
-- Funktion `backfillAll()` enqueued alle bisher nicht erfolgreich hochgeladenen:
-  - Angebote mit Status `angenommen|versendet`
-  - Rechnungen mit Status `versendet|bezahlt|teilbezahlt`
-  - Dokumente (`geloescht_am IS NULL`), die noch keinen `drive_status='uploaded'` haben
-- Idempotenz-Key identisch zur Auto-Enqueue-Logik → Duplikate landen nicht doppelt in der Queue.
+**UI-Komponente:** Neue `KundeLogo.tsx` mit Varianten `lg | md | sm` — zeigt Logo oder Initialen-Fallback.
 
-Wireup in `backend/src/routes/drive.ts`:
-- Nach erfolgreichem `exchangeCode` (im Callback) und nach `connect` (sobald `refreshTokenIsSet`) → `void backfillAll()` einmalig anstoßen.
-- Zusätzlich neuer Endpoint `POST /drive/backfill` (auth) für „Alles erneut prüfen"-Button in den Einstellungen.
+**Einsatzorte:**
+- `kunden.$id.tsx` Header-Karte: Initialen-Kachel durch `KundeLogo size="lg"` ersetzen + Hover-Button „Logo ändern/entfernen" (öffnet kleinen Dialog mit FilePicker + Vorschau + Entfernen).
+- Kundenliste `kunden.tsx`: kleines Avatar links vor Namen (`size="sm"`).
+- PDF (`backend/src/pdf/render.ts` + `belegPdf.server.ts`): falls Kunde Logo hat, dezent rechts neben der Adresse einbetten (max 80×40 px). Toggle in `pdf/firma.ts`-Layout-Defaults wäre Overkill — fest verdrahtet, klein, oben rechts im Adress-Block.
 
-UI: in `GoogleDriveTab.tsx` → `SynchronisationSection` Button „Alles erneut prüfen" + Toast mit Anzahl enqueued.
+## 3. Kunde wirklich löschen (Hard-Delete mit Kaskade)
 
-## 3. „Jetzt in Drive sichern"-Knopf pro Beleg
+Aktuell: `deleteKunde` macht Soft-Delete sobald Angebote/Rechnungen existieren. Der User will eine echte Lösch-Option.
 
-Neuer Endpoint `backend/src/routes/drive.ts`:
-- `POST /drive/uploads/enqueue` mit Body `{ belegArt: "angebot"|"rechnung"|"dokument", belegId }` → ruft die gleichen Hilfsfunktionen wie der Backfill auf (eine Datei) und triggert sofort `tickDriveQueue(1)`.
+**Backend:**
+- `deleteKunde(id, { force?: boolean })` — bei `force=true`:
+  - Rechnungen + zugehörige `zahlungen`, `mahnungen`, `email_versand` löschen.
+  - Angebote + Positionen löschen.
+  - Objekte, Ansprechpartner, Dokumente (inkl. Datei-Blobs via `dokumente/storage`), Notizen kaskadieren.
+  - `DELETE FROM kunde …` als harter Delete in **einer Transaction**.
+- Route `DELETE /kunden/:id?force=1` (nur wenn `force` gesetzt → Hard). Ohne `force` bleibt bestehendes Verhalten (Soft).
 
-Frontend-Hook `src/hooks/useApi.ts`:
-- `useEnqueueDriveUpload()` Mutation.
+**Frontend (`KundeLoeschenDialog.tsx`):**
+- Stufe 1 bleibt; wenn `hatDaten`, zusätzliche Warnung in rot: „Endgültiges Löschen entfernt **alle** Rechnungen, Angebote, Zahlungen, Dokumente unwiderruflich."
+- Stufe 2: Bestätigungs-Eingabe wie bisher + zusätzliche Checkbox „Ich verstehe, dass alle abhängigen Daten mitgelöscht werden". Button schickt `force=1`.
+- `useDeleteKunde` erweitern auf `mutate({ id, force })`.
 
-Wo der Button hinkommt:
-- `src/routes/angebote.$id.tsx` und `rechnungen.$id.tsx` → in der bestehenden Drive-Status-Zeile/Card: Sekundär-Button „Jetzt in Drive sichern" wenn Status ≠ `erfolg`.
-- `src/components/dokumente/DokumentBearbeitenDialog.tsx` (oder Detail-Bereich) analog.
-- `DriveStatusBadge` / `DriveSyncBadge` bekommen optionalen `onResync`-Callback bzw. der Button wird daneben gerendert.
+## 4. Stundenzettel-Iframe lädt leer (X-Frame-Options)
 
-## 4. Status-Anzeige & Fehlertexte
+**Ursache:** `http://mycleancenter-pi.local:8080/040506` ist ein **anderer Origin** als der CRM-Port. Die Stundenzettel-App liefert vermutlich `X-Frame-Options: SAMEORIGIN` (oder die Login-Seite tut es). Browser blockiert die Einbettung → weiße Seite.
 
-`backend/src/drive/upload-worker.ts` + `upload-repo.ts`:
-- Beim `markFehler` → bekannten Google-Fehlertext (z. B. `invalid_grant`, `insufficientPermissions`, `storageQuotaExceeded`, `403: access_denied`) in benutzerfreundliche Codes mappen (`token-expired`, `drive-voll`, `kein-zugriff`).
-- Response enthält `fehlerCode` zusätzlich zu `fehlerText`.
+**Lösung: Reverse-Proxy im CRM-Backend** (same-origin → keine Frame-Header-Probleme):
+- Neue Route `backend/src/routes/stundenzettel-proxy.ts` registriert unter Pfad `/extern/stundenzettel/*`. Liest Ziel-Basis aus Settings (`stundenzettel.url`), streamt Request/Response durch, leitet Status, Cookies, Headers weiter; strippt `X-Frame-Options` und `Content-Security-Policy: frame-ancestors`.
+- Settings-Eintrag in `settings/schemas.ts` ergänzen / nutzen (es existiert schon `useStundenzettelUrl`).
+- Frontend `useStundenzettelUrl()` liefert für den iframe nun den **same-origin Proxy-Pfad** (`/extern/stundenzettel/040506`), für „In neuem Tab" weiterhin die Direkt-URL.
+- `stundenzettel.tsx`: `analysiereUmfeld` an die Proxy-URL anpassen — same-origin entfernt das Mixed-Content- und Cloud-LAN-Hindernis automatisch (Cloud-Preview-Hinweis bleibt, weil dort weder Backend noch Stundenzettel-App existieren).
 
-Frontend `DriveSyncBadge`/`DriveStatusBadge`:
-- Anzeige-Logik vereinheitlichen:
-  - `erfolg` → „In Drive gespeichert" (grün, Link öffnen)
-  - `pending`/`running` → „Wird gesichert…" (kein „gespeichert"-Label)
-  - `fehler`/`manuell` → konkrete Klartext-Hilfe je nach `fehlerCode`:
-    - `token-expired` → „Verbindung abgelaufen — in Einstellungen → Google Drive neu verbinden."
-    - `drive-voll` → „Google-Drive-Speicher voll — Platz schaffen und erneut versuchen."
-    - `kein-zugriff` → „Kein Schreibzugriff auf den Ordner — Konto-Berechtigung prüfen."
-    - sonst → Original-Fehlertext + „Erneut versuchen"-Button.
-
-`useLiveEvents`: existierende Invalidierungen reichen — kein Toast-Spam, Throttle bleibt.
-
-## 5. Tests / QA
-
-- Backend: `backend/test/drive-backfill.spec.ts` für Backfill-Idempotenz + Naming `{MMMM}`.
-- Manuell im Preview: Drive verbinden → bestehende Belege erscheinen in Queue → erfolgreiche und fehlerhafte States in den Einstellungen sichtbar → Detail-Seiten zeigen „Jetzt sichern"-Button.
-
----
+**Edge-Cases im Proxy:** SSE/Websocket nicht nötig (Stundenzettel ist klassisches MPA/SPA), aber relative Pfade (`/assets/...`) müssen funktionieren → Path-Rewrite `^/extern/stundenzettel/ → /` und absoluter `Location:`-Header bei Redirects auf den Proxy-Pfad zurückschreiben.
 
 ## Technische Details
 
-- `{MMMM}` wird ausschließlich auf Deutsch geliefert (fix `["Januar","Februar",…]`), da das ganze System auf de-DE läuft.
-- Old → New Migration: nur Default-Template-Hub, keine DB-Migration nötig.
-- `backfillAll` läuft im Hintergrund (async, nicht blockierend), maximal ~500 Items pro Call, danach erneut anstoßbar.
-- Idempotenz-Key bleibt `{art}-{nummer|id}-{sha[0:16]}` — verhindert Doppel-Uploads.
-- `POST /drive/uploads/enqueue` und `POST /drive/backfill` sind Auth-geschützt (`requireAuth`), keine Mail-Trigger (gilt absolute Regel).
+```
+Migration 017:
+  ALTER TABLE kunde ADD COLUMN logo_blob BLOB;
+  ALTER TABLE kunde ADD COLUMN logo_mime TEXT;
+  ALTER TABLE kunde ADD COLUMN logo_updated_at TEXT;
+```
+
+```
+Geänderte/Neue Dateien:
+  backend/src/db/migrations/017_kunden_logo.sql               (neu)
+  backend/src/kunden/repo.ts                                  (notizen-guard, logo-fns, deleteKunde force)
+  backend/src/routes/stammdaten.ts                            (logo-routes, force-param, try/catch)
+  backend/src/routes/stundenzettel-proxy.ts                   (neu)
+  backend/src/server.ts                                       (proxy registrieren)
+  backend/src/pdf/render.ts | belegPdf.server.ts              (kunden-logo im PDF)
+  src/components/forms/KundeBearbeitenDialog.tsx              (notizen-fix)
+  src/components/forms/KundeLoeschenDialog.tsx                (hard-delete UI)
+  src/components/forms/KundeLogoUploadDialog.tsx              (neu)
+  src/components/kunden/KundeLogo.tsx                         (neu)
+  src/routes/kunden.$id.tsx | kunden.tsx                      (KundeLogo einsetzen)
+  src/routes/stundenzettel.tsx                                (Proxy-URL nutzen)
+  src/lib/stundenzettel/config.ts                             (Proxy-URL-Helper)
+  src/hooks/useApi.ts                                         (logo + delete-force hooks)
+  src/lib/api/types.ts                                        (logoUpdatedAt im Kunde-Typ)
+```
+
+Tests: `kunden-delete-force.spec.ts`, `kunden-logo.spec.ts`, `stundenzettel-proxy.spec.ts`.
