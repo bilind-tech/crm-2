@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils";
 
 interface MobileListCardProps {
   onClick?: () => void;
+  /** Optionales führendes Element (z. B. Logo/Avatar). */
+  leading?: React.ReactNode;
   title: React.ReactNode;
   subtitle?: React.ReactNode;
   meta?: React.ReactNode;
@@ -23,6 +25,7 @@ interface MobileListCardProps {
  */
 export function MobileListCard({
   onClick,
+  leading,
   title,
   subtitle,
   meta,
@@ -50,6 +53,7 @@ export function MobileListCard({
       )}
     >
       <div className="flex items-start gap-3">
+        {leading && <div className="shrink-0">{leading}</div>}
         <div className="min-w-0 flex-1">
           <div className="truncate font-semibold leading-tight">{title}</div>
           {subtitle && (
