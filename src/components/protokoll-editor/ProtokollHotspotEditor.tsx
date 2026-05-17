@@ -53,7 +53,7 @@ export function ProtokollHotspotEditor({ fieldId, draft, set, onOpenAdvanced, on
     </div>
   );
 
-  // ────── Stammdaten / Meta ──────
+  // ────── Inhalt / Meta ──────
   if (fieldId === "meta") {
     return (
       <div className="w-[280px]">
