@@ -38,6 +38,10 @@ export interface Kunde {
   tags: string[];
   status: KundeStatus;
   archiviert: boolean;
+  /** Backend liefert `hasLogo: true`, wenn ein Kunden-Logo hinterlegt ist. Bild selbst via `GET /kunden/:id/logo`. */
+  hasLogo?: boolean;
+  /** ISO-Zeit der letzten Logo-Änderung — als Cache-Bust für `<img src>`-URLs. */
+  logoUpdatedAt?: string;
   erstelltAm: ISODateTime;
   geaendertAm: ISODateTime;
 }
