@@ -1,70 +1,72 @@
-## Problem
+## Diagnose
 
-Beim Drucken eines Angebots, einer Rechnung oder eines Übergabeprotokolls erscheint nur „Load failed" — ohne weitere Information. Das ist die rohe Safari/WebKit-Fehlermeldung von `fetch()`, ohne Kontext darüber, **was** geladen werden konnte.
+Der Fehler **"Importing a module script failed"** mit URL `/werkzeuge/uebergabeprotokoll` ist **kein Code-Bug in der Route selbst** — die Imports der Route (`UebergabeProtokollForm`, `useProtokolle`) und der frisch erstellten `ProtokollHtmlPreview` sind alle sauber, alle Abhängigkeiten existieren.
 
-## Ursachenanalyse
+Es handelt sich um einen klassischen **Chunk-Load-Error**: der Browser hält noch die alte SPA-Shell und versucht, einen Code-Chunk (`uebergabeprotokoll-XYZ.js`) zu laden, dessen URL nach dem letzten Build/HMR nicht mehr existiert.
 
-In `src/lib/pdf/printBlob.ts` macht `printPdfBlobUrl` ein `fetch(blobUrl)` und ruft danach `arrayBuffer()`. Wenn die Blob-URL in der Zwischenzeit ungültig wurde (React 19 / StrictMode räumt Blob-URLs verzögert auf, oder ein Neumount der Seite hat sie revoked), wirft WebKit exakt `TypeError: Load failed`. Genau diese Meldung landet 1:1 im Toast.
+Beleg dafür in den Console-Logs:
+```
+[vite] failed to connect to websocket … localhost:8080
+```
+HMR ist down → der Tab bekommt keine Reload-Signale → beim ersten Lazy-Import einer Route schlägt das Script-Fetch fehl → TanStack Router zeigt `errorComponent`.
 
-Aufruf-Stellen:
-- `src/routes/angebote.$id.tsx` → `<PrintButton url={pdf.url} ... />`
-- `src/routes/rechnungen.$id.tsx` → `<PrintButton url={pdf.url} ... />`
-- `src/routes/protokolle.$id.tsx` → `<PrintButton blob={pdf.blob} url={pdf.url} ... />`
-- `src/components/dokumente/DokumentViewer.tsx` → `<PrintButton url={dateiUrl} ... />`
+Ein einfaches **F5 / Hard-Reload behebt es sofort** — aber das ist keine echte Lösung, denn dasselbe passiert deinen Endnutzern nach jedem System-Update auf dem Pi: der Browser hängt am alten `index.html`, lädt einen alten Chunk-Namen, kein Reload → genau dieser Fehler.
 
-Bei Angebot/Rechnung wird nur die **URL** übergeben, obwohl der Blob via `useAngebotPdf` / `useRechnungPdf` ohnehin schon vorliegt — der Umweg über `fetch(blobUrl)` ist die fehlerträchtige Stelle.
+## Plan: Chunk-Load-Errors robust auffangen
 
-Zweitens: die Fehlermeldung selbst ist nutzlos. Wir wissen nicht, welcher Schritt versagt hat (Fetch? PDF.js-Parse? Canvas-Render? iframe-Print?).
+### 1. Globaler Chunk-Error-Handler (Auto-Reload)
+- Datei: `src/lib/chunkErrorReload.ts` (neu)
+- Globaler `window.addEventListener("error", …)` + `unhandledrejection`-Listener.
+- Triggert genau bei diesen Signalen:
+  - `error.message` enthält `Importing a module script failed`
+  - oder `Failed to fetch dynamically imported module`
+  - oder `ChunkLoadError`
+- Verhalten:
+  - Beim **ersten Auftreten** in einer Tab-Session: `sessionStorage`-Flag setzen + `location.reload()`. Damit wird die neue `index.html` geladen, die auf die aktuellen Chunk-Hashes verweist.
+  - Beim **zweiten Auftreten** (Flag bereits gesetzt): nicht erneut reloaden, sondern Toast „Aktualisierung fehlgeschlagen — bitte Seite manuell neu laden". Vermeidet Endlos-Reload-Loops.
+- In `src/router.tsx` oder `src/routes/__root.tsx` einmalig importieren.
 
-## Plan
+### 2. Route-Error-Komponente verbessern
+- `defaultErrorComponent` im Router so erweitern, dass bei Chunk-Fehlern direkt ein **prominenter "Neu laden"-Button** + automatischer Reload nach 1 s erscheint, statt der generischen Fehlerseite mit „Technische Details".
+- Erkennung über dieselben Strings wie oben.
 
-### 1. Blob direkt verwenden, wenn vorhanden (eliminiert die fehlerträchtige fetch-Stufe)
+### 3. Service-Worker / Cache-Header
+- Sicherstellen, dass das Pi-Backend `index.html` **immer mit `Cache-Control: no-store`** ausliefert (das ist die Datei, die auf die korrekten Chunk-Hashes verweist).
+- Assets unter `/assets/*` (gehashte Dateinamen) bekommen weiterhin `immutable, max-age=31536000`.
+- Falls aktuell anders konfiguriert: `backend/src/` Static-Serve-Setup prüfen und anpassen.
 
-`src/components/pdf/PrintButton.tsx`
-- Prop-Typen erweitern, sodass `blob` und `url` zusammen erlaubt sind (Blob bevorzugt).
-- Handler: wenn `blob` da ist → `printPdfBlob(blob)`; sonst Fallback auf `url`.
+### 4. Sofort-Fix für aktuelle Sitzung
+- Du machst einmalig im Browser **Strg+Shift+R** (Hard-Reload) auf der Preview, danach läuft `/werkzeuge/uebergabeprotokoll` wieder.
 
-`src/routes/angebote.$id.tsx`, `src/routes/rechnungen.$id.tsx`
-- `<PrintButton blob={pdf.blob} url={pdf.url} ... />` statt nur `url`.
+## Was NICHT geändert wird
+- `ProtokollHtmlPreview` / `ProtokollEditorLayout` — sind in Ordnung, kein Auslöser.
+- `werkzeuge.uebergabeprotokoll.tsx` — sauberer Code, sauberer Import.
+- Keine Refactorings am Live-Editor in diesem Fix — das Flicker-/Live-Thema bleibt separates Topic.
 
-### 2. Druck-Pipeline mit präzisen Fehlerstufen versehen
+## Technische Details (für später)
 
-`src/lib/pdf/printBlob.ts`
-- Jede Stufe (`fetch`, `arrayBuffer`, `pdfjs.getDocument`, `page.render`, `iframe.load`, `print`) in einen eigenen Try-Catch packen und Fehler mit klarem deutschem Prefix neu werfen, z. B.:
-  - „PDF konnte nicht geladen werden (Blob-URL abgelaufen)"
-  - „PDF konnte nicht entschlüsselt werden (PDF.js)"
-  - „Seite X konnte nicht gerendert werden"
-  - „Druckdialog konnte nicht geöffnet werden (Browser blockiert)"
-- Original-Message als `cause` mitgeben und in der Konsole loggen.
-- Bei `fetch(blobUrl)` zusätzlich prüfen, ob die URL noch gültig ist (try/catch um `fetch`).
+`src/lib/chunkErrorReload.ts` (Skizze):
+```ts
+const FLAG = "mcc.chunkReloadedOnce";
+const isChunkError = (msg?: string) =>
+  !!msg && (
+    msg.includes("Importing a module script failed") ||
+    msg.includes("Failed to fetch dynamically imported module") ||
+    msg.includes("ChunkLoadError")
+  );
 
-### 3. Backend-Aufruf separat verifizieren (nur Hinweis-Logging, keine Verhaltensänderung)
-
-`src/lib/pdf/backendPdf.ts` loggt heute schon Warnings — wir lassen das so. Wichtig ist nur, dass die Fehler aus dem Print-Path nicht mit Backend-Fehlern verwechselt werden.
-
-## Technische Details
-
-```text
-PrintButton
-  └─ printPdfBlob(blob)                    ← neuer bevorzugter Pfad
-       └─ blob.arrayBuffer()
-            └─ renderPdfToImages(buf)
-                 └─ printViaHiddenIframe(imgs)
-
-(Fallback nur wenn nirgends ein Blob verfügbar ist:)
-PrintButton
-  └─ printPdfBlobUrl(url)
-       ├─ fetch(url)                      ← Try-Catch: „PDF-Quelle nicht erreichbar"
-       └─ res.arrayBuffer()               ← Try-Catch: „PDF-Inhalt unvollständig"
+export function installChunkErrorReload() {
+  const handle = (msg?: string) => {
+    if (!isChunkError(msg)) return;
+    if (sessionStorage.getItem(FLAG)) return; // schon einmal versucht
+    sessionStorage.setItem(FLAG, "1");
+    location.reload();
+  };
+  window.addEventListener("error", (e) => handle(e.message));
+  window.addEventListener("unhandledrejection", (e) =>
+    handle(e.reason?.message ?? String(e.reason))
+  );
+}
 ```
 
-Geänderte Dateien (nur Frontend, keine Business-Logik):
-- `src/components/pdf/PrintButton.tsx`
-- `src/lib/pdf/printBlob.ts`
-- `src/routes/angebote.$id.tsx`
-- `src/routes/rechnungen.$id.tsx`
-
-## Ergebnis
-
-- In **>90 %** der Fälle (Beleg-Detailseiten, Protokoll-Detailseite, Viewer-Dialog) wird gar nicht mehr per `fetch` über die Blob-URL gegangen — der Druck nutzt den schon vorhandenen Blob direkt. Damit verschwindet die häufigste „Load failed"-Ursache.
-- Wenn doch noch etwas schiefgeht, sagt der Toast genau, **welcher Schritt** fehlgeschlagen ist (z. B. „PDF konnte nicht entschlüsselt werden" statt „Load failed") — so können wir bei einem nächsten Report direkt die richtige Stelle ansehen.
+Reload-Flag in `__root.tsx` einmal nach erfolgreichem Mount löschen, damit beim nächsten echten Chunk-Fehler wieder ein Reload passiert.

@@ -24,6 +24,11 @@ import { Toaster } from "@/components/ui/sonner";
 import { UeberfaelligPopup } from "@/components/notifications/UeberfaelligPopup";
 import { GlobalDropZone } from "@/components/dokumente/GlobalDropZone";
 import { useLiveEvents } from "@/hooks/useLiveEvents";
+import { installChunkErrorReload, clearChunkReloadFlag } from "@/lib/chunkErrorReload";
+
+if (typeof window !== "undefined") {
+  installChunkErrorReload();
+}
 
 export const Route = createRootRoute({
   head: () => ({
@@ -90,6 +95,11 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
+  useEffect(() => {
+    // Erfolgreicher Mount nach Reload → Flag löschen, damit beim nächsten
+    // echten Chunk-Fehler wieder ein Reload-Versuch erfolgt.
+    clearChunkReloadFlag();
+  }, []);
   const [queryClient] = useState(
     () =>
       new QueryClient({

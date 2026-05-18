@@ -1,9 +1,50 @@
 import { createRouter, useRouter } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { routeTree } from "./routeTree.gen";
+import { isLikelyChunkError } from "@/lib/chunkErrorReload";
+import { useEffect } from "react";
 
 function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
+  const chunkError = isLikelyChunkError(error);
+
+  useEffect(() => {
+    if (!chunkError) return;
+    // Bei Chunk-Fehlern (alte SPA-Shell nach Update) automatisch reloaden,
+    // sofern wir es nicht schon einmal versucht haben.
+    const FLAG = "mcc.chunkReloadedOnce";
+    try {
+      if (sessionStorage.getItem(FLAG)) return;
+      sessionStorage.setItem(FLAG, "1");
+    } catch {
+      return;
+    }
+    const t = setTimeout(() => location.reload(), 800);
+    return () => clearTimeout(t);
+  }, [chunkError]);
+
+  if (chunkError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="max-w-md text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+          <h1 className="mt-4 text-xl font-semibold text-foreground">
+            Neue Version verfügbar
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Die Seite wird neu geladen, um auf die aktuelle Version umzuschalten…
+          </p>
+          <button
+            onClick={() => location.reload()}
+            className="mt-6 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Jetzt neu laden
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const details = [
     `Name:    ${error?.name ?? "Error"}`,
     `Message: ${error?.message ?? "(keine Nachricht)"}`,

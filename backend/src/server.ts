@@ -5,6 +5,7 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import { existsSync, mkdirSync } from "node:fs";
+import path from "node:path";
 import { config, inspectDataDir } from "./config.js";
 import { openDatabase, closeDatabase, getSchemaVersion } from "./db/index.js";
 import { registerSpaPageFallback } from "./spa-fallback.js";
@@ -269,6 +270,18 @@ async function main(): Promise<void> {
       decorateReply: true,
       wildcard: false,
       index: ["index.html"],
+      setHeaders: (res, filePath) => {
+        // index.html NIE cachen — sonst zeigen Browser nach einem Update
+        // weiter auf alte Chunk-Hashes ("Importing a module script failed").
+        // Gehashte Assets in /assets/ dürfen dauerhaft gecached werden.
+        if (filePath.endsWith("index.html")) {
+          res.setHeader("Cache-Control", "no-store, must-revalidate");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
+        } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        }
+      },
     });
     // Pi-Auslieferung: Das Backend liefert die gebaute App als statische SPA aus.
     // Kein SSR auf dem Raspberry Pi — so vermeiden wir TanStack-SSR-Runtime-Drift.
@@ -315,6 +328,9 @@ async function main(): Promise<void> {
       if (!hasSpaIndex) {
         return reply.status(503).send({ error: "Frontend nicht verfügbar", statusCode: 503 });
       }
+      reply.header("Cache-Control", "no-store, must-revalidate");
+      reply.header("Pragma", "no-cache");
+      reply.header("Expires", "0");
       return reply.type("text/html; charset=utf-8").sendFile("index.html");
     });
     app.log.info({ frontendDir: config.frontendDir }, "Frontend-Statics aktiv");
