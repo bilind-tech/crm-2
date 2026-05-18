@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useKunde, useObjekt, useProtokollByDokumentId } from "@/hooks/useApi";
 import { useDokumentBlobUrl } from "@/hooks/useDokumentBlobUrl";
 import { PrintButton } from "@/components/pdf/PrintButton";
+import { PdfCanvasViewer } from "@/components/pdf/PdfCanvasViewer";
 import type { Dokument } from "@/lib/api/types";
 import { DriveSyncRow } from "./DriveSyncBadge";
 
@@ -18,7 +19,7 @@ interface Props {
 export function DokumentViewer({ dokument, open, onOpenChange, onEdit }: Props) {
   const { data: kunde } = useKunde(dokument?.kundeId ?? "");
   const { data: objekt } = useObjekt(dokument?.objektId ?? "");
-  const { url: dateiUrl, loading } = useDokumentBlobUrl(dokument);
+  const { url: dateiUrl, blob: dateiBlob, loading } = useDokumentBlobUrl(dokument);
   const isProtokoll = dokument?.typ === "protokoll" || /^(PR|SU)\d/.test(dokument?.dateiname ?? "");
   const { data: protokoll } = useProtokollByDokumentId(isProtokoll ? dokument?.id : null);
 
@@ -131,8 +132,13 @@ export function DokumentViewer({ dokument, open, onOpenChange, onEdit }: Props) 
                 style={{ touchAction: "pinch-zoom" }}
               />
             </div>
-          ) : isPdf && dateiUrl ? (
-            <iframe src={dateiUrl} title={dokument.titel} className="h-full w-full border-0" />
+          ) : isPdf && (dateiUrl || dateiBlob) ? (
+            <PdfCanvasViewer
+              pdfUrl={dateiUrl || null}
+              pdfBlob={dateiBlob}
+              fileName={dokument.dateiname || dokument.titel}
+              className="h-full w-full overflow-y-auto bg-muted/30"
+            />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
