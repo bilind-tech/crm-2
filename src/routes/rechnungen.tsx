@@ -290,6 +290,19 @@ function Page() {
                   >
                     <Mail className="h-4 w-4" />
                   </button>
+                  {erinnerungIds.has(r.id) && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setErinnerungFuer(r);
+                      }}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-md border border-warning/40 bg-warning/10 px-2.5 text-sm font-medium text-warning hover:bg-warning/20"
+                      title="Freundliche Zahlungserinnerung senden"
+                    >
+                      <MailWarning className="h-4 w-4" />
+                    </button>
+                  )}
                   {istVollBezahlt(r) ? (
                     <span className="inline-flex h-9 items-center gap-1.5 rounded-md border border-success/30 bg-success/10 px-3 text-sm font-medium text-success">
                       <CheckCircle2 className="h-4 w-4" />
@@ -439,6 +452,19 @@ function Page() {
                         >
                           <Mail className="h-4 w-4" />
                         </button>
+                        {erinnerungIds.has(r.id) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              e.preventDefault();
+                              setErinnerungFuer(r);
+                            }}
+                            className="inline-flex h-8 items-center gap-1 rounded-md border border-warning/40 bg-warning/10 px-2 text-warning hover:bg-warning/20"
+                            title="Freundliche Zahlungserinnerung senden"
+                          >
+                            <MailWarning className="h-4 w-4" />
+                          </button>
+                        )}
                         {istVollBezahlt(r) ? (
                           <span className="inline-flex h-8 items-center gap-1 rounded-md border border-success/30 bg-success/10 px-2.5 text-xs font-medium text-success">
                             <CheckCircle2 className="h-3.5 w-3.5" />
@@ -525,6 +551,14 @@ function Page() {
         <RechnungEmailLauncher rechnung={emailFuer} onClose={() => setEmailFuer(null)} />
       )}
 
+      {erinnerungFuer && (
+        <RechnungEmailLauncher
+          rechnung={erinnerungFuer}
+          alsErinnerung
+          onClose={() => setErinnerungFuer(null)}
+        />
+      )}
+
       <RechnungAusDauerauftragDialog open={daDialog} onOpenChange={setDaDialog} />
 
       {confirmDialog}
@@ -532,9 +566,18 @@ function Page() {
   );
 }
 
-function RechnungEmailLauncher({ rechnung, onClose }: { rechnung: Rechnung; onClose: () => void }) {
+function RechnungEmailLauncher({
+  rechnung,
+  onClose,
+  alsErinnerung,
+}: {
+  rechnung: Rechnung;
+  onClose: () => void;
+  alsErinnerung?: boolean;
+}) {
   const { data: kunde } = useKunde(rechnung.kundeId);
   const pdf = useRechnungPdf(rechnung);
+  const erinnerungVorlageId = useErinnerungVorlageId();
   return (
     <EmailVersandDialog
       open
@@ -547,6 +590,7 @@ function RechnungEmailLauncher({ rechnung, onClose }: { rechnung: Rechnung; onCl
       pdfBlobUrl={pdf.url}
       pdfDateiname={`${rechnung.nummer}.pdf`}
       pdfStatus={pdf.status}
+      vorbelegteVorlageId={alsErinnerung ? erinnerungVorlageId : undefined}
     />
   );
 }
