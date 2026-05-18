@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { LoadingPlaceholder } from "@/components/layout/LoadingPlaceholder";
 import { toast } from "sonner";
+import { autoLinkifyImages } from "@/lib/email/signature";
 import {
   Plus,
   Trash2,
@@ -519,7 +520,7 @@ function SignaturDialog({
               <iframe
                 title="Signatur Vorschau"
                 sandbox=""
-                srcDoc={`<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:14px;padding:20px;}</style></head><body>${html}</body></html>`}
+                srcDoc={`<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:14px;padding:20px;}img{max-width:240px;height:auto;}</style></head><body>${autoLinkifyImages(html)}</body></html>`}
                 className="block h-[260px] w-full rounded-lg border border-border bg-white"
               />
             )}

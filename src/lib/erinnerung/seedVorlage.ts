@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useEmailVorlagen, useCreateEmailVorlage } from "@/hooks/useApi";
 
-const NAME = "Zahlungserinnerung (freundlich)";
+const NAME = "Zahlungserinnerung (freundlich) v2";
 
 const BETREFF = "Freundliche Erinnerung: Rechnung {{rechnung.nummer}}";
 
@@ -17,8 +17,7 @@ const KOERPER = `<p>{{anrede.zeile}}</p>
 <strong>Bank:</strong> {{firma.bank}}<br/>
 <strong>IBAN:</strong> {{firma.iban}}<br/>
 <strong>Verwendungszweck:</strong> {{rechnung.nummer}}</p>
-<p>Bei Fragen zur Rechnung melden Sie sich jederzeit gerne bei uns.</p>
-<p>Mit freundlichen Grüßen<br/>{{firma.name}}</p>`;
+<p>Vielen Dank für die kurze Prüfung.</p>`;
 
 export function useErinnerungVorlageId(): string | undefined {
   const { data: vorlagen = [], isLoading } = useEmailVorlagen();

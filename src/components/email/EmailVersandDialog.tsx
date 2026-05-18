@@ -24,6 +24,8 @@ import {
   Check,
   Plus,
   Settings,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -59,6 +61,7 @@ import {
   replacePlaceholders,
   type PlaceholderContext,
 } from "@/lib/email/placeholders";
+import { autoLinkifyImages } from "@/lib/email/signature";
 import type { Angebot, EmailKontext, EmailVorlage, Kunde, Rechnung } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import { createClientId } from "@/lib/clientId";
@@ -145,6 +148,8 @@ export function EmailVersandDialog({
   const [zeigeCcBcc, setZeigeCcBcc] = useState(false);
   const [phase, setPhase] = useState<SendPhase>("idle");
   const visuellRef = useRef<HTMLDivElement>(null);
+  const [pdfPreviewOffen, setPdfPreviewOffen] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Ausgewählten Ansprechpartner für Platzhalter ({{ansprechpartner.*}},
   // {{anrede.zeile}}) ermitteln. Reihenfolge wie bei der „An"-Vorbelegung:
@@ -229,10 +234,11 @@ export function EmailVersandDialog({
   }, [mode, open, bodyHtml, ctx]);
 
   const signatur = signaturen.find((s) => s.id === signaturId);
+  const signaturHtmlGerendert = signatur ? autoLinkifyImages(signatur.html) : "";
   const aufgelosterBetreff = replacePlaceholders(betreff, ctx);
   const finaleBody =
     replacePlaceholders(bodyHtml, ctx) +
-    (signatur ? `\n<br/><br/>${replacePlaceholders(signatur.html, ctx)}` : "");
+    (signatur ? `\n<br/><br/>${replacePlaceholders(signaturHtmlGerendert, ctx)}` : "");
   const unresolved = [
     ...findUnresolvedPlaceholders(betreff, ctx),
     ...findUnresolvedPlaceholders(bodyHtml, ctx),
@@ -272,6 +278,8 @@ export function EmailVersandDialog({
     const belegId = angebot?.id ?? rechnung?.id;
 
     setPhase("sending");
+    // Nach oben scrollen, damit die Versand-Animation im Viewport landet.
+    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
 
     // Idempotenz-Key pro Klick — Backend erkennt Doppelklicks und sendet nicht zweimal.
     const idempotenzKey = createClientId("mail");
@@ -352,7 +360,10 @@ export function EmailVersandDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => phase === "idle" && onOpenChange(o)}>
-      <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto bg-background p-0">
+      <DialogContent
+        ref={scrollRef}
+        className="max-w-3xl max-h-[92vh] overflow-y-auto bg-background p-0"
+      >
         {/* Hero Header */}
         <div className="relative overflow-hidden border-b border-border bg-background px-6 pb-5 pt-6">
           <div className="flex items-start gap-4">
@@ -557,7 +568,7 @@ export function EmailVersandDialog({
                 <div
                   className="prose prose-sm max-w-none text-sm text-foreground/80"
                   dangerouslySetInnerHTML={{
-                    __html: replacePlaceholders(signatur.html, ctx),
+                    __html: replacePlaceholders(signaturHtmlGerendert, ctx),
                   }}
                 />
               </div>
@@ -568,8 +579,9 @@ export function EmailVersandDialog({
           {pdfDateiname && (
             <Field label="Anhänge">
               {pdfAnhangAktiv ? (
-                <div className="flex items-center justify-between rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm">
-                  <span className="flex items-center gap-3">
+                <div className="overflow-hidden rounded-xl border border-border bg-muted/30">
+                  <div className="flex items-center justify-between px-4 py-3 text-sm">
+                    <span className="flex items-center gap-3">
                     <span className="grid h-9 w-9 place-content-center rounded-lg bg-destructive/10 text-destructive">
                       {pdfStatus === "loading" ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -590,14 +602,41 @@ export function EmailVersandDialog({
                       </span>
                     </span>
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setPdfAnhangAktiv(false)}
-                    className="rounded-full p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
-                    aria-label="Anhang entfernen"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                    <div className="flex items-center gap-1">
+                      {pdfBlobUrl && pdfStatus === "ready" && (
+                        <button
+                          type="button"
+                          onClick={() => setPdfPreviewOffen((v) => !v)}
+                          className="rounded-full p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                          aria-label={pdfPreviewOffen ? "Vorschau schließen" : "PDF Vorschau"}
+                          aria-expanded={pdfPreviewOffen}
+                        >
+                          {pdfPreviewOffen ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setPdfAnhangAktiv(false)}
+                        className="rounded-full p-1.5 text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+                        aria-label="Anhang entfernen"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                  {pdfPreviewOffen && pdfBlobUrl && pdfStatus === "ready" && (
+                    <div className="border-t border-border bg-background">
+                      <iframe
+                        title="PDF-Vorschau"
+                        src={pdfBlobUrl}
+                        className="block h-[480px] w-full border-0"
+                      />
+                    </div>
+                  )}
                 </div>
               ) : (
                 <button
