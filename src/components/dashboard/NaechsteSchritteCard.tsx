@@ -66,6 +66,11 @@ export function NaechsteSchritteCard() {
   const [emailRechnung, setEmailRechnung] = useState<Rechnung | null>(null);
   const [emailMitErinnerung, setEmailMitErinnerung] = useState(false);
 
+  const sendRechnung = (r: Rechnung, mitErinnerung = false) => {
+    setEmailRechnung(r);
+    setEmailMitErinnerung(mitErinnerung);
+  };
+
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
@@ -98,7 +103,7 @@ export function NaechsteSchritteCard() {
               schritt={s}
               angebote={angebote}
               rechnungen={rechnungen}
-              onSendRechnung={setEmailRechnung}
+              onSendRechnung={sendRechnung}
             />
           ))}
         </ul>
@@ -127,7 +132,7 @@ function SchrittRow({
   schritt: NaechsterSchritt;
   angebote: Angebot[];
   rechnungen: Rechnung[];
-  onSendRechnung: (r: Rechnung) => void;
+  onSendRechnung: (r: Rechnung, mitErinnerung?: boolean) => void;
 }) {
   const navigate = useNavigate();
   const angebot = angebote.find((a) => a.id === schritt.belegId);
