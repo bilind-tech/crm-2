@@ -51,7 +51,6 @@ import {
   useEmailVorlagen,
   useFirmendaten,
   useKunde,
-  useMahnEinstellungen,
   useSendEmail,
   useSmtp,
 } from "@/hooks/useApi";
@@ -77,11 +76,9 @@ interface Props {
   /** PDF-Status (loading/ready/error). Wenn "loading", wird Senden deaktiviert mit Hinweis. */
   pdfStatus?: "idle" | "loading" | "ready" | "error";
   onSent?: () => void;
-  /** Wenn gesetzt: Versand wird im Backend als Mahnung dieser Stufe protokolliert. */
-  mahnStufe?: 1 | 2 | 3;
-  /** Optional: Vorlagen-ID, die per Default ausgewählt wird (z.B. aus Mahn-Konfig). */
+  /** Optional: Vorlagen-ID, die per Default ausgewählt wird. */
   vorbelegteVorlageId?: string;
-  /** Optional: zusätzliche Platzhalter-Variablen (z.B. mahnung.gebuehr). */
+  /** Optional: zusätzliche Platzhalter-Variablen. */
   zusatzPlaceholder?: Record<string, string>;
 }
 
@@ -99,13 +96,11 @@ export function EmailVersandDialog({
   pdfDateiname,
   pdfStatus = "ready",
   onSent,
-  mahnStufe,
   vorbelegteVorlageId,
 }: Props) {
   const { data: vorlagen = [] } = useEmailVorlagen();
   const { data: signaturen = [] } = useEmailSignaturen();
   const { data: firma } = useFirmendaten();
-  const { data: mahnEinstellungen } = useMahnEinstellungen();
   const { data: smtp } = useSmtp();
   const send = useSendEmail();
   // Ansprechpartner des Kunden laden, um die Empfänger-Mail
