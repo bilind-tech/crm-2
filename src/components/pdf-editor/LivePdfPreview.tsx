@@ -1,14 +1,10 @@
 // Snapshot-PDF-Vorschau für den Beleg-Editor (Angebot / Rechnung).
 //
-// Designziel: keinerlei Flackern beim Tippen. Die PDF wird NICHT live bei
-// jeder Änderung neu gebaut. Stattdessen:
-//   - Initial einmal bauen → stabil anzeigen.
-//   - Jede weitere Eingabe markiert die Vorschau als „nicht aktuell"
-//     (kleiner ruhiger Status oben rechts) und blendet einen
-//     „Aktualisieren"-Button ein.
-//   - Klick → genau ein neuer Build → atomarer Swap, ohne `<Document>`
-//     neu zu mounten.
-//   - Build-Fehler lassen die zuletzt funktionierende PDF stehen.
+// Designziel: keinerlei Flackern beim Tippen. Die PDF wird nach jeder
+// Änderung debounced (800 ms Ruhe) automatisch neu gebaut. Der sichtbare
+// Stand wechselt erst, wenn der neue Build erfolgreich ist – atomarer Swap,
+// ohne `<Document>` neu zu mounten. Build-Fehler lassen die zuletzt
+// funktionierende PDF stehen.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page } from "react-pdf";
@@ -132,13 +128,19 @@ export function LivePdfPreview(props: Props) {
       setBuilding(false);
       const queued = queuedKeyRef.current;
       queuedKeyRef.current = null;
+      // Falls während des Builds bereits neue Änderungen aufliefen, sofort
+      // den nächsten Build anstoßen – sonst bliebe der Stand veraltet.
       if (queued && queued !== targetKey) {
-        // Nur falls jemand explizit angefragt hatte, während wir bauten.
-        // (Wir triggern hier KEIN automatisches Rebuild bei reinen Tipp-Diffs.)
+        void runBuildRef.current?.();
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentKey]);
+
+  // Ref auf den aktuellen runBuild, damit der finally-Block oben den
+  // jüngsten Build aufrufen kann, ohne in die Dep-Liste zu geraten.
+  const runBuildRef = useRef(runBuild);
+  runBuildRef.current = runBuild;
 
   // Erster Build (einmalig, sobald Container vermessen ist).
   const didInitRef = useRef(false);
@@ -150,6 +152,17 @@ export function LivePdfPreview(props: Props) {
   }, [containerWidth, runBuild]);
 
   const isStale = builtKey !== null && builtKey !== currentKey;
+
+  // Auto-Rebuild: sobald der Draft sich semantisch ändert und der initiale
+  // Build durch ist, nach 800 ms Tipp-Ruhe automatisch neu rendern.
+  useEffect(() => {
+    if (!didInitRef.current) return;
+    if (!isStale) return;
+    const t = setTimeout(() => {
+      void runBuildRef.current?.();
+    }, 800);
+    return () => clearTimeout(t);
+  }, [isStale, currentKey]);
 
   const renderWidth = useMemo(() => {
     const raw = Math.min(Math.max(containerWidth - 16, 280), 900);
@@ -185,24 +198,11 @@ export function LivePdfPreview(props: Props) {
       {pdfBuffer && (
         <div className="pointer-events-none sticky top-2 z-20 mb-2 flex justify-end">
           <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-background/85 px-2 py-1 text-[11px] text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur">
-            {building ? (
+            {building || isStale ? (
               <span className="flex items-center gap-1.5">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 wird aktualisiert …
               </span>
-            ) : isStale ? (
-              <>
-                <span className="text-amber-600 dark:text-amber-400">Vorschau nicht aktuell</span>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="h-6 rounded-full px-2 text-[11px]"
-                  onClick={() => void runBuild()}
-                >
-                  <RefreshCw className="mr-1 h-3 w-3" />
-                  Aktualisieren
-                </Button>
-              </>
             ) : (
               <span>Vorschau aktuell</span>
             )}
