@@ -152,7 +152,10 @@ function RechnungEmailLauncher({
   const pdf = useRechnungPdf(rechnung);
 
   const vorbelegteVorlageId = useMemo(() => {
-    const erin = vorlagen.find((v) => v.seedKey === "rechnung.erinnerung");
+    const rechnungsVorlagen = vorlagen.filter((v) => v.kontext === "rechnung");
+    const erin =
+      rechnungsVorlagen.find((v) => /erinner/i.test(v.name)) ??
+      rechnungsVorlagen.find((v) => v.istStandard);
     return erin?.id;
   }, [vorlagen]);
 
