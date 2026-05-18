@@ -1,11 +1,14 @@
 // 2-Spalten-Editor für Protokolle: links Live-Preview, rechts Felder.
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ArrowLeft, CheckCircle2, Eye, Loader2, Pencil, RotateCcw, Save } from "lucide-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Group, Panel, Separator } from "react-resizable-panels";
-import { ProtokollHtmlPreview } from "./ProtokollHtmlPreview";
+import {
+  ProtokollLivePreview,
+  type ProtokollLivePreviewHandle,
+} from "./ProtokollLivePreview";
 import { UebergabePanel } from "./UebergabePanel";
 import { SchluesselPanel } from "./SchluesselPanel";
 import { ProtokollHotspotEditor } from "./ProtokollHotspotEditor";
@@ -24,6 +27,7 @@ import type {
   UebergabeProtokoll,
   SchluesselProtokoll,
   ProtokollOptionen,
+  SchluesselZeile,
 } from "@/lib/api/types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -47,6 +51,8 @@ export function ProtokollEditorLayout({ protokoll }: Props) {
   const [mobileView, setMobileView] = useState<"editor" | "preview">("editor");
   const [activeTab, setActiveTab] = useState<ProtokollEditorTabId>("inhalt");
   const [busy, setBusy] = useState(false);
+  const previewRef = useRef<ProtokollLivePreviewHandle>(null);
+  const flushPreview = () => previewRef.current?.flush();
 
   const titlePrefix = protokollTitel(draft);
 
@@ -84,6 +90,21 @@ export function ProtokollEditorLayout({ protokoll }: Props) {
     setTyped("optionen", { ...opt, [k]: v });
   };
 
+  // Schlüssel-Tabelle: Hotspot-Toolbar „+ Zeile" delegiert an Editor-State.
+  const schluesselDraft = draft.kind === "schluessel" ? (draft as SchluesselProtokoll) : null;
+  const tableActions = schluesselDraft
+    ? {
+        onAddRow: () => {
+          const zeilen: SchluesselZeile[] = schluesselDraft.schluessel ?? [];
+          setTyped("schluessel", [
+            ...zeilen,
+            { bezeichnung: "", anzahl: 1, schluesselNr: "", bemerkung: "" },
+          ]);
+          flushPreview();
+        },
+      }
+    : undefined;
+
   const renderHotspotEditor = (fieldId: string, close: () => void) => (
     <ProtokollHotspotEditor
       fieldId={fieldId}
@@ -95,7 +116,10 @@ export function ProtokollEditorLayout({ protokoll }: Props) {
         setMobileView("editor");
         close();
       }}
-      onClose={close}
+      onClose={() => {
+        close();
+        flushPreview();
+      }}
     />
   );
 
@@ -291,12 +315,14 @@ export function ProtokollEditorLayout({ protokoll }: Props) {
   );
 
   const previewEl = (
-    <ProtokollHtmlPreview
+    <ProtokollLivePreview
+      ref={previewRef}
       draft={draft}
       kunde={kundeQ.data}
       objekt={objekt}
       firma={firmaQ.data}
       renderEditor={renderHotspotEditor}
+      tableActions={tableActions}
     />
   );
 
