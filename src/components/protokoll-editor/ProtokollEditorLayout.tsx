@@ -5,7 +5,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Group, Panel, Separator } from "react-resizable-panels";
-import { ProtokollLivePreview } from "./ProtokollLivePreview";
+import { ProtokollHtmlPreview } from "./ProtokollHtmlPreview";
 import { UebergabePanel } from "./UebergabePanel";
 import { SchluesselPanel } from "./SchluesselPanel";
 import { ProtokollHotspotEditor } from "./ProtokollHotspotEditor";
@@ -291,7 +291,7 @@ export function ProtokollEditorLayout({ protokoll }: Props) {
   );
 
   const previewEl = (
-    <ProtokollLivePreview
+    <ProtokollHtmlPreview
       draft={draft}
       kunde={kundeQ.data}
       objekt={objekt}
