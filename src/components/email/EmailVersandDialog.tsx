@@ -612,29 +612,6 @@ export function EmailVersandDialog({
           )}
         </div>
 
-        {mahnStufe && mahnConfirm && (
-          <div className="mx-6 mb-3 flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-            <div className="space-y-0.5">
-              <p className="font-medium text-foreground">
-                Mahnstufe {mahnStufe} wirklich versenden?
-              </p>
-              <p className="text-xs text-muted-foreground">
-                An {anChips.join(", ") || an}. Klicke nochmal auf „E-Mail senden", um den Versand zu
-                bestätigen.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setMahnConfirm(false)}
-              className="ml-auto rounded-full p-1 text-muted-foreground hover:bg-muted/40"
-              aria-label="Bestätigung abbrechen"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-
         <DialogFooter className="gap-2 border-t border-border bg-muted/20 px-6 py-4 sm:gap-2">
           <Button
             variant="outline"
@@ -671,10 +648,6 @@ export function EmailVersandDialog({
             ) : pdfAnhangAktiv && pdfStatus === "loading" ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" /> PDF wird vorbereitet …
-              </>
-            ) : mahnStufe && mahnConfirm ? (
-              <>
-                <AlertCircle className="h-4 w-4" /> Mahnung bestätigen & senden
               </>
             ) : (
               <>
