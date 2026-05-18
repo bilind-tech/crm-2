@@ -21,8 +21,8 @@ export interface RowAction {
 
 export interface TableAction {
   onAddRow: () => void;
-  onAddStundenRow: () => void;
-  onAddPauschalRow: () => void;
+  onAddStundenRow?: () => void;
+  onAddPauschalRow?: () => void;
 }
 
 interface Props {
@@ -86,24 +86,28 @@ export function PdfFieldOverlay({
                   <Plus className="h-3.5 w-3.5" />
                   <span className="text-[10px] font-medium">Zeile</span>
                 </ToolbarButton>
-                <ToolbarButton
-                  label="Stunden-Zeile"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    tableActions.onAddStundenRow();
-                  }}
-                >
-                  <span className="text-[10px] font-medium">+ Std</span>
-                </ToolbarButton>
-                <ToolbarButton
-                  label="Pauschal-Zeile"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    tableActions.onAddPauschalRow();
-                  }}
-                >
-                  <span className="text-[10px] font-medium">+ Pauschal</span>
-                </ToolbarButton>
+                {tableActions.onAddStundenRow && (
+                  <ToolbarButton
+                    label="Stunden-Zeile"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      tableActions.onAddStundenRow!();
+                    }}
+                  >
+                    <span className="text-[10px] font-medium">+ Std</span>
+                  </ToolbarButton>
+                )}
+                {tableActions.onAddPauschalRow && (
+                  <ToolbarButton
+                    label="Pauschal-Zeile"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      tableActions.onAddPauschalRow!();
+                    }}
+                  >
+                    <span className="text-[10px] font-medium">+ Pauschal</span>
+                  </ToolbarButton>
+                )}
               </div>
             </div>
           );
