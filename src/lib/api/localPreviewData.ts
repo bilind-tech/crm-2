@@ -213,21 +213,6 @@ export const previewGoogleDrive = {
   aktualisiertAm: isoNow,
 };
 
-export const previewMahnungStatus = {
-  einstellungen: {
-    autoVorschlagAktiv: false,
-    modus: "vorschlag",
-    cronZeit: "09:00",
-    nurAnWerktagen: true,
-    benachrichtigungBeiVorschlag: true,
-    benachrichtigungBeiAutoversand: false,
-    stufen: [],
-  },
-  letzterLauf: null,
-};
-
-export const previewMahnEinstellungen = previewMahnungStatus.einstellungen;
-
 export function previewDashboardKennzahlen(): DashboardKennzahlen {
   const angebote = allAngebote();
   const rechnungen = allRechnungen();
@@ -363,7 +348,6 @@ export function localPreviewGet<T>(path: string): T | null {
   if (cleanPath === "/email/signaturen") return [] as T;
   if (cleanPath === "/einstellungen/smtp") return { host: "", port: 587, secure: false, user: "", passwortGesetzt: false, absenderName: "My Clean Center", absenderEmail: "" } as T;
   if (cleanPath === "/einstellungen/google-drive") return previewGoogleDrive as T;
-  if (cleanPath === "/einstellungen/mahnung") return previewMahnEinstellungen as T;
   if (cleanPath === "/dashboard/kennzahlen") return previewDashboardKennzahlen() as T;
   if (cleanPath === "/dashboard/umsatz") return previewUmsatz() as T;
   if (cleanPath === "/dashboard/warnungen") return [] as T;
@@ -391,8 +375,6 @@ export function localPreviewGet<T>(path: string): T | null {
   if (cleanPath === "/benachrichtigungen") return [] as T;
   if (cleanPath === "/einstellungen/firma") return previewFirma as T;
   if (cleanPath === "/einstellungen/nummernkreise") return previewNummernkreise as T;
-  if (cleanPath === "/mahnung/status") return previewMahnungStatus as T;
-  if (cleanPath === "/mahnung/laeufe") return [] as T;
   return null;
 }
 

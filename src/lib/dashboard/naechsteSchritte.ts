@@ -1,15 +1,15 @@
 // Berechnet priorisierte „Nächste Schritte" für das Dashboard.
 // Liefert Angebot-/Rechnung-Aufgaben (Erstellen, Versenden, Nachfassen).
 //
-// Mahn-Vorschläge werden NICHT mehr hier berechnet — sie kommen aus dem
-// Backend-Mahnlauf (`/mahnung/laeufe/:id`), siehe NaechsteSchritteCard.
+// Zahlungserinnerungen werden nicht hier berechnet — sie kommen aus
+// useErinnerungen() (clientseitig, Trigger 14/7 Tage), siehe NaechsteSchritteCard.
 
 import type { Angebot, Rechnung, Kunde } from "@/lib/api/types";
 
 export type NaechsterSchrittTyp =
   | "rechnung_erstellen"
   | "rechnung_versenden"
-  | "mahnung_senden"
+  | "erinnerung_senden"
   | "angebot_nachfassen";
 
 export interface NaechsterSchritt {
@@ -88,7 +88,7 @@ export function berechneNaechsteSchritte(
     });
   }
 
-  // Mahn-Vorschläge: Backend-only — siehe NaechsteSchritteCard.
+  // Zahlungserinnerungen: clientseitig in NaechsteSchritteCard via useErinnerungen.
 
   // 4. Angebot versendet seit > 7 Tagen ohne Antwort → nachfassen
   for (const a of angebote) {

@@ -2,8 +2,10 @@ import { createFileRoute, Link, Outlet, useMatches, useNavigate } from "@tanstac
 import { DetailSkeleton } from "@/components/layout/DetailSkeleton";
 import { NotFoundState } from "@/components/layout/NotFoundState";
 import { useState } from "react";
-import { Download, Send, CheckCircle2, Wallet, Trash2, Pencil } from "lucide-react";
+import { Download, Send, CheckCircle2, Wallet, Trash2, Pencil, MailWarning } from "lucide-react";
 import { useRechnung, useAngebot, useKunde, useDeleteZahlung } from "@/hooks/useApi";
+import { useIstErinnerungFaellig } from "@/hooks/useErinnerungen";
+import { useErinnerungVorlageId } from "@/lib/erinnerung/seedVorlage";
 import { useConfirm } from "@/hooks/useConfirm";
 import { BelegLoeschenDialog } from "@/components/forms/BelegLoeschenDialog";
 import { useRechnungPdf } from "@/hooks/useBelegPdf";
@@ -42,11 +44,14 @@ function Page() {
   const pdf = useRechnungPdf(r);
   const [zahlungOpen, setZahlungOpen] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
+  const [erinnerungOpen, setErinnerungOpen] = useState(false);
   const [delOpen, setDelOpen] = useState(false);
   const navigate = useNavigate();
   const { data: quellAngebot } = useAngebot(r?.quellAngebotId ?? "");
   const { data: kunde } = useKunde(r?.kundeId ?? "");
   const delZahlung = useDeleteZahlung(id);
+  const erinnerungVorlageId = useErinnerungVorlageId();
+  const erinnerungFaellig = useIstErinnerungFaellig(id);
   const { confirm, dialog: confirmDialog } = useConfirm();
 
   if (isLoading) return <DetailSkeleton variant="beleg" />;
@@ -75,10 +80,8 @@ function Page() {
         />
       );
     }
-    if (r.status === "versendet" || r.status === "ueberfaellig" || r.status === "teilbezahlt") {
-      // weiter unten regulärer Zahlung-Button — zusätzlich Mahnung anbieten bei überfällig
-      // (rendern wir später in einem zweiten Block, hier primär)
-    }
+    // Bei offenen Posten zeigt das Detail unten den Zahlungs-Button; oben
+    // bleibt der Platz für Versand/Erinnerung (siehe `actions` PageHeader).
     if (r.status === "bezahlt") {
       return (
         <span className="inline-flex items-center gap-1.5 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-sm font-medium text-success">
@@ -117,6 +120,16 @@ function Page() {
               </Button>
             )}
             <PrintButton blob={pdf.blob} url={pdf.url} variant="outline" size="default" />
+            {erinnerungFaellig && (
+              <Button
+                variant="outline"
+                className="rounded-lg border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
+                onClick={() => setErinnerungOpen(true)}
+                title="Freundliche Zahlungserinnerung senden"
+              >
+                <MailWarning className="mr-1.5 h-4 w-4" /> Erinnerung senden
+              </Button>
+            )}
             <Button asChild variant="outline" className="rounded-lg">
               <Link to="/rechnungen/$id/bearbeiten" params={{ id: r.id }}>
                 <Pencil className="mr-1.5 h-4 w-4" /> PDF bearbeiten
@@ -328,6 +341,16 @@ function Page() {
         rechnung={r}
         pdfBlobUrl={pdf.url}
         pdfDateiname={`${r.nummer}.pdf`}
+      />
+      <EmailVersandDialog
+        open={erinnerungOpen}
+        onOpenChange={setErinnerungOpen}
+        kontext="rechnung"
+        kunde={kunde}
+        rechnung={r}
+        pdfBlobUrl={pdf.url}
+        pdfDateiname={`${r.nummer}.pdf`}
+        vorbelegteVorlageId={erinnerungVorlageId}
       />
       <BelegLoeschenDialog
         art="rechnung"

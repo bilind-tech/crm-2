@@ -1,14 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useDashboardKennzahlen, useUmsatz, useRechnungen } from "@/hooks/useApi";
-import { useMahnZaehler } from "@/hooks/useMahnZaehler";
 import { useDauerauftragLaeufe } from "@/hooks/useDauerauftraege";
+import { useErinnerungen } from "@/hooks/useErinnerungen";
 import { formatEUR, formatDate } from "@/lib/format";
 import {
   Building2,
   Euro,
   FileText,
-  Bell,
+  Mail,
   CheckCircle2,
   ArrowRight,
   Inbox,
@@ -35,7 +35,7 @@ function Dashboard() {
   const { data: k } = useDashboardKennzahlen(zeitraum);
   const { data: umsatz = [] } = useUmsatz(zeitraum);
   const { data: rechnungen = [] } = useRechnungen();
-  const mahn = useMahnZaehler(zeitraumIstAktiv(zeitraum) ? zeitraum : undefined);
+  const erinnerungen = useErinnerungen();
   const { data: laeufeErzeugt = [] } = useDauerauftragLaeufe("erzeugt");
 
   const aktiv = zeitraumIstAktiv(zeitraum);
@@ -185,36 +185,53 @@ function Dashboard() {
         <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
             <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-warning/10 text-warning">
-              <Bell className="h-4 w-4" />
+              <Mail className="h-4 w-4" />
             </span>
-            <h2 className="text-base font-semibold">Mahnwesen</h2>
+            <h2 className="text-base font-semibold">Zahlungserinnerungen</h2>
           </div>
-          {mahn.aktionEmpfohlen === 0 && mahn.ueberfaellig === 0 ? (
+          {erinnerungen.count === 0 ? (
             <div className="py-6 text-center">
               <span className="mx-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-success/10 text-success">
                 <CheckCircle2 className="h-5 w-5" />
               </span>
               <p className="mt-2 text-sm text-muted-foreground">
-                {aktiv
-                  ? `Im Zeitraum ${zeitLabel} keine offenen Mahnvorgänge.`
-                  : "Keine offenen Mahnvorgänge."}
+                Alles in Ordnung — keine Erinnerung nötig.
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-3">
-              <MahnStat value={mahn.aktionEmpfohlen} label="Aktion empfohlen" tone="primary" />
-              <MahnStat
-                value={mahn.ueberfaellig}
-                label="Überfällig"
-                tone="warning"
-                sub={mahn.offenSumme > 0 ? formatEUR(mahn.offenSumme) : undefined}
-              />
-              <MahnStat
-                value={mahn.inkassoReif}
-                label="Inkasso-reif"
-                tone={mahn.inkassoReif > 0 ? "danger" : "muted"}
-              />
-            </div>
+            <>
+              <p className="mb-3 text-sm text-muted-foreground">
+                {erinnerungen.count === 1
+                  ? "1 Rechnung empfiehlt eine freundliche Erinnerung."
+                  : `${erinnerungen.count} Rechnungen empfehlen eine freundliche Erinnerung.`}{" "}
+                Offen gesamt:{" "}
+                <span className="font-medium text-foreground">
+                  {formatEUR(erinnerungen.gesamtOffen)}
+                </span>
+              </p>
+              <ul className="divide-y divide-border">
+                {erinnerungen.eintraege.slice(0, 4).map((e) => (
+                  <li key={e.id}>
+                    <Link
+                      to="/rechnungen/$id"
+                      params={{ id: e.id }}
+                      className="flex items-center justify-between gap-3 py-2 text-sm hover:text-primary"
+                    >
+                      <span className="min-w-0 truncate">
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {e.nummer}
+                        </span>{" "}
+                        · +{e.tageUeber}{" "}
+                        {e.tageUeber === 1 ? "Tag" : "Tage"}
+                      </span>
+                      <span className="shrink-0 font-medium text-warning">
+                        {formatEUR(e.offen)}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </div>
       </div>
@@ -245,28 +262,3 @@ function Dashboard() {
   );
 }
 
-function MahnStat({
-  value,
-  label,
-  sub,
-  tone,
-}: {
-  value: number;
-  label: string;
-  sub?: string;
-  tone: "primary" | "warning" | "danger" | "muted";
-}) {
-  const colorMap = {
-    primary: "text-primary",
-    warning: "text-warning",
-    danger: "text-destructive",
-    muted: "text-muted-foreground",
-  } as const;
-  return (
-    <div className="rounded-xl border border-border bg-muted/30 p-3 text-center">
-      <p className={`text-2xl font-semibold ${colorMap[tone]}`}>{value}</p>
-      <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">{label}</p>
-      {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
-    </div>
-  );
-}

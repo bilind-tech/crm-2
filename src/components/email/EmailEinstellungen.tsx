@@ -81,7 +81,7 @@ export function EmailVorlagenTab() {
           <div>
             <h2 className="text-lg font-semibold">E-Mail-Vorlagen</h2>
             <p className="text-sm text-muted-foreground">
-              Wiederverwendbare Vorlagen für Angebote, Rechnungen und Mahnungen.
+              Wiederverwendbare Vorlagen für Angebote, Rechnungen und Zahlungserinnerungen.
             </p>
           </div>
           <Button onClick={() => setCreating(true)} className="rounded-lg">
@@ -238,7 +238,6 @@ function VorlageDialog({
                 <SelectContent>
                   <SelectItem value="angebot">Angebot</SelectItem>
                   <SelectItem value="rechnung">Rechnung</SelectItem>
-                  <SelectItem value="mahnung">Mahnung</SelectItem>
                   <SelectItem value="allgemein">Allgemein</SelectItem>
                 </SelectContent>
               </Select>
@@ -673,7 +672,7 @@ export function SmtpTab() {
           <p className="font-medium text-foreground">Manueller Versand garantiert</p>
           <p className="text-muted-foreground">
             E-Mails werden ausschließlich nach deinem direkten Klick verschickt — keine
-            Hintergrund-Jobs, keine Cron-Mails, keine automatischen Mahnungen.
+            Hintergrund-Jobs, keine Cron-Mails, keine automatischen Erinnerungen.
           </p>
         </div>
       </div>
