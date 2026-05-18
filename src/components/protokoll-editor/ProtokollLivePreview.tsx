@@ -1,36 +1,26 @@
-// Live-PDF-Vorschau für Protokolle. ArrayBuffer-Quelle für PDF.js
-// (wie LivePdfPreview bei Angebot/Rechnung) — vermeidet
-// "Unexpected server response (0)" beim Worker-Fetch der blob:-URL
-// auf dem Pi-Backend.
+// Stabile Snapshot-PDF-Vorschau für Protokolle.
+// Wichtig: Die PDF wird NICHT bei jedem Tastendruck live neu geladen.
+// Änderungen markieren die Vorschau nur als veraltet; aktualisiert wird kontrolliert.
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 import { configurePdfWorker } from "@/lib/pdf/pdfjsWorker";
 
 configurePdfWorker();
-import { Loader2, RefreshCw } from "lucide-react";
+import { CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 import { generateProtokollPdf } from "@/lib/pdf/werkzeugePdf";
 import type { Protokoll, Kunde, Objekt, Firmendaten } from "@/lib/api/types";
 import { PdfFieldOverlay } from "@/components/pdf-editor/PdfFieldOverlay";
 import { protokollMetaForId, FALLBACK_HOTSPOTS_PROTOKOLL_SEITE_1 } from "@/lib/pdf/fieldMap";
 import { A4, type RuntimeHotspot } from "@/lib/pdf/hotspotTracker";
 
-const INITIAL_BUILD_DELAY_MS = 80;
-const AUTO_REFRESH_DELAY_MS = 3000;
-const LOADER_DELAY_MS = 250;
-
+const LOADER_DELAY_MS = 450;
 const VOLATILE = new Set(["aktualisiertAm", "erstelltAm", "updatedAt", "createdAt"]);
+
 function semKey<T>(o: T) {
   return JSON.stringify(o, (k, v) => (VOLATILE.has(k) ? undefined : v));
-}
-
-function hasActiveTextEditor() {
-  if (typeof document === "undefined" || typeof HTMLElement === "undefined") return false;
-  const el = document.activeElement;
-  if (!(el instanceof HTMLElement)) return false;
-  return el.matches('input, textarea, select, [contenteditable="true"], [role="textbox"]');
 }
 
 interface Props {
@@ -52,19 +42,21 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
   const [openHotspotId, setOpenHotspotId] = useState<string | null>(null);
 
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const [viewerSeq, setViewerSeq] = useState(0);
   const [numPages, setNumPages] = useState(0);
   const [rendering, setRendering] = useState(false);
   const [showLoader, setShowLoader] = useState(false);
   const [queuedKey, setQueuedKey] = useState<string | null>(null);
-  const [refreshNonce, setRefreshNonce] = useState(0);
   const [buildError, setBuildError] = useState<string | null>(null);
   const [viewerError, setViewerError] = useState<string | null>(null);
+
   const mountedRef = useRef(true);
   const pdfUrlRef = useRef<string | null>(null);
-  const openHotspotIdRef = useRef<string | null>(null);
-  const forceRefreshRef = useRef(false);
-  openHotspotIdRef.current = openHotspotId;
+  const inFlightRef = useRef(false);
+  const latestKeyRef = useRef("");
+  const builtKeyRef = useRef("");
+  const hasVisiblePdfRef = useRef(false);
+  const dataRef = useRef({ draft, kunde, objekt, firma });
+  dataRef.current = { draft, kunde, objekt, firma };
 
   useEffect(() => {
     const el = containerRef.current;
@@ -89,25 +81,75 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
     return () => clearTimeout(t);
   }, [rendering]);
 
-  const draftKey = useMemo(() => semKey(draft), [draft]);
-  const ctxKey = useMemo(() => semKey({ kunde, objekt, firma }), [kunde, objekt, firma]);
-  const currentKey = useMemo(() => `${draftKey}|${ctxKey}`, [draftKey, ctxKey]);
-  // Build-Queue: nur der jüngste Eingabe-Stand wird gerendert.
-  // - inFlightRef verhindert parallele Builds
-  // - latestKeyRef hält den zuletzt angeforderten Stand fest
-  // - viewerSeq erzeugt nur neue PDF.js-Daten, ohne ein zweites Document zu mounten
-  const inFlightRef = useRef(false);
-  const latestKeyRef = useRef<string>("");
-  const builtKeyRef = useRef<string>("");
-  // Aktuelle Daten als Ref, damit der Build-Loop immer den frischesten Stand nimmt.
-  const dataRef = useRef({ draft, kunde, objekt, firma });
-  dataRef.current = { draft, kunde, objekt, firma };
-
   useEffect(() => {
     return () => {
       mountedRef.current = false;
       if (pdfUrlRef.current) URL.revokeObjectURL(pdfUrlRef.current);
     };
+  }, []);
+
+  const draftKey = useMemo(() => semKey(draft), [draft]);
+  const ctxKey = useMemo(() => semKey({ kunde, objekt, firma }), [kunde, objekt, firma]);
+  const currentKey = useMemo(() => `${draftKey}|${ctxKey}`, [draftKey, ctxKey]);
+
+  const runBuild = useCallback(async (requestedKey = latestKeyRef.current) => {
+    if (inFlightRef.current || builtKeyRef.current === requestedKey) return;
+
+    inFlightRef.current = true;
+    latestKeyRef.current = requestedKey;
+    setRendering(true);
+    setBuildError(null);
+
+    try {
+      const { draft: d, kunde: k, objekt: o, firma: f } = dataRef.current;
+      const { blob, hotspots: hs } = await generateProtokollPdf(d, k, o, f);
+      if (!mountedRef.current) return;
+      if (!(blob instanceof Blob) || blob.size === 0) {
+        throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
+      }
+
+      const buf = await blob.arrayBuffer();
+      if (!mountedRef.current) return;
+      const newUrl = URL.createObjectURL(blob);
+
+      if (requestedKey !== latestKeyRef.current) {
+        URL.revokeObjectURL(newUrl);
+        setQueuedKey(latestKeyRef.current);
+        return;
+      }
+
+      const previousUrl = pdfUrlRef.current;
+      builtKeyRef.current = requestedKey;
+      hasVisiblePdfRef.current = true;
+      pdfUrlRef.current = newUrl;
+
+      setHotspots(hs);
+      setPdfBuffer(buf);
+      setPdfUrl(newUrl);
+      setQueuedKey(null);
+      setLoadAttempt(0);
+      setViewerError(null);
+
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("[ProtokollLivePreview] build failed", e);
+      if (mountedRef.current) setBuildError(e instanceof Error ? e.message : "PDF-Fehler");
+    } finally {
+      inFlightRef.current = false;
+      if (!mountedRef.current) return;
+
+      setRendering(false);
+      const newestKey = latestKeyRef.current;
+      if (newestKey !== builtKeyRef.current) {
+        setQueuedKey(newestKey);
+        if (!hasVisiblePdfRef.current) {
+          window.setTimeout(() => {
+            if (mountedRef.current) void runBuild(latestKeyRef.current);
+          }, 0);
+        }
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -118,89 +160,11 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
     }
 
     setQueuedKey(currentKey);
-    const delay = forceRefreshRef.current ? 0 : pdfBuffer ? AUTO_REFRESH_DELAY_MS : INITIAL_BUILD_DELAY_MS;
-    const timer = setTimeout(() => {
-      if (pdfBuffer && !forceRefreshRef.current && (openHotspotIdRef.current || hasActiveTextEditor())) {
-        return;
-      }
-      forceRefreshRef.current = false;
+    if (!hasVisiblePdfRef.current && !inFlightRef.current) {
       void runBuild(currentKey);
-    }, delay);
-
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentKey, refreshNonce]);
-
-  useEffect(() => {
-    if (!queuedKey || queuedKey === builtKeyRef.current || openHotspotId || hasActiveTextEditor()) return;
-    const timer = setTimeout(() => {
-      if (!openHotspotIdRef.current && !hasActiveTextEditor()) void runBuild(latestKeyRef.current);
-    }, 250);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queuedKey, openHotspotId]);
-
-  useEffect(() => {
-    const refreshAfterBlur = () => {
-      window.setTimeout(() => {
-        if (queuedKey && !openHotspotIdRef.current && !hasActiveTextEditor()) void runBuild(latestKeyRef.current);
-      }, 250);
-    };
-    window.addEventListener("focusout", refreshAfterBlur);
-    return () => window.removeEventListener("focusout", refreshAfterBlur);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queuedKey]);
-
-  const runBuild = async (requestedKey = latestKeyRef.current) => {
-    latestKeyRef.current = requestedKey;
-    if (inFlightRef.current || builtKeyRef.current === requestedKey) return;
-    inFlightRef.current = true;
-    setRendering(true);
-    setBuildError(null);
-    try {
-      const { draft: d, kunde: k, objekt: o, firma: f } = dataRef.current;
-      const { blob, hotspots: hs } = await generateProtokollPdf(d, k, o, f);
-      if (!mountedRef.current) return;
-      if (!(blob instanceof Blob) || blob.size === 0) {
-        throw new Error("PDF konnte nicht erzeugt werden (leerer Blob).");
-      }
-      const buf = await blob.arrayBuffer();
-      if (!mountedRef.current) return;
-      const newUrl = URL.createObjectURL(blob);
-      if (requestedKey !== latestKeyRef.current) {
-        URL.revokeObjectURL(newUrl);
-        setQueuedKey(latestKeyRef.current);
-        return;
-      }
-
-      builtKeyRef.current = requestedKey;
-      const previousUrl = pdfUrlRef.current;
-      pdfUrlRef.current = newUrl;
-      setHotspots(hs);
-      setPdfBuffer(buf);
-      setPdfUrl(newUrl);
-      setQueuedKey(null);
-      setLoadAttempt(0);
-      setViewerSeq((n) => n + 1);
-      if (previousUrl) URL.revokeObjectURL(previousUrl);
-      setViewerError(null);
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error("[ProtokollLivePreview] build failed", e);
-      if (mountedRef.current) setBuildError(e instanceof Error ? e.message : "PDF-Fehler");
-    } finally {
-      inFlightRef.current = false;
-      if (mountedRef.current) {
-        setRendering(false);
-        if (latestKeyRef.current !== builtKeyRef.current) {
-          setQueuedKey(latestKeyRef.current);
-          setRefreshNonce((n) => n + 1);
-        }
-      }
     }
-  };
+  }, [currentKey, runBuild]);
 
-  // Snap auf 20-px-Schritte: kein Re-Render bei Scrollbar-Wackler.
   const renderWidthRaw = useMemo(() => {
     const raw = Math.min(Math.max(containerWidth - 16, 280), 900);
     return Math.round(raw / 20) * 20;
@@ -208,7 +172,6 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
   const renderWidth = useDeferredValue(renderWidthRaw);
   const scale = renderWidth / A4.width;
 
-  // Fallback, falls Tracker leer (selten).
   const effectiveHotspots: RuntimeHotspot[] = useMemo(() => {
     if (hotspots.length > 0) return hotspots;
     return FALLBACK_HOTSPOTS_PROTOKOLL_SEITE_1.map((f) => ({
@@ -221,37 +184,39 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
     }));
   }, [hotspots]);
 
-  // Frische Kopie pro Load — PDF.js detacht den Buffer im Worker.
   const fileSource = useMemo(
     () => (pdfBuffer ? { data: new Uint8Array(pdfBuffer.slice(0)) } : null),
-    [pdfBuffer, viewerSeq, loadAttempt],
+    [pdfBuffer, loadAttempt],
   );
+
+  const isStale = Boolean(queuedKey && queuedKey !== builtKeyRef.current && pdfBuffer);
 
   return (
     <div ref={containerRef} className="relative h-full overflow-y-auto bg-muted/30 px-2 py-3 sm:px-4">
-      {showLoader && rendering && (
-        <div className="pointer-events-none sticky top-2 z-20 ml-auto flex w-fit items-center gap-1.5 rounded-full bg-background/80 px-2 py-0.5 text-[10px] text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur">
-          <Loader2 className="h-2.5 w-2.5 animate-spin" />
-          aktualisiert …
-        </div>
-      )}
-
-      {queuedKey && !rendering && pdfBuffer && (
-        <div className="sticky top-2 z-20 ml-auto mb-2 flex w-fit items-center gap-2 rounded-full bg-background/90 px-2 py-1 text-[10px] text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur">
-          <span>Änderungen warten</span>
+      {(showLoader && rendering && pdfBuffer) || isStale ? (
+        <div className="sticky top-2 z-20 ml-auto mb-2 flex w-fit items-center gap-2 rounded-full bg-background/95 px-2 py-1 text-[10px] text-muted-foreground shadow-sm ring-1 ring-border backdrop-blur">
+          {rendering ? (
+            <>
+              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+              <span>Vorschau wird aktualisiert</span>
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="h-2.5 w-2.5" />
+              <span>Vorschau nicht aktuell</span>
+            </>
+          )}
           <button
             type="button"
-            onClick={() => {
-              forceRefreshRef.current = true;
-              setRefreshNonce((n) => n + 1);
-            }}
-            className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 font-medium text-primary-foreground transition hover:opacity-90"
+            onClick={() => void runBuild(latestKeyRef.current)}
+            disabled={rendering}
+            className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <RefreshCw className="h-2.5 w-2.5" />
-            Vorschau aktualisieren
+            Aktualisieren
           </button>
         </div>
-      )}
+      ) : null}
 
       {!pdfBuffer && !buildError && containerWidth > 0 && (
         <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -264,18 +229,25 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
         <div className="flex h-full min-h-[40vh] flex-col items-center justify-center gap-2 px-6 text-center text-sm">
           <p className="font-medium text-destructive">PDF konnte nicht erzeugt werden</p>
           <p className="text-xs text-muted-foreground">{buildError}</p>
+          <button
+            type="button"
+            onClick={() => void runBuild(latestKeyRef.current)}
+            className="mt-2 inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition hover:opacity-90"
+          >
+            <RefreshCw className="h-3 w-3" />
+            Erneut versuchen
+          </button>
         </div>
       )}
 
       {buildError && pdfBuffer && (
         <div className="sticky top-2 z-20 mx-auto mb-2 w-fit max-w-[90%] rounded-md border border-destructive/40 bg-destructive/10 px-3 py-1 text-xs text-destructive">
-          Vorschau veraltet — letzter Build fehlgeschlagen: {buildError}
+          Letzte stabile Vorschau bleibt sichtbar — Aktualisierung fehlgeschlagen: {buildError}
         </div>
       )}
 
       {fileSource && containerWidth > 0 && !viewerError && (
         <Document
-          key={`pdf-${loadAttempt}`}
           file={fileSource}
           onLoadSuccess={({ numPages }) => {
             setNumPages(numPages);
@@ -286,7 +258,6 @@ export function ProtokollLivePreview({ draft, kunde, objekt, firma, renderEditor
             console.error("[ProtokollLivePreview] viewer error", {
               message: err?.message,
               byteLength: pdfBuffer?.byteLength ?? 0,
-              viewerSeq,
               loadAttempt,
               kind: draft.kind,
               draftId: draft.id,
