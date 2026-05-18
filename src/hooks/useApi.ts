@@ -345,6 +345,7 @@ export const useUpdateAngebot = (id: string) => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["angebote"] });
       qc.invalidateQueries({ queryKey: qk.angebot(id) });
+      qc.invalidateQueries({ queryKey: ["drive", "aktuell", "angebot", id] });
     },
   });
 };
