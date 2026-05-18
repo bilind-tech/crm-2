@@ -217,16 +217,16 @@ export function EmailVersandDialog({
     }
   };
 
-  // Visuell-Editor-Inhalt synchron halten — nur bei Mode-Wechsel auf "visuell"
+  // Visuell-Editor-Inhalt synchron halten — auch beim initialen Öffnen
+  // und nach Vorlagenwechsel. Guard verhindert Caret-Sprung beim Tippen.
   useEffect(() => {
-    if (mode === "visuell" && visuellRef.current) {
-      const aufgeloest = replacePlaceholders(bodyHtml, ctx);
-      if (visuellRef.current.innerHTML !== aufgeloest) {
-        visuellRef.current.innerHTML = aufgeloest;
-      }
+    if (mode !== "visuell") return;
+    if (!visuellRef.current) return;
+    const aufgeloest = replacePlaceholders(bodyHtml, ctx);
+    if (visuellRef.current.innerHTML !== aufgeloest) {
+      visuellRef.current.innerHTML = aufgeloest;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }, [mode, open, bodyHtml, ctx]);
 
   const signatur = signaturen.find((s) => s.id === signaturId);
   const aufgelosterBetreff = replacePlaceholders(betreff, ctx);
