@@ -82,7 +82,7 @@ function header(f: FirmaForPdf, logoDataUrl: string | null) {
       },
       logoDataUrl
         ? { width: 270, image: logoDataUrl, fit: [270, 120], alignment: "right" }
-        : { width: 270, text: f.firmenname.toUpperCase(), bold: true, fontSize: 20, color: COLOR_TEXT, alignment: "right" },
+        : { width: 270, text: "" },
     ],
   };
 }
