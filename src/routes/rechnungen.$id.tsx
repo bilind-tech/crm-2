@@ -351,6 +351,7 @@ function Page() {
         kunde={kunde}
         rechnung={r}
         pdfBlobUrl={pdf.url}
+        pdfBlob={pdf.blob}
         pdfDateiname={`${r.nummer}.pdf`}
       />
       <EmailVersandDialog
@@ -360,6 +361,7 @@ function Page() {
         kunde={kunde}
         rechnung={r}
         pdfBlobUrl={pdf.url}
+        pdfBlob={pdf.blob}
         pdfDateiname={`${r.nummer}.pdf`}
         vorbelegteVorlageId={erinnerungVorlageId}
       />

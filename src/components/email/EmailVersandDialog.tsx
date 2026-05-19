@@ -62,6 +62,7 @@ import {
   type PlaceholderContext,
 } from "@/lib/email/placeholders";
 import { autoLinkifyImages } from "@/lib/email/signature";
+import { PdfCanvasViewer } from "@/components/pdf/PdfCanvasViewer";
 import type { Angebot, EmailKontext, EmailVorlage, Kunde, Rechnung } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import { createClientId } from "@/lib/clientId";
@@ -75,6 +76,8 @@ interface Props {
   rechnung?: Rechnung | null;
   /** Blob-URL des bereits erzeugten PDFs (z.B. aus useAngebotPdf). */
   pdfBlobUrl?: string | null;
+  /** Optional Blob — wird für die robuste In-Dialog-Vorschau (PDF.js) bevorzugt. */
+  pdfBlob?: Blob | null;
   pdfDateiname?: string;
   /** PDF-Status (loading/ready/error). Wenn "loading", wird Senden deaktiviert mit Hinweis. */
   pdfStatus?: "idle" | "loading" | "ready" | "error";
@@ -96,6 +99,7 @@ export function EmailVersandDialog({
   angebot,
   rechnung,
   pdfBlobUrl,
+  pdfBlob,
   pdfDateiname,
   pdfStatus = "ready",
   onSent,
@@ -641,11 +645,13 @@ export function EmailVersandDialog({
                     </div>
                   </div>
                   {pdfPreviewOffen && pdfBlobUrl && pdfStatus === "ready" && (
-                    <div className="border-t border-border bg-background">
-                      <iframe
-                        title="PDF-Vorschau"
-                        src={pdfBlobUrl}
-                        className="block h-[480px] w-full border-0"
+                    <div className="border-t border-border bg-muted/30">
+                      <PdfCanvasViewer
+                        pdfUrl={pdfBlobUrl}
+                        pdfBlob={pdfBlob ?? null}
+                        fileName={pdfDateiname ?? "anhang.pdf"}
+                        maxWidth={760}
+                        className="max-h-[480px] overflow-auto"
                       />
                     </div>
                   )}

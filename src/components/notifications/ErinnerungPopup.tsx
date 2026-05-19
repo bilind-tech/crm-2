@@ -171,6 +171,7 @@ function ErinnerungLauncher({
       kunde={kunde}
       rechnung={rechnung}
       pdfBlobUrl={pdf.url}
+      pdfBlob={pdf.blob}
       pdfDateiname={`${rechnung.nummer}.pdf`}
       pdfStatus={pdf.status}
       vorbelegteVorlageId={vorlageId}

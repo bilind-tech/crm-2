@@ -340,6 +340,7 @@ function Page() {
         kunde={kunde}
         angebot={a}
         pdfBlobUrl={pdf.url}
+        pdfBlob={pdf.blob}
         pdfDateiname={`${a.nummer}.pdf`}
       />
       <BelegLoeschenDialog
