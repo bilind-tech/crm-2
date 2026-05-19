@@ -64,7 +64,6 @@ export async function einstellungenRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", requireAuth);
 
   const simpleAreas: Array<keyof typeof AREAS> = [
-    "firma",
     "nummernkreise",
     "sicherheit",
     "erscheinung",
@@ -87,6 +86,43 @@ export async function einstellungenRoutes(app: FastifyInstance): Promise<void> {
       return r.value;
     });
   }
+
+  // -------- Firma — UI nutzt firmenname/webseite, Backend speichert name/web --------
+  // Adapter akzeptiert beide Schreibweisen und liefert beide zurück, damit weder
+  // Formular noch PDF-Renderer leere Felder sehen.
+  function firmaToWire(base: Record<string, unknown>): Record<string, unknown> {
+    const b = base;
+    return {
+      ...b,
+      // UI-Aliasse zusätzlich zu den internen Feldern:
+      firmenname: b.name,
+      webseite: b.web,
+    };
+  }
+  function firmaFromWire(input: Record<string, unknown>): Record<string, unknown> {
+    const i = { ...input };
+    if (i.firmenname !== undefined && i.name === undefined) i.name = i.firmenname;
+    if (i.webseite !== undefined && i.web === undefined) i.web = i.webseite;
+    delete i.firmenname;
+    delete i.webseite;
+    return i;
+  }
+
+  app.get("/einstellungen/firma", async () => {
+    const base = loadArea("firma") as Record<string, unknown>;
+    return firmaToWire(base);
+  });
+  app.patch("/einstellungen/firma", async (req, reply) => {
+    const mapped = firmaFromWire((req.body ?? {}) as Record<string, unknown>);
+    const r = patchArea("firma", mapped);
+    if (!r.ok) {
+      reply.status(r.status);
+      return { error: r.error, issues: r.issues };
+    }
+    audit({ userId: req.user?.id, action: "settings.firma.patch", ip: req.ip });
+    emit("einstellung:geaendert", { key: "firma", userId: req.user?.id ?? null });
+    return firmaToWire(r.value as Record<string, unknown>);
+  });
 
   // -------- Mahnung — flach intern, nested für UI --------
   app.get("/einstellungen/mahnung", async () => {
