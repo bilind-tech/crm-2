@@ -20,6 +20,7 @@ import { useKunden } from "@/hooks/useApi";
 import { summenRechnung } from "@/lib/belege/summen";
 import { formatEUR } from "@/lib/format";
 import { periodeFuer, periodeBezeichnung } from "@/lib/dauerauftrag/termine";
+import { verfuegbareJahre } from "@/lib/zeitraum/jahre";
 import { Label } from "@/components/ui/label";
 import { DauerauftragEditDialog } from "@/components/dauerauftrag/DauerauftragEditDialog";
 import type { Dauerauftrag, DauerauftragFrequenz } from "@/lib/api/types";
@@ -64,13 +65,13 @@ export function RechnungAusDauerauftragDialog({ open, onOpenChange }: Props) {
   const [bearbeiten, setBearbeiten] = useState<Dauerauftrag | null>(null);
 
   const gewaehltesDatum = useMemo(() => new Date(jahr, monat, 1), [jahr, monat]);
-  // Jahres-Spannweite: aktuelles Jahr -2 bis +2 (5 Jahre — reicht für ein ganzes
-  // Geschäftsjahr rückwärts plus Puffer).
-  const jahresOptionen = useMemo(() => {
-    const aktJahr = heute.getFullYear();
-    return [aktJahr - 2, aktJahr - 1, aktJahr, aktJahr + 1, aktJahr + 2];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Jahresliste dynamisch: aktuelles Jahr + 2 Zukunftsjahre + alle Jahre,
+  // in denen bereits Läufe existieren (für Rückblick auf reale Vergangenheit).
+  // Aufsteigend, damit Auswahl chronologisch wirkt (Vergangenheit oben, Zukunft unten).
+  const jahresOptionen = useMemo(
+    () => verfuegbareJahre(alleLaeufe.map((l) => l.periode), { zukunftJahre: 2, sort: "asc" }),
+    [alleLaeufe],
+  );
 
   const kundeName = (id: string) => {
     const k = kunden.find((x) => x.id === id);
