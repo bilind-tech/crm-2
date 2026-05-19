@@ -571,6 +571,7 @@ function Page() {
       )}
 
       <RechnungAusDauerauftragDialog open={daDialog} onOpenChange={setDaDialog} />
+      <RechnungenExcelExportDialog open={excelDialog} onOpenChange={setExcelDialog} />
 
       {confirmDialog}
     </div>
