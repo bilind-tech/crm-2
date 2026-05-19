@@ -97,7 +97,6 @@ function Page() {
   const [nurDA, setNurDA] = useState(false);
   const [open, setOpen] = useState(false);
   const [daDialog, setDaDialog] = useState(false);
-  const [excelDialog, setExcelDialog] = useState(false);
   const [zahlungFuer, setZahlungFuer] = useState<Rechnung | null>(null);
   const [emailFuer, setEmailFuer] = useState<Rechnung | null>(null);
   const [erinnerungFuer, setErinnerungFuer] = useState<Rechnung | null>(null);
@@ -160,15 +159,6 @@ function Page() {
             >
               <Repeat className="mr-1.5 h-4 w-4" />
               Aus Dauerauftrag
-            </Button>
-            <Button
-              variant="outline"
-              className="rounded-lg"
-              onClick={() => setExcelDialog(true)}
-              title="Rechnungen als Excel exportieren"
-            >
-              <FileSpreadsheet className="mr-1.5 h-4 w-4" />
-              Excel-Export
             </Button>
             <PrimaryAction onClick={() => setOpen(true)} label="Neue Rechnung" />
           </div>
@@ -570,7 +560,6 @@ function Page() {
       )}
 
       <RechnungAusDauerauftragDialog open={daDialog} onOpenChange={setDaDialog} />
-      <RechnungenExcelExportDialog open={excelDialog} onOpenChange={setExcelDialog} />
 
       {confirmDialog}
     </div>
